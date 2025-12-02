@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String    @id @default(uuid())
+  email       String    @unique
+  password    String
+  name        String
+  role        String    @default("USER")
+  demoBalance Float     @default(10000)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  trades      Trade[]
+  sessions    Session[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Trade {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market        String
+  symbol        String
+  direction     String
+  amount        Float
+  entryPrice    Float
+  exitPrice     Float?
+  duration      Int
+  payoutPercent Float
+  status        String    @default("OPEN")
+  result        String?
+  profit        Float?
+  openedAt      DateTime  @default(now())
+  closedAt      DateTime?
+  expiresAt     DateTime
+
+  @@index([userId])
+  @@index([status])
+  @@index([symbol])
+  @@index([openedAt])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model MarketConfig {
+  id             String   @id @default(uuid())
+  symbol         String   @unique
+  marketType     String
+  name           String
+  isActive       Boolean  @default(true)
+  payoutPercent  Float    @default(80)
+  minTradeAmount Float    @default(1)
+  maxTradeAmount Float    @default(1000)
+  volatilityMode String   @default("MEDIUM")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([symbol])
+  @@index([marketType])
+}
+
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+}
