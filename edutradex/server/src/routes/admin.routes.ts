@@ -2,6 +2,10 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authMiddleware, adminMiddleware } from '../middleware/auth.middleware.js';
 import { adminService, AdminServiceError } from '../services/admin/admin.service.js';
 import {
+  adminCopyTradingService,
+  AdminCopyTradingServiceError,
+} from '../services/copy-trading/index.js';
+import {
   getUsersQuerySchema,
   updateUserStatusSchema,
   updateUserRoleSchema,
@@ -9,6 +13,14 @@ import {
   updateMarketConfigSchema,
   setSystemSettingSchema,
 } from '../validators/admin.validators.js';
+import {
+  adminLeaderListSchema,
+  adminLeaderIdSchema,
+  adminLeaderActionSchema,
+  adminUpdateLeaderSettingsSchema,
+  adminUpdateLeaderStatsSchema,
+  adminLeaderFollowersSchema,
+} from '../validators/copy-trading.validators.js';
 
 const router = Router();
 
@@ -36,7 +48,13 @@ router.get(
 
       res.json({
         success: true,
-        data: result,
+        data: result.users,
+        pagination: {
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+          totalPages: result.totalPages,
+        },
       });
     } catch (error) {
       next(error);
@@ -415,6 +433,428 @@ router.delete(
       });
     } catch (error) {
       if (error instanceof AdminServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// ============= Copy Trading Management =============
+
+// Get copy trading platform stats
+router.get(
+  '/copy-trading/stats',
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const stats = await adminCopyTradingService.getCopyTradingStats();
+
+      res.json({
+        success: true,
+        data: stats,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get recent copy trading activity
+router.get(
+  '/copy-trading/activity',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      const activity = await adminCopyTradingService.getRecentActivity(limit);
+
+      res.json({
+        success: true,
+        data: activity,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get all leaders (with filters)
+router.get(
+  '/copy-trading/leaders',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = adminLeaderListSchema.safeParse({ query: req.query });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid query parameters',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const result = await adminCopyTradingService.getAllLeaders(parsed.data.query);
+
+      res.json({
+        success: true,
+        data: result.leaders,
+        pagination: {
+          page: parsed.data.query.page,
+          limit: parsed.data.query.limit,
+          total: result.total,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get pending leader applications
+router.get(
+  '/copy-trading/leaders/pending',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      const result = await adminCopyTradingService.getPendingLeaders({ page, limit });
+
+      res.json({
+        success: true,
+        data: result.leaders,
+        pagination: {
+          page,
+          limit,
+          total: result.total,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get leader detail
+router.get(
+  '/copy-trading/leaders/:id',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = adminLeaderIdSchema.safeParse({ params: req.params });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid leader ID',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const leader = await adminCopyTradingService.getLeaderDetail(parsed.data.params.id);
+
+      res.json({
+        success: true,
+        data: leader,
+      });
+    } catch (error) {
+      if (error instanceof AdminCopyTradingServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Get leader's followers
+router.get(
+  '/copy-trading/leaders/:id/followers',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = adminLeaderFollowersSchema.safeParse({
+        params: req.params,
+        query: req.query,
+      });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid parameters',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const result = await adminCopyTradingService.getLeaderFollowers(
+        parsed.data.params.id,
+        parsed.data.query
+      );
+
+      res.json({
+        success: true,
+        data: result.followers,
+        pagination: {
+          page: parsed.data.query.page,
+          limit: parsed.data.query.limit,
+          total: result.total,
+        },
+      });
+    } catch (error) {
+      if (error instanceof AdminCopyTradingServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Approve leader
+router.post(
+  '/copy-trading/leaders/:id/approve',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = adminLeaderActionSchema.safeParse({
+        params: req.params,
+        body: req.body,
+      });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const leader = await adminCopyTradingService.approveLeader(
+        parsed.data.params.id,
+        parsed.data.body.adminNote
+      );
+
+      res.json({
+        success: true,
+        message: 'Leader approved successfully',
+        data: leader,
+      });
+    } catch (error) {
+      if (error instanceof AdminCopyTradingServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Reject leader
+router.post(
+  '/copy-trading/leaders/:id/reject',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = adminLeaderActionSchema.safeParse({
+        params: req.params,
+        body: req.body,
+      });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const leader = await adminCopyTradingService.rejectLeader(
+        parsed.data.params.id,
+        parsed.data.body.adminNote
+      );
+
+      res.json({
+        success: true,
+        message: 'Leader rejected',
+        data: leader,
+      });
+    } catch (error) {
+      if (error instanceof AdminCopyTradingServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Suspend leader
+router.post(
+  '/copy-trading/leaders/:id/suspend',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = adminLeaderActionSchema.safeParse({
+        params: req.params,
+        body: req.body,
+      });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const leader = await adminCopyTradingService.suspendLeader(
+        parsed.data.params.id,
+        parsed.data.body.reason
+      );
+
+      res.json({
+        success: true,
+        message: 'Leader suspended',
+        data: leader,
+      });
+    } catch (error) {
+      if (error instanceof AdminCopyTradingServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Reinstate leader
+router.post(
+  '/copy-trading/leaders/:id/reinstate',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = adminLeaderIdSchema.safeParse({ params: req.params });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid leader ID',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const leader = await adminCopyTradingService.reinstateLeader(parsed.data.params.id);
+
+      res.json({
+        success: true,
+        message: 'Leader reinstated',
+        data: leader,
+      });
+    } catch (error) {
+      if (error instanceof AdminCopyTradingServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Update leader settings (admin)
+router.patch(
+  '/copy-trading/leaders/:id/settings',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = adminUpdateLeaderSettingsSchema.safeParse({
+        params: req.params,
+        body: req.body,
+      });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const leader = await adminCopyTradingService.updateLeaderSettings(
+        parsed.data.params.id,
+        parsed.data.body
+      );
+
+      res.json({
+        success: true,
+        message: 'Leader settings updated',
+        data: leader,
+      });
+    } catch (error) {
+      if (error instanceof AdminCopyTradingServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Update leader stats (admin - manual override for win rate, trades, profit)
+router.patch(
+  '/copy-trading/leaders/:id/stats',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = adminUpdateLeaderStatsSchema.safeParse({
+        params: req.params,
+        body: req.body,
+      });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const leader = await adminCopyTradingService.updateLeaderStats(
+        parsed.data.params.id,
+        parsed.data.body
+      );
+
+      res.json({
+        success: true,
+        message: 'Leader stats updated',
+        data: leader,
+      });
+    } catch (error) {
+      if (error instanceof AdminCopyTradingServiceError) {
         res.status(error.statusCode).json({
           success: false,
           error: error.message,

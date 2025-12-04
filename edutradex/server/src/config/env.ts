@@ -20,10 +20,30 @@ const envSchema = z.object({
   CLIENT_URL: z.string().default('http://localhost:3000'),
 
   // Demo settings
-  DEFAULT_DEMO_BALANCE: z.string().default('10000'),
+  DEFAULT_DEMO_BALANCE: z.string().default('0'),
   DEFAULT_PAYOUT_PERCENTAGE: z.string().default('80'),
   MIN_TRADE_AMOUNT: z.string().default('1'),
-  MAX_TRADE_AMOUNT: z.string().default('1000'),
+  MAX_TRADE_AMOUNT: z.string().default('100000'),
+
+  // Deriv API
+  DERIV_APP_ID: z.string().default('1089'),
+  DERIV_WS_URL: z.string().default('wss://ws.derivws.com/websockets/v3?app_id='),
+  USE_DERIV_API: z.string().default('true'),
+  FALLBACK_TO_SIMULATION: z.string().default('true'),
+
+  // Spread Management
+  DEFAULT_SPREAD_MARKUP: z.string().default('2'),
+  MIN_SPREAD_MARKUP: z.string().default('0.5'),
+  MAX_SPREAD_MARKUP: z.string().default('10'),
+
+  // Email/SMTP Configuration
+  SMTP_HOST: z.string().default('smtp.gmail.com'),
+  SMTP_PORT: z.string().default('587'),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  SMTP_FROM_NAME: z.string().default('OptigoBroker'),
+  SMTP_FROM_EMAIL: z.string().default('noreply@optigobroker.com'),
+  EMAIL_VERIFICATION_ENABLED: z.string().default('false'),
 });
 
 function validateEnv() {
@@ -64,5 +84,28 @@ export const config = {
     defaultPayoutPercentage: parseFloat(env.DEFAULT_PAYOUT_PERCENTAGE),
     minTradeAmount: parseFloat(env.MIN_TRADE_AMOUNT),
     maxTradeAmount: parseFloat(env.MAX_TRADE_AMOUNT),
+  },
+
+  deriv: {
+    appId: env.DERIV_APP_ID,
+    wsUrl: env.DERIV_WS_URL,
+    useDerivApi: env.USE_DERIV_API === 'true',
+    fallbackToSimulation: env.FALLBACK_TO_SIMULATION === 'true',
+  },
+
+  spread: {
+    defaultMarkup: parseFloat(env.DEFAULT_SPREAD_MARKUP),
+    minMarkup: parseFloat(env.MIN_SPREAD_MARKUP),
+    maxMarkup: parseFloat(env.MAX_SPREAD_MARKUP),
+  },
+
+  email: {
+    host: env.SMTP_HOST,
+    port: parseInt(env.SMTP_PORT, 10),
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS,
+    fromName: env.SMTP_FROM_NAME,
+    fromEmail: env.SMTP_FROM_EMAIL,
+    verificationEnabled: env.EMAIL_VERIFICATION_ENABLED === 'true',
   },
 };

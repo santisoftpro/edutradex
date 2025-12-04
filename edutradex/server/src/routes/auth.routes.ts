@@ -151,6 +151,57 @@ router.post(
 );
 
 /**
+ * POST /api/auth/topup-demo
+ * Add funds to demo account
+ */
+router.post(
+  '/topup-demo',
+  authMiddleware,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.userId) {
+        res.status(401).json({
+          success: false,
+          error: 'User not authenticated',
+        });
+        return;
+      }
+
+      const { amount } = req.body;
+      if (!amount || typeof amount !== 'number' || amount <= 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid amount. Must be a positive number',
+        });
+        return;
+      }
+
+      const result = await authService.topUpDemoBalance(req.userId, amount);
+
+      res.json({
+        success: true,
+        data: result,
+        message: `$${amount.toLocaleString()} added to demo account`,
+      });
+    } catch (error) {
+      if (error instanceof AuthServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+
+      logger.error('Demo top-up error', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to top up demo balance',
+      });
+    }
+  }
+);
+
+/**
  * POST /api/auth/verify
  * Verify if token is valid
  */
@@ -165,6 +216,148 @@ router.post(
         user: req.user,
       },
     });
+  }
+);
+
+/**
+ * POST /api/auth/send-verification
+ * Send email verification code
+ */
+router.post(
+  '/send-verification',
+  authMiddleware,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.userId) {
+        res.status(401).json({
+          success: false,
+          error: 'User not authenticated',
+        });
+        return;
+      }
+
+      await authService.sendVerificationCode(req.userId);
+
+      res.json({
+        success: true,
+        message: 'Verification code sent to your email',
+      });
+    } catch (error) {
+      if (error instanceof AuthServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+
+      logger.error('Send verification error', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send verification code',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/verify-email
+ * Verify email with code
+ */
+router.post(
+  '/verify-email',
+  authMiddleware,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.userId) {
+        res.status(401).json({
+          success: false,
+          error: 'User not authenticated',
+        });
+        return;
+      }
+
+      const { code } = req.body;
+      if (!code || typeof code !== 'string') {
+        res.status(400).json({
+          success: false,
+          error: 'Verification code is required',
+        });
+        return;
+      }
+
+      await authService.verifyEmail(req.userId, code);
+
+      res.json({
+        success: true,
+        message: 'Email verified successfully',
+      });
+    } catch (error) {
+      if (error instanceof AuthServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+
+      logger.error('Verify email error', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to verify email',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/switch-account
+ * Switch between LIVE and DEMO accounts
+ */
+router.post(
+  '/switch-account',
+  authMiddleware,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.userId) {
+        res.status(401).json({
+          success: false,
+          error: 'User not authenticated',
+        });
+        return;
+      }
+
+      const { accountType } = req.body;
+      if (!accountType || !['LIVE', 'DEMO'].includes(accountType)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid account type. Must be LIVE or DEMO',
+        });
+        return;
+      }
+
+      const user = await authService.switchAccountType(req.userId, accountType);
+
+      res.json({
+        success: true,
+        data: { user },
+        message: `Switched to ${accountType} account`,
+      });
+    } catch (error) {
+      if (error instanceof AuthServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+
+      logger.error('Switch account error', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to switch account',
+      });
+    }
   }
 );
 

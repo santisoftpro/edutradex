@@ -3,12 +3,18 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { createServer, Server } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
+import { randomUUID } from 'crypto';
+import jwt from 'jsonwebtoken';
 
 // Config must be imported first - it loads dotenv
 import { config } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import routes from './routes/index.js';
+import { wsManager } from './services/websocket/websocket.manager.js';
+import { emailService } from './services/email/email.service.js';
+import { commissionScheduler } from './services/scheduler/commission.scheduler.js';
+import { tradeSettlementScheduler } from './services/scheduler/trade.scheduler.js';
 
 // Constants
 const REQUEST_BODY_LIMIT = '10mb';
@@ -33,12 +39,19 @@ app.use(cors({
 app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: REQUEST_BODY_LIMIT }));
 
-// Request logging middleware
+// Serve static files for uploads
+app.use('/uploads', express.static('uploads'));
+
+// Request logging middleware (skip frequent polling endpoints)
 app.use((req: Request, _res: Response, next: NextFunction) => {
-  logger.debug(`${req.method} ${req.path}`, {
-    query: req.query,
-    ip: req.ip
-  });
+  // Skip logging for frequent polling requests to reduce noise
+  const skipPaths = ['/api/trades/active', '/api/trades/stats', '/api/market'];
+  if (!skipPaths.some(p => req.path.startsWith(p))) {
+    logger.debug(`${req.method} ${req.path}`, {
+      query: req.query,
+      ip: req.ip
+    });
+  }
   next();
 });
 
@@ -55,7 +68,7 @@ app.get('/health', (_req: Request, res: Response) => {
 // API info endpoint
 app.get('/api', (_req: Request, res: Response) => {
   res.json({
-    name: 'EduTradeX API',
+    name: 'OptigoBroker API',
     version: '1.0.0',
     description: 'Demo Forex & OTC Trading Platform API',
     endpoints: {
@@ -98,12 +111,16 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws: WebSocket) => {
-  logger.info('WebSocket client connected');
+  const clientId = randomUUID();
+  wsManager.addClient(ws, clientId);
+
+  logger.info('WebSocket client connected', { clientId });
 
   ws.send(JSON.stringify({
     type: 'connected',
     payload: {
-      message: 'Connected to EduTradeX WebSocket',
+      clientId,
+      message: 'Connected to OptigoBroker WebSocket',
       timestamp: Date.now()
     }
   }));
@@ -111,7 +128,7 @@ wss.on('connection', (ws: WebSocket) => {
   ws.on('message', (data: Buffer) => {
     try {
       const message = JSON.parse(data.toString());
-      logger.debug('WebSocket message received', { type: message.type });
+      logger.debug('WebSocket message received', { clientId, type: message.type });
 
       switch (message.type) {
         case 'ping':
@@ -120,11 +137,81 @@ wss.on('connection', (ws: WebSocket) => {
             payload: { timestamp: Date.now() }
           }));
           break;
+
+        case 'authenticate':
+          if (message.payload?.token) {
+            try {
+              const decoded = jwt.verify(message.payload.token, config.jwt.secret) as { id: string };
+              wsManager.authenticateClient(clientId, decoded.id);
+              logger.info('WebSocket client authenticated', { clientId, userId: decoded.id });
+            } catch {
+              ws.send(JSON.stringify({
+                type: 'error',
+                payload: { message: 'Invalid authentication token' }
+              }));
+            }
+          } else {
+            ws.send(JSON.stringify({
+              type: 'error',
+              payload: { message: 'Token is required for authentication' }
+            }));
+          }
+          break;
+
+        case 'subscribe':
+          if (message.payload?.symbol) {
+            wsManager.subscribeToSymbol(clientId, message.payload.symbol);
+            logger.info('Client subscribed to symbol', {
+              clientId,
+              symbol: message.payload.symbol
+            });
+          } else {
+            ws.send(JSON.stringify({
+              type: 'error',
+              payload: { message: 'Symbol is required for subscription' }
+            }));
+          }
+          break;
+
+        case 'unsubscribe':
+          if (message.payload?.symbol) {
+            wsManager.unsubscribeFromSymbol(clientId, message.payload.symbol);
+            logger.info('Client unsubscribed from symbol', {
+              clientId,
+              symbol: message.payload.symbol
+            });
+          } else {
+            ws.send(JSON.stringify({
+              type: 'error',
+              payload: { message: 'Symbol is required for unsubscription' }
+            }));
+          }
+          break;
+
+        case 'subscribe_all':
+          // Subscribe to all available market symbols
+          const symbols = message.payload?.symbols || [];
+          if (Array.isArray(symbols) && symbols.length > 0) {
+            symbols.forEach((symbol: string) => {
+              wsManager.subscribeToSymbol(clientId, symbol);
+            });
+            logger.info('Client subscribed to multiple symbols', {
+              clientId,
+              count: symbols.length
+            });
+          } else {
+            ws.send(JSON.stringify({
+              type: 'error',
+              payload: { message: 'Symbols array is required' }
+            }));
+          }
+          break;
+
         default:
           logger.debug('Unhandled WebSocket message type', { type: message.type });
       }
     } catch (error) {
-      logger.error('WebSocket message parse error', { error });
+      logger.error('WebSocket message parse error', { clientId, error });
       ws.send(JSON.stringify({
         type: 'error',
         payload: { message: 'Invalid message format' }
@@ -133,17 +220,22 @@ wss.on('connection', (ws: WebSocket) => {
   });
 
   ws.on('error', (error: Error) => {
-    logger.error('WebSocket error', { message: error.message });
+    logger.error('WebSocket error', { clientId, message: error.message });
   });
 
   ws.on('close', () => {
-    logger.info('WebSocket client disconnected');
+    wsManager.removeClient(clientId);
+    logger.info('WebSocket client disconnected', { clientId });
   });
 });
 
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string): Promise<void> {
   logger.info(`${signal} received, shutting down gracefully`);
+
+  // Stop schedulers
+  commissionScheduler.stop();
+  tradeSettlementScheduler.stop();
 
   // Close WebSocket server
   wss.close(() => {
@@ -185,12 +277,21 @@ process.on('unhandledRejection', (reason: unknown) => {
 // Start server
 async function startServer(): Promise<void> {
   try {
+    // Initialize email service
+    emailService.initialize(config.email);
+
     // Connect to database
     await connectDatabase();
 
+    // Start commission scheduler (runs every 24 hours)
+    commissionScheduler.start();
+
+    // Start trade settlement scheduler (runs every 5 seconds to catch expired trades)
+    tradeSettlementScheduler.start();
+
     // Start HTTP server
     server.listen(config.port, () => {
-      logger.info('EduTradeX Server started', {
+      logger.info('OptigoBroker Server started', {
         port: config.port,
         environment: config.nodeEnv,
         httpUrl: `http://localhost:${config.port}`,

@@ -68,6 +68,28 @@ router.get('/history/:symbol', (req: Request, res: Response) => {
   });
 });
 
+router.get('/bars/:symbol', (req: Request, res: Response) => {
+  const { symbol } = req.params;
+  const decodedSymbol = decodeURIComponent(symbol);
+  const resolution = parseInt(req.query.resolution as string) || 60;
+  const limit = parseInt(req.query.limit as string) || 100;
+
+  const bars = marketService.getHistoricalBars(decodedSymbol, resolution, limit);
+
+  if (bars.length === 0) {
+    res.status(404).json({
+      success: false,
+      error: 'No data available for symbol',
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: bars,
+  });
+});
+
 router.get('/assets', (_req: Request, res: Response) => {
   const assets = marketService.getAllAssets();
   res.json({
@@ -108,6 +130,42 @@ router.get('/asset/:symbol', (req: Request, res: Response) => {
   res.json({
     success: true,
     data: asset,
+  });
+});
+
+router.get('/status', (_req: Request, res: Response) => {
+  const status = marketService.getMarketStatus();
+
+  res.json({
+    success: true,
+    data: status,
+  });
+});
+
+router.get('/symbols/available', (_req: Request, res: Response) => {
+  const symbols = marketService.getAvailableSymbols();
+
+  res.json({
+    success: true,
+    data: symbols,
+  });
+});
+
+router.get('/symbols/forex', (_req: Request, res: Response) => {
+  const symbols = marketService.getAvailableForexSymbols();
+
+  res.json({
+    success: true,
+    data: symbols,
+  });
+});
+
+router.get('/symbols/synthetic', (_req: Request, res: Response) => {
+  const symbols = marketService.getAvailableSyntheticSymbols();
+
+  res.json({
+    success: true,
+    data: symbols,
   });
 });
 

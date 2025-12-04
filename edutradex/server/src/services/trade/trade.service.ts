@@ -3,6 +3,7 @@ import { config } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { authService } from '../auth/auth.service.js';
 import { marketService } from '../market/market.service.js';
+import { copyExecutionService } from '../copy-trading/index.js';
 
 interface PlaceTradeInput {
   symbol: string;
@@ -27,6 +28,7 @@ interface TradeResult {
   result: string | null;
   profit: number | null;
   market: string;
+  accountType: string;
   openedAt: Date;
   closedAt: Date | null;
   expiresAt: Date;
@@ -79,9 +81,9 @@ export class TradeService {
       throw new TradeServiceError('Insufficient balance', 400);
     }
 
-    const validDurations = [5, 15, 30, 60, 180, 300];
-    if (!validDurations.includes(data.duration)) {
-      throw new TradeServiceError('Invalid trade duration', 400);
+    // Allow durations from 5 seconds to 24 hours (86400 seconds)
+    if (data.duration < 5 || data.duration > 86400) {
+      throw new TradeServiceError('Trade duration must be between 5 seconds and 24 hours', 400);
     }
 
     const now = new Date();
@@ -101,6 +103,7 @@ export class TradeService {
           market: data.marketType.toUpperCase(),
           status: 'OPEN',
           expiresAt,
+          accountType: 'DEMO',
         },
       }),
       prisma.user.update({
@@ -124,6 +127,11 @@ export class TradeService {
 
     this.scheduleTradeSettlement(trade.id, data.duration);
 
+    // Copy trading: Execute copy trades for followers if user is an approved leader
+    this.executeCopyTradesForLeader(userId, trade).catch((error) => {
+      logger.error('Error executing copy trades', { tradeId: trade.id, error });
+    });
+
     return {
       id: trade.id,
       userId: trade.userId,
@@ -138,6 +146,7 @@ export class TradeService {
       result: trade.result,
       profit: trade.profit,
       market: trade.market,
+      accountType: trade.accountType,
       openedAt: trade.openedAt,
       closedAt: trade.closedAt,
       expiresAt: trade.expiresAt,
@@ -207,6 +216,13 @@ export class TradeService {
       exitPrice,
     });
 
+    // Update leader stats if this user is a leader (non-copy trade)
+    if (!trade.isCopyTrade) {
+      this.updateLeaderStatsIfApplicable(trade.userId).catch((error) => {
+        logger.error('Error updating leader stats', { userId: trade.userId, error });
+      });
+    }
+
     return {
       id: updatedTrade.id,
       userId: updatedTrade.userId,
@@ -221,6 +237,7 @@ export class TradeService {
       result: updatedTrade.result,
       profit: updatedTrade.profit,
       market: updatedTrade.market,
+      accountType: updatedTrade.accountType,
       openedAt: updatedTrade.openedAt,
       closedAt: updatedTrade.closedAt,
       expiresAt: updatedTrade.expiresAt,
@@ -263,6 +280,7 @@ export class TradeService {
         result: trade.result,
         profit: trade.profit,
         market: trade.market,
+        accountType: trade.accountType,
         openedAt: trade.openedAt,
         closedAt: trade.closedAt,
         expiresAt: trade.expiresAt,
@@ -292,6 +310,7 @@ export class TradeService {
       result: trade.result,
       profit: trade.profit,
       market: trade.market,
+      accountType: trade.accountType,
       openedAt: trade.openedAt,
       closedAt: trade.closedAt,
       expiresAt: trade.expiresAt,
@@ -318,6 +337,7 @@ export class TradeService {
       result: trade.result,
       profit: trade.profit,
       market: trade.market,
+      accountType: trade.accountType,
       openedAt: trade.openedAt,
       closedAt: trade.closedAt,
       expiresAt: trade.expiresAt,
@@ -353,6 +373,55 @@ export class TradeService {
     logger.info('User trade history cleared', { userId, deletedCount: result.count });
 
     return { deletedCount: result.count };
+  }
+
+  private async executeCopyTradesForLeader(
+    userId: string,
+    trade: {
+      id: string;
+      userId: string;
+      symbol: string;
+      direction: string;
+      amount: number;
+      entryPrice: number;
+      duration: number;
+      market: string;
+      expiresAt: Date;
+    }
+  ): Promise<void> {
+    const leaderProfile = await prisma.copyTradingLeader.findUnique({
+      where: { userId },
+      select: { id: true, status: true },
+    });
+
+    if (!leaderProfile || leaderProfile.status !== 'APPROVED') {
+      return;
+    }
+
+    const results = await copyExecutionService.executeCopyTrades(trade, leaderProfile.id);
+
+    if (results.length > 0) {
+      logger.info('Copy trades executed for leader', {
+        leaderId: leaderProfile.id,
+        originalTradeId: trade.id,
+        copiedCount: results.filter((r) => r.status === 'copied').length,
+        pendingCount: results.filter((r) => r.status === 'pending').length,
+        skippedCount: results.filter((r) => r.status === 'skipped').length,
+      });
+    }
+  }
+
+  private async updateLeaderStatsIfApplicable(userId: string): Promise<void> {
+    const leaderProfile = await prisma.copyTradingLeader.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!leaderProfile) {
+      return;
+    }
+
+    await copyExecutionService.updateLeaderStats(leaderProfile.id);
   }
 }
 

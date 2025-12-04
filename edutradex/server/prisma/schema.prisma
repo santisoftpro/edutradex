@@ -8,20 +8,50 @@ datasource db {
 }
 
 model User {
-  id          String    @id @default(uuid())
-  email       String    @unique
-  password    String
-  name        String
-  role        String    @default("USER")
-  demoBalance Float     @default(10000)
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  trades      Trade[]
-  sessions    Session[]
+  id                String       @id @default(uuid())
+  email             String       @unique
+  password          String
+  name              String
+  role              String       @default("USER")
+  liveBalance       Float        @default(0)       // Real balance - can deposit/withdraw
+  demoBalance       Float        @default(10000)   // Practice balance - cannot withdraw
+  activeAccountType String       @default("LIVE")  // LIVE or DEMO - Live is main account
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  trades            Trade[]
+  sessions          Session[]
+  deposits          Deposit[]
+  withdrawals       Withdrawal[]
+
+  // Email verification
+  emailVerified   Boolean   @default(false)
+  emailVerifiedAt DateTime?
+
+  // KYC verification
+  kyc             KYC?
+
+  // Copy trading relations
+  leaderProfile CopyTradingLeader?
+  following     CopyTradingFollower[] @relation("Follower")
+
+  // Referral/Affiliate system
+  referralCode      String?   @unique
+  referredBy        String?   // ID of user who referred this user
+  referredByUser    User?     @relation("Referrals", fields: [referredBy], references: [id])
+  referrals         User[]    @relation("Referrals")
+  referralEarnings  Float     @default(0)
+  totalReferrals    Int       @default(0)
+
+  // Referral commissions earned
+  commissionsEarned  ReferralCommission[] @relation("Earner")
+  commissionsGenerated ReferralCommission[] @relation("Generator")
 
   @@index([email])
   @@index([role])
+  @@index([referralCode])
+  @@index([referredBy])
+  @@index([emailVerified])
 }
 
 model Trade {
@@ -39,14 +69,22 @@ model Trade {
   status        String    @default("OPEN")
   result        String?
   profit        Float?
+  accountType   String    @default("DEMO") // LIVE or DEMO - which account this trade was placed from
   openedAt      DateTime  @default(now())
   closedAt      DateTime?
   expiresAt     DateTime
+
+  // Copy trading fields
+  isCopyTrade      Boolean           @default(false)
+  originalTrades   CopiedTrade[]     @relation("OriginalTrade")
+  copiedFromTrades CopiedTrade[]     @relation("CopiedTrade")
+  pendingCopies    PendingCopyTrade[]
 
   @@index([userId])
   @@index([status])
   @@index([symbol])
   @@index([openedAt])
+  @@index([accountType])
 }
 
 model Session {
@@ -86,4 +124,383 @@ model SystemConfig {
   updatedAt DateTime @updatedAt
 
   @@index([key])
+}
+
+model Deposit {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount          Float
+  method          String    // MOBILE_MONEY, CRYPTO
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+
+  // Mobile Money fields
+  phoneNumber     String?
+  mobileProvider  String?   // M-PESA, AIRTEL, MTN, etc.
+
+  // Crypto fields
+  cryptoCurrency  String?   // BTC, ETH, USDT, etc.
+  walletAddress   String?
+  transactionHash String?
+
+  // Admin fields
+  adminNote       String?
+  processedBy     String?
+  processedAt     DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([method])
+  @@index([createdAt])
+}
+
+model SpreadConfig {
+  id           String   @id @default(uuid())
+  symbol       String   @unique
+  markupPips   Float    @default(2)      // Spread markup in pips
+  isActive     Boolean  @default(true)
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([symbol])
+  @@index([isActive])
+}
+
+model Withdrawal {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount          Float
+  method          String    // MOBILE_MONEY, CRYPTO
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+
+  // Mobile Money fields
+  phoneNumber     String?
+  mobileProvider  String?   // M-PESA, AIRTEL, MTN, etc.
+
+  // Crypto fields
+  cryptoCurrency  String?   // BTC, ETH, USDT, etc.
+  walletAddress   String?
+
+  // Admin fields
+  adminNote       String?
+  processedBy     String?
+  processedAt     DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([method])
+  @@index([createdAt])
+}
+
+model PaymentMethod {
+  id              String   @id @default(uuid())
+  type            String   // CRYPTO, MOBILE_MONEY
+  name            String   // Display name (e.g., "Bitcoin (BTC)", "MTN MoMo")
+  code            String   @unique // Unique code (e.g., "btc", "mtn-momo", "usdt-trc20")
+
+  // Crypto specific
+  cryptoCurrency  String?  // BTC, ETH, USDT, USDC, etc.
+  network         String?  // ERC20, TRC20, BEP20, etc.
+  walletAddress   String?  // Admin's wallet address
+
+  // Mobile Money specific
+  mobileProvider  String?  // MTN, MPESA, AIRTEL, etc.
+  phoneNumber     String?  // Admin's phone number for receiving
+  accountName     String?  // Account holder name
+
+  // Display settings
+  iconUrl         String?
+  iconBg          String   @default("bg-gray-500/20")
+  displayOrder    Int      @default(0)
+
+  // Transaction settings
+  minAmount       Float    @default(10)
+  maxAmount       Float    @default(10000)
+  processingTime  String   @default("~5 min")
+
+  // Status
+  isActive        Boolean  @default(true)
+  isPopular       Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([type])
+  @@index([isActive])
+  @@index([displayOrder])
+}
+
+// ==========================================
+// COPY TRADING MODELS
+// ==========================================
+
+model CopyTradingLeader {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  displayName String
+  description String?
+  avatarUrl   String?
+
+  // Status: PENDING, APPROVED, REJECTED, SUSPENDED
+  status      String   @default("PENDING")
+
+  // Performance metrics (updated after each settled trade)
+  totalTrades   Int    @default(0)
+  winningTrades Int    @default(0)
+  totalProfit   Float  @default(0)
+  winRate       Float  @default(0)
+
+  // Settings
+  maxFollowers Int     @default(100)
+  isPublic     Boolean @default(true)
+
+  // Admin fields
+  adminNote    String?
+  approvedAt   DateTime?
+  rejectedAt   DateTime?
+  suspendedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  followers    CopyTradingFollower[]
+  copiedTrades CopiedTrade[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([winRate])
+  @@index([totalTrades])
+}
+
+model CopyTradingFollower {
+  id         String            @id @default(uuid())
+  followerId String
+  follower   User              @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  leaderId   String
+  leader     CopyTradingLeader @relation(fields: [leaderId], references: [id], onDelete: Cascade)
+
+  // Copy settings
+  // CopyMode: AUTOMATIC, MANUAL
+  copyMode       String  @default("AUTOMATIC")
+  fixedAmount    Float
+  maxDailyTrades Int     @default(50)
+  isActive       Boolean @default(true)
+
+  // Daily tracking
+  tradesToday    Int      @default(0)
+  lastTradeDate  DateTime?
+
+  // Stats
+  totalCopied Int   @default(0)
+  totalProfit Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  copiedTrades  CopiedTrade[]
+  pendingTrades PendingCopyTrade[]
+
+  @@unique([followerId, leaderId])
+  @@index([followerId])
+  @@index([leaderId])
+  @@index([isActive])
+}
+
+model CopiedTrade {
+  id         String              @id @default(uuid())
+  followerId String
+  follower   CopyTradingFollower @relation(fields: [followerId], references: [id], onDelete: Cascade)
+  leaderId   String
+  leader     CopyTradingLeader   @relation(fields: [leaderId], references: [id], onDelete: Cascade)
+
+  originalTradeId String
+  originalTrade   Trade  @relation("OriginalTrade", fields: [originalTradeId], references: [id])
+  copiedTradeId   String
+  copiedTrade     Trade  @relation("CopiedTrade", fields: [copiedTradeId], references: [id])
+
+  amount Float
+  profit Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([followerId])
+  @@index([leaderId])
+  @@index([originalTradeId])
+  @@index([copiedTradeId])
+}
+
+model PendingCopyTrade {
+  id          String              @id @default(uuid())
+  followerId  String
+  followerRel CopyTradingFollower @relation(fields: [followerId], references: [id], onDelete: Cascade)
+
+  originalTradeId String
+  originalTrade   Trade  @relation(fields: [originalTradeId], references: [id])
+
+  symbol          String
+  direction       String
+  suggestedAmount Float
+  entryPrice      Float
+  duration        Int
+  market          String
+
+  // Status: PENDING, APPROVED, REJECTED, EXPIRED
+  status    String   @default("PENDING")
+  expiresAt DateTime
+
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([followerId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+// ==========================================
+// REFERRAL/AFFILIATE SYSTEM
+// ==========================================
+
+model ReferralCommission {
+  id            String   @id @default(uuid())
+
+  // Who earned the commission (the referrer)
+  earnerId      String
+  earner        User     @relation("Earner", fields: [earnerId], references: [id], onDelete: Cascade)
+
+  // Who generated the commission (the referred user)
+  generatorId   String
+  generator     User     @relation("Generator", fields: [generatorId], references: [id], onDelete: Cascade)
+
+  // Commission details
+  type          String   // SIGNUP_BONUS, DEPOSIT_COMMISSION, TRADE_COMMISSION
+  amount        Float
+  percentage    Float    // Commission percentage applied
+  sourceAmount  Float?   // Original amount (deposit/trade amount)
+  sourceId      String?  // Reference to deposit/trade ID
+
+  // Status
+  status        String   @default("PENDING") // PENDING, CREDITED, CANCELLED
+  creditedAt    DateTime?
+
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([earnerId])
+  @@index([generatorId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ReferralSettings {
+  id                    String   @id @default(uuid())
+
+  // Commission rates
+  signupBonus           Float    @default(5)    // Fixed bonus for each signup
+  depositCommission     Float    @default(5)    // Percentage of deposit
+  tradeCommission       Float    @default(1)    // Percentage of trade amount
+
+  // Limits
+  minWithdrawal         Float    @default(10)   // Minimum withdrawal for referral earnings
+  maxCommissionPerUser  Float    @default(1000) // Max commission from single user
+
+  // Settings
+  isActive              Boolean  @default(true)
+  requireVerification   Boolean  @default(false)
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// ==========================================
+// EMAIL VERIFICATION
+// ==========================================
+
+model EmailVerification {
+  id        String   @id @default(uuid())
+  email     String
+  code      String
+  type      String   @default("SIGNUP") // SIGNUP, PASSWORD_RESET
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([code])
+  @@index([expiresAt])
+}
+
+// ==========================================
+// ADMIN MESSAGES
+// ==========================================
+
+model AdminMessage {
+  id          String   @id @default(uuid())
+  senderId    String
+  recipientId String?  // Null means sent to all users
+  subject     String
+  content     String
+  type        String   @default("GENERAL") // GENERAL, ANNOUNCEMENT, ALERT
+  isRead      Boolean  @default(false)
+  sentViaEmail Boolean @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([recipientId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// KYC VERIFICATION
+// ==========================================
+
+model KYC {
+  id              String    @id @default(uuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Personal Information
+  firstName       String?
+  lastName        String?
+  dateOfBirth     DateTime?
+  nationality     String?
+  address         String?
+  city            String?
+  country         String?
+  postalCode      String?
+  phoneNumber     String?
+
+  // Document Information
+  documentType    String?   // NATIONAL_ID, PASSPORT, DRIVERS_LICENSE
+  documentNumber  String?
+  documentFront   String?   // File path or URL
+  documentBack    String?   // File path or URL
+  selfieWithId    String?   // File path or URL
+
+  // Verification Status
+  status          String    @default("NOT_SUBMITTED") // NOT_SUBMITTED, PENDING, APPROVED, REJECTED
+  rejectionReason String?
+  
+  // Admin fields
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  adminNote       String?
+
+  submittedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }

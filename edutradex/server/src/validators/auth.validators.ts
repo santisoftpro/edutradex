@@ -22,6 +22,12 @@ export const registerSchema = z.object({
     .min(2, 'Name must be at least 2 characters')
     .max(100, 'Name must be less than 100 characters')
     .trim(),
+
+  referralCode: z
+    .string()
+    .max(20, 'Referral code must be less than 20 characters')
+    .optional()
+    .transform((val) => val?.trim().toUpperCase()),
 });
 
 export const loginSchema = z.object({

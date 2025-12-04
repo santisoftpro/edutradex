@@ -23,12 +23,18 @@ export function validate<T extends z.ZodTypeAny>(
     res: Response,
     next: NextFunction
   ): Promise<void> => {
+    const dataToValidate = req[target];
     try {
-      const dataToValidate = req[target];
       const validated = await schema.parseAsync(dataToValidate);
 
       // Replace the request data with validated and transformed data
-      req[target] = validated;
+      // Note: req.query is read-only, so we can't overwrite it
+      if (target !== 'query') {
+        req[target] = validated;
+      } else {
+        // For query params, store in a custom property since req.query is read-only
+        (req as any).validatedQuery = validated;
+      }
 
       next();
     } catch (error) {
@@ -38,6 +44,13 @@ export function validate<T extends z.ZodTypeAny>(
           message: issue.message,
         }));
 
+        console.log('[VALIDATION ERROR]', {
+          path: req.path,
+          target,
+          data: dataToValidate,
+          errors: formattedErrors
+        });
+
         res.status(400).json({
           success: false,
           error: 'Validation failed',
@@ -45,6 +58,12 @@ export function validate<T extends z.ZodTypeAny>(
         });
         return;
       }
+
+      console.log('[VALIDATION ERROR - UNKNOWN]', {
+        path: req.path,
+        target,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
 
       res.status(400).json({
         success: false,
