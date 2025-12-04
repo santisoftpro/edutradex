@@ -40,6 +40,11 @@ coverage/
 
 # Prisma
 prisma/migrations/
+*.db
+
+# Backups and uploads (sensitive data)
+backups/
+uploads/
 
 # Misc
 *.tsbuildinfo
