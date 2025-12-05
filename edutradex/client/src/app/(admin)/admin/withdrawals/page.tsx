@@ -106,7 +106,7 @@ function ProcessWithdrawalModal({
         {action === 'approve' && (
           <div className="mt-4 p-3 bg-emerald-900/30 border border-emerald-900/50 rounded-lg">
             <p className="text-sm text-emerald-400">
-              Approving will deduct {formatCurrency(withdrawal.amount)} from the user&apos;s balance.
+              {formatCurrency(withdrawal.amount)} was already deducted from user&apos;s balance when requested.
             </p>
           </div>
         )}
@@ -114,7 +114,7 @@ function ProcessWithdrawalModal({
         {action === 'reject' && (
           <div className="mt-4 p-3 bg-amber-900/30 border border-amber-900/50 rounded-lg">
             <p className="text-sm text-amber-400">
-              Rejecting will keep the user&apos;s balance unchanged.
+              Rejecting will refund {formatCurrency(withdrawal.amount)} back to user&apos;s balance.
             </p>
           </div>
         )}

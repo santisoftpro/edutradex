@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   Wallet,
   User,
@@ -59,9 +60,7 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice }: Tr
 
         {/* Logo - hidden on mobile */}
         <div className="hidden md:flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">OB</span>
-          </div>
+          <Image src="/logo.png" alt="OptigoBroker" width={32} height={32} className="h-8 w-8" />
           <span className="text-white font-bold hidden sm:block">OptigoBroker</span>
         </div>
 

@@ -98,32 +98,26 @@ export const useTradeStore = create<TradeState>()(
       isLoading: false,
 
       placeTrade: async (tradeData) => {
-        set({ isLoading: true });
-        try {
-          const apiTrade = await api.placeTrade({
-            symbol: tradeData.symbol,
-            direction: tradeData.direction,
-            amount: tradeData.amount,
-            duration: tradeData.duration,
-            entryPrice: tradeData.entryPrice,
-            marketType: tradeData.marketType,
-          });
+        // Don't set global isLoading - allows rapid multiple trades
+        const apiTrade = await api.placeTrade({
+          symbol: tradeData.symbol,
+          direction: tradeData.direction,
+          amount: tradeData.amount,
+          duration: tradeData.duration,
+          entryPrice: tradeData.entryPrice,
+          marketType: tradeData.marketType,
+        });
 
-          const trade = mapApiTradeToTrade(apiTrade);
+        const trade = mapApiTradeToTrade(apiTrade);
 
-          set((state) => ({
-            trades: [trade, ...state.trades],
-            activeTrades: [trade, ...state.activeTrades],
-            isLoading: false,
-          }));
+        set((state) => ({
+          trades: [trade, ...state.trades],
+          activeTrades: [trade, ...state.activeTrades],
+        }));
 
-          get().pollTradeStatus(trade.id);
+        get().pollTradeStatus(trade.id);
 
-          return trade;
-        } catch (error) {
-          set({ isLoading: false });
-          throw error;
-        }
+        return trade;
       },
 
       fetchTrades: async () => {

@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   LineChart,
   Wallet,
-  History,
   User,
   ArrowUpFromLine,
 } from 'lucide-react';
@@ -23,32 +22,11 @@ const navItems = [
 export function MobileNav() {
   const pathname = usePathname();
 
-  // On trade page, show compact version
+  // On trade page, don't render - trade page has its own MobileNav component
   const isTradePage = pathname === '/dashboard/trade';
 
   if (isTradePage) {
-    return (
-      <nav
-        className="fixed top-14 right-1 z-50 md:hidden"
-        style={{ touchAction: 'manipulation' }}
-      >
-        <div className="flex flex-col gap-1.5">
-          {navItems.filter(item => item.href !== '/dashboard/trade').map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center justify-center w-10 h-10 bg-[#1a1a2e] border border-[#3d3d5c] rounded-lg text-slate-400 active:text-white active:bg-[#252542] shadow-lg cursor-pointer select-none"
-                style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
-              >
-                <Icon className="h-5 w-5" />
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
-    );
+    return null;
   }
 
   return (

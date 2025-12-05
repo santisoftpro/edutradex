@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowUp, ArrowDown, DollarSign, Timer, ChevronUp, ChevronDown, Zap, Edit3 } from 'lucide-react';
+import { ArrowUp, ArrowDown, DollarSign, Zap, Edit3 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 
 interface TradingPanelProps {
@@ -28,10 +28,9 @@ const DURATIONS = [
 
 const QUICK_AMOUNTS = [5, 10, 25, 50, 100, 500, 1000, 5000];
 
-export function TradingPanel({ balance, onTrade, isLoading, currentPrice, payoutPercent = 85, isTradesPanelOpen = true }: TradingPanelProps) {
+export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 85, isTradesPanelOpen = true }: TradingPanelProps) {
   const [amount, setAmount] = useState(10);
   const [duration, setDuration] = useState(60);
-  const [isExpanded, setIsExpanded] = useState(false);
   const [showCustomDuration, setShowCustomDuration] = useState(false);
   const [customHours, setCustomHours] = useState(0);
   const [customMinutes, setCustomMinutes] = useState(1);
@@ -52,382 +51,189 @@ export function TradingPanel({ balance, onTrade, isLoading, currentPrice, payout
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getDurationLabel = (seconds: number) => {
-    const found = DURATIONS.find(d => d.value === seconds);
-    if (found) return found.label;
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    if (hours > 0) return `${hours}h${mins > 0 ? ` ${mins}m` : ''}`;
-    if (mins > 0) return `${mins}m${secs > 0 ? ` ${secs}s` : ''}`;
-    return `${secs}s`;
-  };
-
+  // Desktop Panel Only - Mobile uses MobileTradingPanel component
   return (
-    <>
-      {/* Desktop Panel - mr-[68px] accounts for fixed RightMenu when TradesSidebar is hidden */}
-      <div className={cn(
-        "hidden md:flex w-56 bg-[#1a1a2e] border-l border-[#2d2d44] flex-col h-full",
-        !isTradesPanelOpen && "mr-[68px]"
-      )}>
-        {/* Scrollable Content - custom thin scrollbar */}
-        <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
-          {/* Time Display */}
-          <div className="p-3 border-b border-[#2d2d44]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wide">Expiration</span>
+    <div className={cn(
+      "hidden md:flex w-56 bg-[#1a1a2e] border-l border-[#2d2d44] flex-col h-full",
+      !isTradesPanelOpen && "mr-[68px]"
+    )}>
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
+        {/* Time Display */}
+        <div className="p-3 border-b border-[#2d2d44]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wide">Expiration</span>
+            <button
+              onClick={() => setShowCustomDuration(!showCustomDuration)}
+              className="flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors"
+              title="Custom time"
+            >
+              <Edit3 className="h-3 w-3" />
+              <span className="text-[10px]">Custom</span>
+            </button>
+          </div>
+
+          {showCustomDuration ? (
+            <div className="space-y-2">
+              <div className="flex gap-1">
+                <div className="flex-1">
+                  <label className="text-[10px] text-gray-500 block mb-1">Hours</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="24"
+                    value={customHours}
+                    onChange={(e) => setCustomHours(Math.max(0, Math.min(24, Number(e.target.value))))}
+                    className="w-full px-1 py-1.5 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm text-center focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] text-gray-500 block mb-1">Min</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={customMinutes}
+                    onChange={(e) => setCustomMinutes(Math.max(0, Math.min(59, Number(e.target.value))))}
+                    className="w-full px-1 py-1.5 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm text-center focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] text-gray-500 block mb-1">Sec</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={customSeconds}
+                    onChange={(e) => setCustomSeconds(Math.max(0, Math.min(59, Number(e.target.value))))}
+                    className="w-full px-1 py-1.5 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm text-center focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
               <button
-                onClick={() => setShowCustomDuration(!showCustomDuration)}
-                className="flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors"
-                title="Custom time"
+                onClick={() => {
+                  const totalSeconds = customHours * 3600 + customMinutes * 60 + customSeconds;
+                  if (totalSeconds >= 5 && totalSeconds <= 86400) {
+                    setDuration(totalSeconds);
+                    setShowCustomDuration(false);
+                  }
+                }}
+                className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors"
               >
-                <Edit3 className="h-3 w-3" />
-                <span className="text-[10px]">Custom</span>
+                Set ({customHours > 0 ? `${customHours}h ` : ''}{customMinutes}m {customSeconds}s)
               </button>
             </div>
-
-            {showCustomDuration ? (
-              <div className="space-y-2">
-                <div className="flex gap-1">
-                  <div className="flex-1">
-                    <label className="text-[10px] text-gray-500 block mb-1">Hours</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="24"
-                      value={customHours}
-                      onChange={(e) => setCustomHours(Math.max(0, Math.min(24, Number(e.target.value))))}
-                      className="w-full px-1 py-1.5 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm text-center focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-[10px] text-gray-500 block mb-1">Min</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="59"
-                      value={customMinutes}
-                      onChange={(e) => setCustomMinutes(Math.max(0, Math.min(59, Number(e.target.value))))}
-                      className="w-full px-1 py-1.5 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm text-center focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-[10px] text-gray-500 block mb-1">Sec</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="59"
-                      value={customSeconds}
-                      onChange={(e) => setCustomSeconds(Math.max(0, Math.min(59, Number(e.target.value))))}
-                      className="w-full px-1 py-1.5 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm text-center focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    const totalSeconds = customHours * 3600 + customMinutes * 60 + customSeconds;
-                    if (totalSeconds >= 5 && totalSeconds <= 86400) {
-                      setDuration(totalSeconds);
-                      setShowCustomDuration(false);
-                    }
-                  }}
-                  className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors"
-                >
-                  Set ({customHours > 0 ? `${customHours}h ` : ''}{customMinutes}m {customSeconds}s)
-                </button>
-              </div>
-            ) : (
-              <div className="text-xl font-mono font-bold text-white text-center py-2 bg-gradient-to-b from-[#252542] to-[#1f1f38] rounded-lg border border-[#3d3d5c]">
-                {formatDuration(duration)}
-              </div>
-            )}
-
-            {/* Duration buttons - show first 6 presets */}
-            <div className="grid grid-cols-5 gap-1 mt-2">
-              {DURATIONS.slice(0, 10).map((d) => (
-                <button
-                  key={d.value}
-                  onClick={() => {
-                    setDuration(d.value);
-                    setShowCustomDuration(false);
-                  }}
-                  className={cn(
-                    'py-1.5 rounded-md text-[10px] font-semibold transition-all',
-                    duration === d.value && !showCustomDuration
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                      : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
-                  )}
-                >
-                  {d.label}
-                </button>
-              ))}
+          ) : (
+            <div className="text-xl font-mono font-bold text-white text-center py-2 bg-gradient-to-b from-[#252542] to-[#1f1f38] rounded-lg border border-[#3d3d5c]">
+              {formatDuration(duration)}
             </div>
-          </div>
+          )}
 
-          {/* Amount Input */}
-          <div className="p-3 border-b border-[#2d2d44]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wide">Amount</span>
-              <DollarSign className="h-3.5 w-3.5 text-gray-500" />
-            </div>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))}
-                className="w-full pl-7 pr-3 py-2 bg-gradient-to-b from-[#252542] to-[#1f1f38] border border-[#3d3d5c] rounded-lg text-white text-lg font-bold text-center focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 transition-all"
-              />
-            </div>
-
-            {/* Quick Amount Buttons */}
-            <div className="grid grid-cols-3 gap-1.5 mt-2">
-              {QUICK_AMOUNTS.map((quickAmount) => (
-                <button
-                  key={quickAmount}
-                  onClick={() => setAmount(quickAmount)}
-                  className={cn(
-                    'py-1.5 rounded-md text-xs font-semibold transition-all',
-                    amount === quickAmount
-                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
-                      : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
-                  )}
-                >
-                  ${quickAmount}
-                </button>
-              ))}
-            </div>
-
-            {/* Balance display */}
-            <div className="flex items-center justify-between mt-2 px-0.5">
-              <span className="text-gray-500 text-[10px]">Balance</span>
-              <span className="text-emerald-400 text-xs font-bold">{formatCurrency(balance)}</span>
-            </div>
-          </div>
-
-          {/* Payout Display - Compact */}
-          <div className="p-3">
-            <div className="bg-gradient-to-br from-emerald-900/30 to-emerald-800/10 rounded-lg p-2.5 border border-emerald-500/20">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Zap className="h-3.5 w-3.5 text-emerald-500" />
-                  <span className="text-gray-400 text-[10px] font-medium">Payout</span>
-                </div>
-                <span className="text-lg font-bold text-emerald-400">+{payoutPercent}%</span>
-              </div>
-              <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-emerald-500/20 text-[10px]">
-                <span className="text-gray-400">Profit</span>
-                <span className="text-emerald-300 font-semibold">+${potentialProfit.toFixed(2)}</span>
-              </div>
-              <div className="flex items-center justify-between mt-0.5 text-[10px]">
-                <span className="text-gray-400">Return</span>
-                <span className="text-emerald-400 font-bold">${(amount + potentialProfit).toFixed(2)}</span>
-              </div>
-            </div>
+          {/* Duration buttons */}
+          <div className="grid grid-cols-5 gap-1 mt-2">
+            {DURATIONS.slice(0, 10).map((d) => (
+              <button
+                key={d.value}
+                onClick={() => {
+                  setDuration(d.value);
+                  setShowCustomDuration(false);
+                }}
+                className={cn(
+                  'py-1.5 rounded-md text-[10px] font-semibold transition-all',
+                  duration === d.value && !showCustomDuration
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                    : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
+                )}
+              >
+                {d.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Trade Buttons - Fixed at bottom */}
-        <div className="p-3 border-t border-[#2d2d44] space-y-2 flex-shrink-0">
-          {/* BUY Button */}
-          <button
-            onClick={() => handleTrade('UP')}
-            disabled={isLoading || amount > balance || amount <= 0}
-            className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-emerald-900 disabled:to-emerald-900 disabled:cursor-not-allowed rounded-lg font-bold text-white text-sm flex items-center justify-center gap-1.5 transition-all duration-200 shadow-lg shadow-emerald-900/50 hover:shadow-emerald-500/40 active:scale-[0.98] group"
-          >
-            <ArrowUp className="h-5 w-5 group-hover:-translate-y-0.5 transition-transform" strokeWidth={3} />
-            BUY
-          </button>
+        {/* Amount Input */}
+        <div className="p-3 border-b border-[#2d2d44]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wide">Amount</span>
+            <DollarSign className="h-3.5 w-3.5 text-gray-500" />
+          </div>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))}
+              className="w-full pl-7 pr-3 py-2 bg-gradient-to-b from-[#252542] to-[#1f1f38] border border-[#3d3d5c] rounded-lg text-white text-lg font-bold text-center focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+            />
+          </div>
 
-          {/* SELL Button */}
-          <button
-            onClick={() => handleTrade('DOWN')}
-            disabled={isLoading || amount > balance || amount <= 0}
-            className="w-full py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:from-red-900 disabled:to-red-900 disabled:cursor-not-allowed rounded-lg font-bold text-white text-sm flex items-center justify-center gap-1.5 transition-all duration-200 shadow-lg shadow-red-900/50 hover:shadow-red-500/40 active:scale-[0.98] group"
-          >
-            <ArrowDown className="h-5 w-5 group-hover:translate-y-0.5 transition-transform" strokeWidth={3} />
-            SELL
-          </button>
+          {/* Quick Amount Buttons */}
+          <div className="grid grid-cols-3 gap-1.5 mt-2">
+            {QUICK_AMOUNTS.map((quickAmount) => (
+              <button
+                key={quickAmount}
+                onClick={() => setAmount(quickAmount)}
+                className={cn(
+                  'py-1.5 rounded-md text-xs font-semibold transition-all',
+                  amount === quickAmount
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
+                    : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
+                )}
+              >
+                ${quickAmount}
+              </button>
+            ))}
+          </div>
+
+          {/* Balance display */}
+          <div className="flex items-center justify-between mt-2 px-0.5">
+            <span className="text-gray-500 text-[10px]">Balance</span>
+            <span className="text-emerald-400 text-xs font-bold">{formatCurrency(balance)}</span>
+          </div>
+        </div>
+
+        {/* Payout Display */}
+        <div className="p-3">
+          <div className="bg-gradient-to-br from-emerald-900/30 to-emerald-800/10 rounded-lg p-2.5 border border-emerald-500/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Zap className="h-3.5 w-3.5 text-emerald-500" />
+                <span className="text-gray-400 text-[10px] font-medium">Payout</span>
+              </div>
+              <span className="text-lg font-bold text-emerald-400">+{payoutPercent}%</span>
+            </div>
+            <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-emerald-500/20 text-[10px]">
+              <span className="text-gray-400">Profit</span>
+              <span className="text-emerald-300 font-semibold">+${potentialProfit.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between mt-0.5 text-[10px]">
+              <span className="text-gray-400">Return</span>
+              <span className="text-emerald-400 font-bold">${(amount + potentialProfit).toFixed(2)}</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Mobile Bottom Panel - Compact Fixed Height */}
-      <div
-        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#1a1a2e] border-t border-[#2d2d44]"
-        style={{ touchAction: 'manipulation' }}
-      >
-        {/* Expandable Options */}
-        {isExpanded && (
-          <div className="px-3 py-3 space-y-3 bg-[#1a1a2e]">
-            {/* Duration Row */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400 text-xs">Time:</span>
-                <button
-                  onClick={() => setShowCustomDuration(!showCustomDuration)}
-                  className="text-blue-400 text-xs flex items-center gap-1"
-                >
-                  <Edit3 className="h-3 w-3" />
-                  Custom
-                </button>
-              </div>
-              {showCustomDuration ? (
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <label className="text-[10px] text-gray-500 block mb-1">Hr</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="24"
-                      value={customHours}
-                      onChange={(e) => setCustomHours(Math.max(0, Math.min(24, Number(e.target.value))))}
-                      className="w-full px-1 py-2 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm text-center"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-[10px] text-gray-500 block mb-1">Min</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="59"
-                      value={customMinutes}
-                      onChange={(e) => setCustomMinutes(Math.max(0, Math.min(59, Number(e.target.value))))}
-                      className="w-full px-1 py-2 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm text-center"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-[10px] text-gray-500 block mb-1">Sec</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="59"
-                      value={customSeconds}
-                      onChange={(e) => setCustomSeconds(Math.max(0, Math.min(59, Number(e.target.value))))}
-                      className="w-full px-1 py-2 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm text-center"
-                    />
-                  </div>
-                  <button
-                    onClick={() => {
-                      const totalSeconds = customHours * 3600 + customMinutes * 60 + customSeconds;
-                      if (totalSeconds >= 5 && totalSeconds <= 86400) {
-                        setDuration(totalSeconds);
-                        setShowCustomDuration(false);
-                      }
-                    }}
-                    className="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded"
-                  >
-                    Set
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-5 gap-1.5">
-                  {DURATIONS.map((d) => (
-                    <button
-                      key={d.value}
-                      type="button"
-                      onTouchStart={(e) => e.currentTarget.classList.add('scale-95')}
-                      onTouchEnd={(e) => {
-                        e.currentTarget.classList.remove('scale-95');
-                        setDuration(d.value);
-                      }}
-                      onClick={() => setDuration(d.value)}
-                      className={cn(
-                        'py-2 rounded-lg text-xs font-semibold cursor-pointer select-none',
-                        duration === d.value
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-[#252542] text-gray-400'
-                      )}
-                      style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
-                    >
-                      {d.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+      {/* Trade Buttons - Fixed at bottom */}
+      <div className="p-3 border-t border-[#2d2d44] space-y-2 flex-shrink-0">
+        <button
+          onClick={() => handleTrade('UP')}
+          disabled={isLoading || amount > balance || amount <= 0}
+          className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-emerald-900 disabled:to-emerald-900 disabled:cursor-not-allowed rounded-lg font-bold text-white text-sm flex items-center justify-center gap-1.5 transition-all duration-200 shadow-lg shadow-emerald-900/50 hover:shadow-emerald-500/40 active:scale-[0.98] group"
+        >
+          <ArrowUp className="h-5 w-5 group-hover:-translate-y-0.5 transition-transform" strokeWidth={3} />
+          BUY
+        </button>
 
-            {/* Amount Row */}
-            <div className="space-y-2">
-              <span className="text-gray-400 text-xs">Amount:</span>
-              <div className="grid grid-cols-4 gap-1.5">
-                {QUICK_AMOUNTS.map((quickAmount) => (
-                  <button
-                    key={quickAmount}
-                    type="button"
-                    onTouchStart={(e) => e.currentTarget.classList.add('scale-95')}
-                    onTouchEnd={(e) => {
-                      e.currentTarget.classList.remove('scale-95');
-                      setAmount(quickAmount);
-                    }}
-                    onClick={() => setAmount(quickAmount)}
-                    className={cn(
-                      'py-2 rounded-lg text-xs font-semibold cursor-pointer select-none',
-                      amount === quickAmount
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-[#252542] text-gray-400'
-                    )}
-                    style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
-                  >
-                    ${quickAmount}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Trade Controls - Always Visible */}
-        <div className="px-2 pb-2 pt-1 safe-area-bottom">
-          {/* Info Bar - Toggle expand */}
-          <button
-            type="button"
-            onTouchEnd={() => setIsExpanded(!isExpanded)}
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="w-full flex items-center justify-between px-3 py-2 mb-1.5 bg-[#252542] rounded-lg cursor-pointer select-none"
-            style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
-          >
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-white font-bold">${amount}</span>
-              <span className="text-gray-500">|</span>
-              <span className="text-blue-400">{getDurationLabel(duration)}</span>
-              <span className="text-gray-500">|</span>
-              <span className="text-emerald-400">+{payoutPercent}%</span>
-              <span className="text-emerald-400/70 text-[10px]">(+${potentialProfit.toFixed(0)})</span>
-            </div>
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4 text-gray-400" />
-            ) : (
-              <ChevronUp className="h-4 w-4 text-gray-400" />
-            )}
-          </button>
-
-          {/* Trade Buttons */}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onTouchEnd={() => !isLoading && amount <= balance && amount > 0 && handleTrade('UP')}
-              onClick={() => handleTrade('UP')}
-              disabled={isLoading || amount > balance || amount <= 0}
-              className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 disabled:from-emerald-900/50 disabled:to-emerald-900/50 disabled:cursor-not-allowed rounded-xl font-bold text-white text-base flex items-center justify-center gap-1.5 cursor-pointer select-none active:scale-[0.98]"
-              style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
-            >
-              <ArrowUp className="h-5 w-5" strokeWidth={3} />
-              BUY
-            </button>
-            <button
-              type="button"
-              onTouchEnd={() => !isLoading && amount <= balance && amount > 0 && handleTrade('DOWN')}
-              onClick={() => handleTrade('DOWN')}
-              disabled={isLoading || amount > balance || amount <= 0}
-              className="flex-1 py-3 bg-gradient-to-r from-red-600 to-red-500 disabled:from-red-900/50 disabled:to-red-900/50 disabled:cursor-not-allowed rounded-xl font-bold text-white text-base flex items-center justify-center gap-1.5 cursor-pointer select-none active:scale-[0.98]"
-              style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
-            >
-              <ArrowDown className="h-5 w-5" strokeWidth={3} />
-              SELL
-            </button>
-          </div>
-        </div>
+        <button
+          onClick={() => handleTrade('DOWN')}
+          disabled={isLoading || amount > balance || amount <= 0}
+          className="w-full py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:from-red-900 disabled:to-red-900 disabled:cursor-not-allowed rounded-lg font-bold text-white text-sm flex items-center justify-center gap-1.5 transition-all duration-200 shadow-lg shadow-red-900/50 hover:shadow-red-500/40 active:scale-[0.98] group"
+        >
+          <ArrowDown className="h-5 w-5 group-hover:translate-y-0.5 transition-transform" strokeWidth={3} />
+          SELL
+        </button>
       </div>
-    </>
+    </div>
   );
 }

@@ -8,6 +8,9 @@ import { PriceChart } from '@/components/trading/PriceChart';
 import { ActiveTrades } from '@/components/trading/ActiveTrades';
 import { TradesSidebar } from '@/components/trading/TradesSidebar';
 import { RightMenu } from '@/components/trading/RightMenu';
+import { Header } from '@/components/layout/Header';
+import { MobileAssetBar } from '@/components/trading/MobileAssetBar';
+import { MobileTradingPanel } from '@/components/trading/MobileTradingPanel';
 import { MobileNav } from '@/components/trading/MobileNav';
 import { MobileTradesSheet } from '@/components/trading/MobileTradesSheet';
 import { useAuthStore } from '@/store/auth.store';
@@ -18,34 +21,30 @@ import { playBuySound, playSellSound, playWinSound, playLoseSound } from '@/lib/
 
 export default function TradePage() {
   const { user, syncBalanceFromServer, isHydrated } = useAuthStore();
-  const { placeTrade, syncFromApi, isLoading } = useTradeStore();
+  const { placeTrade, syncFromApi } = useTradeStore();
   const { isConnected, latestPrices, priceHistory, subscribe, unsubscribe } = useWebSocket();
   const [selectedAsset, setSelectedAsset] = useState('EUR/USD');
-  const [isTrading, setIsTrading] = useState(false);
   const [currentPrice, setCurrentPrice] = useState<PriceTick | null>(null);
   const [isTradesPanelOpen, setIsTradesPanelOpen] = useState(true);
   const [isMobileTradesOpen, setIsMobileTradesOpen] = useState(false);
+  const [selectedDuration, setSelectedDuration] = useState(300);
 
   useEffect(() => {
     if (isHydrated && user) {
-      // Sync balance and trades from server when page loads
       syncBalanceFromServer();
       syncFromApi();
     }
   }, [isHydrated, user, syncBalanceFromServer, syncFromApi]);
 
-  // Subscribe to selected asset's price updates via WebSocket
   useEffect(() => {
     if (isConnected) {
       subscribe(selectedAsset);
-
       return () => {
         unsubscribe(selectedAsset);
       };
     }
   }, [selectedAsset, isConnected, subscribe, unsubscribe]);
 
-  // Update current price from WebSocket
   useEffect(() => {
     const price = latestPrices.get(selectedAsset);
     if (price) {
@@ -64,20 +63,18 @@ export default function TradePage() {
     async (direction: 'UP' | 'DOWN', amount: number, duration: number) => {
       if (!user) return;
 
-      setIsTrading(true);
-
-      // Play sound based on direction
+      // Play sound immediately for instant feedback
       if (direction === 'UP') {
         playBuySound();
       } else {
         playSellSound();
       }
 
-      try {
-        const priceData = await api.getCurrentPrice(selectedAsset);
-        const entryPrice = priceData?.price || currentPrice?.price || 1.0852;
-        const marketType = getMarketType(selectedAsset);
+      // Use current price from WebSocket (already available, no API call needed)
+      const entryPrice = currentPrice?.price || 1.0852;
+      const marketType = getMarketType(selectedAsset);
 
+      try {
         const trade = await placeTrade({
           symbol: selectedAsset,
           direction,
@@ -87,12 +84,12 @@ export default function TradePage() {
           marketType,
         });
 
-        // Sync balance from server after trade is placed (server deducted the amount)
-        await syncBalanceFromServer();
-
         toast.success(`Trade placed: ${direction} on ${selectedAsset} for $${amount}`, {
           duration: 3000,
         });
+
+        // Sync balance in background (don't block next trade)
+        syncBalanceFromServer();
 
         const pollResult = async () => {
           const updatedTrade = await api.getTradeById(trade.id);
@@ -112,8 +109,7 @@ export default function TradePage() {
               });
             }
 
-            // Always sync balance from server after trade closes - server is source of truth
-            await syncBalanceFromServer();
+            syncBalanceFromServer();
             syncFromApi();
           } else {
             setTimeout(pollResult, 1000);
@@ -126,14 +122,11 @@ export default function TradePage() {
         toast.error('Failed to place trade. Please try again.', {
           duration: 4000,
         });
-      } finally {
-        setIsTrading(false);
       }
     },
     [user, selectedAsset, currentPrice, syncBalanceFromServer, placeTrade, syncFromApi]
   );
 
-  // Show loading while user data is being fetched from server
   if (!user) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-[#0f0f1a]">
@@ -146,40 +139,53 @@ export default function TradePage() {
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-[#0f0f1a] overflow-hidden">
-      <TradingHeader
+    <div className="fixed inset-0 flex flex-col bg-[#0d0d1a] overflow-hidden">
+      {/* ===== DESKTOP LAYOUT ===== */}
+      <div className="hidden md:block">
+        <TradingHeader
+          selectedAsset={selectedAsset}
+          onSelectAsset={setSelectedAsset}
+          currentPrice={currentPrice}
+        />
+      </div>
+
+      {/* ===== MOBILE LAYOUT ===== */}
+      {/* Mobile Header - Same as other pages */}
+      <div className="md:hidden">
+        <Header />
+      </div>
+
+      {/* Mobile Asset Bar */}
+      <MobileAssetBar
         selectedAsset={selectedAsset}
         onSelectAsset={setSelectedAsset}
         currentPrice={currentPrice}
+        expirationTime={selectedDuration}
       />
 
-      {/* Mobile Navigation Bar - below header */}
-      <MobileNav onOpenTrades={() => setIsMobileTradesOpen(true)} />
-
-      {/* Main Content - Chart takes remaining space, minus bottom panel on mobile */}
-      {/* pt-[44px] on mobile for MobileNav, pb-[76px] for trading panel */}
-      <div className="flex-1 flex overflow-hidden pt-[44px] md:pt-0 pb-[76px] md:pb-0">
-        {/* Chart Area - Full width on mobile */}
+      {/* ===== MAIN CONTENT AREA ===== */}
+      {/* Mobile: pb-[250px] for trading panel (~180px) + nav (~70px) */}
+      {/* Desktop: pb-0 */}
+      <div className="flex-1 flex overflow-hidden pb-[250px] md:pb-0">
+        {/* Chart Area */}
         <div className="flex-1 h-full relative overflow-hidden">
           <PriceChart
             symbol={selectedAsset}
             currentPrice={currentPrice}
             priceHistory={priceHistory.get(selectedAsset) || []}
           />
-          {/* Active Trades - Visible on all screens */}
           <ActiveTrades />
         </div>
 
-        {/* Trading Panel - Desktop only sidebar, Mobile shows bottom sheet */}
+        {/* Desktop Trading Panel */}
         <TradingPanel
           balance={user.demoBalance}
           onTrade={handleTrade}
-          isLoading={isTrading || isLoading}
           currentPrice={currentPrice?.price}
           isTradesPanelOpen={isTradesPanelOpen}
         />
 
-        {/* Trades Sidebar - Large screens only, controlled by RightMenu */}
+        {/* Desktop Trades Sidebar */}
         {isTradesPanelOpen && (
           <TradesSidebar
             isCollapsed={false}
@@ -188,11 +194,22 @@ export default function TradePage() {
         )}
       </div>
 
-      {/* Fixed Right Menu - Icon navigation (desktop only) */}
+      {/* Desktop Right Menu */}
       <RightMenu
         isTradesPanelOpen={isTradesPanelOpen}
         onToggleTradesPanel={() => setIsTradesPanelOpen(!isTradesPanelOpen)}
       />
+
+      {/* ===== MOBILE FIXED BOTTOM ELEMENTS ===== */}
+      {/* Mobile Trading Panel - positioned above nav */}
+      <MobileTradingPanel
+        balance={user.demoBalance}
+        onTrade={handleTrade}
+        onDurationChange={setSelectedDuration}
+      />
+
+      {/* Mobile Bottom Navigation - at very bottom */}
+      <MobileNav onOpenTrades={() => setIsMobileTradesOpen(true)} />
 
       {/* Mobile Trades Sheet */}
       <MobileTradesSheet

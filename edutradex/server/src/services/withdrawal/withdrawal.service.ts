@@ -52,27 +52,38 @@ export class WithdrawalService {
       throw new WithdrawalServiceError('Insufficient balance', 400);
     }
 
-    const withdrawal = await prisma.withdrawal.create({
-      data: {
-        userId: data.userId,
-        amount: data.amount,
-        method: 'MOBILE_MONEY',
-        status: 'PENDING',
-        phoneNumber: data.phoneNumber,
-        mobileProvider: data.mobileProvider,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+    // Create withdrawal and deduct balance immediately (hold funds)
+    const [withdrawal] = await prisma.$transaction([
+      prisma.withdrawal.create({
+        data: {
+          userId: data.userId,
+          amount: data.amount,
+          method: 'MOBILE_MONEY',
+          status: 'PENDING',
+          phoneNumber: data.phoneNumber,
+          mobileProvider: data.mobileProvider,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.user.update({
+        where: { id: data.userId },
+        data: {
+          demoBalance: {
+            decrement: data.amount,
+          },
+        },
+      }),
+    ]);
 
-    logger.info('Mobile money withdrawal request created', {
+    logger.info('Mobile money withdrawal request created (balance held)', {
       withdrawalId: withdrawal.id,
       userId: data.userId,
       amount: data.amount,
@@ -95,27 +106,38 @@ export class WithdrawalService {
       throw new WithdrawalServiceError('Insufficient balance', 400);
     }
 
-    const withdrawal = await prisma.withdrawal.create({
-      data: {
-        userId: data.userId,
-        amount: data.amount,
-        method: 'CRYPTO',
-        status: 'PENDING',
-        cryptoCurrency: data.cryptoCurrency,
-        walletAddress: data.walletAddress,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+    // Create withdrawal and deduct balance immediately (hold funds)
+    const [withdrawal] = await prisma.$transaction([
+      prisma.withdrawal.create({
+        data: {
+          userId: data.userId,
+          amount: data.amount,
+          method: 'CRYPTO',
+          status: 'PENDING',
+          cryptoCurrency: data.cryptoCurrency,
+          walletAddress: data.walletAddress,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.user.update({
+        where: { id: data.userId },
+        data: {
+          demoBalance: {
+            decrement: data.amount,
+          },
+        },
+      }),
+    ]);
 
-    logger.info('Crypto withdrawal request created', {
+    logger.info('Crypto withdrawal request created (balance held)', {
       withdrawalId: withdrawal.id,
       userId: data.userId,
       amount: data.amount,
@@ -223,48 +245,26 @@ export class WithdrawalService {
       throw new WithdrawalServiceError('Withdrawal has already been processed', 400);
     }
 
-    // Check if user still has sufficient balance
-    const user = await prisma.user.findUnique({
-      where: { id: withdrawal.userId },
+    // Balance was already deducted when withdrawal was created
+    // Just update the withdrawal status to APPROVED
+    const updatedWithdrawal = await prisma.withdrawal.update({
+      where: { id: withdrawalId },
+      data: {
+        status: 'APPROVED',
+        adminNote,
+        processedBy: adminId,
+        processedAt: new Date(),
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
-
-    if (!user) {
-      throw new WithdrawalServiceError('User not found', 404);
-    }
-
-    if (user.demoBalance < withdrawal.amount) {
-      throw new WithdrawalServiceError('User has insufficient balance for this withdrawal', 400);
-    }
-
-    // Update withdrawal and deduct from user balance in a transaction
-    const [updatedWithdrawal] = await prisma.$transaction([
-      prisma.withdrawal.update({
-        where: { id: withdrawalId },
-        data: {
-          status: 'APPROVED',
-          adminNote,
-          processedBy: adminId,
-          processedAt: new Date(),
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      }),
-      prisma.user.update({
-        where: { id: withdrawal.userId },
-        data: {
-          demoBalance: {
-            decrement: withdrawal.amount,
-          },
-        },
-      }),
-    ]);
 
     logger.info('Withdrawal approved', {
       withdrawalId,
@@ -308,26 +308,37 @@ export class WithdrawalService {
       throw new WithdrawalServiceError('Withdrawal has already been processed', 400);
     }
 
-    const updatedWithdrawal = await prisma.withdrawal.update({
-      where: { id: withdrawalId },
-      data: {
-        status: 'REJECTED',
-        adminNote,
-        processedBy: adminId,
-        processedAt: new Date(),
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+    // Reject withdrawal and refund balance to user (balance was held at creation)
+    const [updatedWithdrawal] = await prisma.$transaction([
+      prisma.withdrawal.update({
+        where: { id: withdrawalId },
+        data: {
+          status: 'REJECTED',
+          adminNote,
+          processedBy: adminId,
+          processedAt: new Date(),
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.user.update({
+        where: { id: withdrawal.userId },
+        data: {
+          demoBalance: {
+            increment: withdrawal.amount,
+          },
+        },
+      }),
+    ]);
 
-    logger.info('Withdrawal rejected', {
+    logger.info('Withdrawal rejected (balance refunded)', {
       withdrawalId,
       userId: withdrawal.userId,
       amount: withdrawal.amount,

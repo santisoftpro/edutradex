@@ -19,7 +19,7 @@ export function TradeMarkers({ symbol, currentPrice }: TradeMarkersProps) {
   if (symbolTrades.length === 0) return null;
 
   return (
-    <div className="absolute right-4 top-16 z-20 flex flex-col gap-1.5 max-w-[180px]">
+    <div className="hidden md:flex absolute right-4 top-16 z-20 flex-col gap-1.5 max-w-[180px]">
       {symbolTrades.slice(0, 5).map((trade) => (
         <CompactTradeMarker key={trade.id} trade={trade} currentPrice={currentPrice} />
       ))}
