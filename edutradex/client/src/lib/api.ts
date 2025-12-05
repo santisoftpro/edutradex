@@ -131,11 +131,16 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        // Only redirect on 401 for protected endpoints, not for auth endpoints
+        // Only redirect on 401 for protected endpoints, not for public auth endpoints
         const url = error.config?.url || '';
-        const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
+        const isPublicAuthEndpoint =
+          url.includes('/auth/login') ||
+          url.includes('/auth/register') ||
+          url.includes('/auth/forgot-password') ||
+          url.includes('/auth/reset-password') ||
+          url.includes('/auth/verify-reset-token');
 
-        if (error.response?.status === 401 && !isAuthEndpoint) {
+        if (error.response?.status === 401 && !isPublicAuthEndpoint) {
           this.token = null;
           if (typeof window !== 'undefined') {
             localStorage.removeItem('auth-storage');
