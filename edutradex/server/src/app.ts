@@ -39,19 +39,19 @@ app.use(cors({
 // Rate limiting - General API limiter
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 100,
+  max: 300, // Increased to handle trading activity
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many requests, please try again later' }
 });
 
-// Rate limiting - Strict limiter for auth endpoints
+// Rate limiting - Stricter limiter for auth endpoints (prevents brute force)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
+  max: 15, // Allow 15 attempts per 15 minutes (1 per minute average)
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, error: 'Too many login attempts, please try again later' }
+  message: { success: false, error: 'Too many login attempts, please try again in 15 minutes' }
 });
 
 // Apply rate limiting
