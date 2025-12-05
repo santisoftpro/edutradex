@@ -22,7 +22,7 @@ model User {
   name              String
   role              String       @default("USER")
   liveBalance       Float        @default(0)
-  demoBalance       Float        @default(10000)
+  demoBalance       Float        @default(0)
   activeAccountType String       @default("LIVE")
   isActive          Boolean      @default(true)
   createdAt         DateTime     @default(now())
