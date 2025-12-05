@@ -233,6 +233,32 @@ export const emailTemplates = {
     `);
   },
 
+  passwordReset: (userName: string, resetLink: string): string => {
+    return wrapTemplate(`
+      <h2>Hello ${userName},</h2>
+      <p>We received a request to reset your password. Click the button below to create a new password:</p>
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${resetLink}" class="btn" style="color: #fff;">Reset Password</a>
+      </div>
+      <div class="warning">
+        <strong>This link expires in 1 hour.</strong> If you didn't request this, please ignore this email.
+      </div>
+      <p style="color: #666; font-size: 14px;">If the button doesn't work, copy and paste this link into your browser:</p>
+      <p style="word-break: break-all; color: #10b981; font-size: 14px;">${resetLink}</p>
+    `);
+  },
+
+  passwordChanged: (userName: string): string => {
+    return wrapTemplate(`
+      <h2>Hello ${userName},</h2>
+      <div class="success">
+        <strong>Your password has been changed successfully!</strong>
+      </div>
+      <p>If you did not make this change, please contact our support team immediately.</p>
+      <p>Best regards,<br><strong>The OptigoBroker Team</strong></p>
+    `);
+  },
+
   kycSubmitted: (userName: string): string => {
     return wrapTemplate(`
       <h2>Hello ${userName},</h2>

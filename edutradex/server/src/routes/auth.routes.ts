@@ -6,9 +6,15 @@ import {
   registerSchema,
   loginSchema,
   resetBalanceSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  verifyResetTokenSchema,
   type RegisterInput,
   type LoginInput,
   type ResetBalanceInput,
+  type ForgotPasswordInput,
+  type ResetPasswordInput,
+  type VerifyResetTokenInput,
 } from '../validators/auth.validators.js';
 import { logger } from '../utils/logger.js';
 
@@ -356,6 +362,90 @@ router.post(
       res.status(500).json({
         success: false,
         error: 'Failed to switch account',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/forgot-password
+ * Request password reset email
+ */
+router.post(
+  '/forgot-password',
+  validateBody(forgotPasswordSchema),
+  async (req: Request<object, object, ForgotPasswordInput>, res: Response): Promise<void> => {
+    try {
+      await authService.forgotPassword(req.body.email);
+
+      // Always return success to prevent email enumeration
+      res.json({
+        success: true,
+        message: 'If an account exists with this email, you will receive a password reset link',
+      });
+    } catch (error) {
+      logger.error('Forgot password error', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to process request',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/reset-password
+ * Reset password with token
+ */
+router.post(
+  '/reset-password',
+  validateBody(resetPasswordSchema),
+  async (req: Request<object, object, ResetPasswordInput>, res: Response): Promise<void> => {
+    try {
+      await authService.resetPassword(req.body.token, req.body.password);
+
+      res.json({
+        success: true,
+        message: 'Password reset successfully',
+      });
+    } catch (error) {
+      if (error instanceof AuthServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+
+      logger.error('Reset password error', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to reset password',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/verify-reset-token
+ * Verify if reset token is valid
+ */
+router.post(
+  '/verify-reset-token',
+  validateBody(verifyResetTokenSchema),
+  async (req: Request<object, object, VerifyResetTokenInput>, res: Response): Promise<void> => {
+    try {
+      const isValid = await authService.verifyResetToken(req.body.token);
+
+      res.json({
+        success: true,
+        data: { valid: isValid },
+      });
+    } catch (error) {
+      logger.error('Verify reset token error', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to verify token',
       });
     }
   }

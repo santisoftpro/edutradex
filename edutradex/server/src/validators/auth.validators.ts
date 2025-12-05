@@ -50,6 +50,37 @@ export const resetBalanceSchema = z.object({
     .optional(),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .email('Invalid email format')
+    .transform((val) => val.toLowerCase().trim()),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z
+    .string()
+    .min(1, 'Reset token is required'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password must be less than 128 characters')
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      'Password must contain at least one uppercase letter, one lowercase letter, and one number'
+    ),
+});
+
+export const verifyResetTokenSchema = z.object({
+  token: z
+    .string()
+    .min(1, 'Reset token is required'),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ResetBalanceInput = z.infer<typeof resetBalanceSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type VerifyResetTokenInput = z.infer<typeof verifyResetTokenSchema>;

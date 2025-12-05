@@ -398,6 +398,65 @@ export class AuthService {
       accountType: updatedUser.activeAccountType as 'LIVE' | 'DEMO',
     };
   }
+
+  async forgotPassword(email: string): Promise<boolean> {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, name: true, isActive: true },
+    });
+
+    // Always return success to prevent email enumeration
+    if (!user || !user.isActive) {
+      logger.info('Password reset requested for non-existent/inactive email', { email });
+      return true;
+    }
+
+    const token = await emailService.sendPasswordResetEmail(email, user.name, config.client.url);
+
+    if (token) {
+      logger.info('Password reset email sent', { userId: user.id });
+    }
+
+    return true;
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<boolean> {
+    const email = await emailService.verifyResetToken(token);
+
+    if (!email) {
+      throw new AuthServiceError('Invalid or expired reset token', 400);
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, name: true, isActive: true },
+    });
+
+    if (!user || !user.isActive) {
+      throw new AuthServiceError('User not found or inactive', 404);
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, this.SALT_ROUNDS);
+
+    await prisma.user.update({
+      where: { email },
+      data: { password: hashedPassword },
+    });
+
+    await emailService.markResetTokenUsed(token);
+
+    // Send confirmation email
+    emailService.sendPasswordChanged(email, user.name)
+      .catch(err => logger.error('Failed to send password changed email', { userId: user.id, error: err }));
+
+    logger.info('Password reset successfully', { userId: user.id });
+    return true;
+  }
+
+  async verifyResetToken(token: string): Promise<boolean> {
+    const email = await emailService.verifyResetToken(token);
+    return email !== null;
+  }
 }
 
 export const authService = new AuthService();

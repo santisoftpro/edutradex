@@ -115,7 +115,7 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
-      timeout: 10000,
+      timeout: 30000,
     });
 
     this.client.interceptors.request.use(
@@ -940,6 +940,20 @@ class ApiClient {
 
   async verifyEmail(code: string): Promise<void> {
     await this.post('/auth/verify-email', { code });
+  }
+
+  // Password Reset API Methods
+  async forgotPassword(email: string): Promise<void> {
+    await this.post('/auth/forgot-password', { email });
+  }
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    await this.post('/auth/reset-password', { token, password });
+  }
+
+  async verifyResetToken(token: string): Promise<boolean> {
+    const response = await this.post<{ success: boolean; data: { valid: boolean } }>('/auth/verify-reset-token', { token });
+    return response.data.valid;
   }
 
   // KYC API Methods (User)

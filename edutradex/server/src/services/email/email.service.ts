@@ -245,6 +245,82 @@ class EmailService {
     const html = emailTemplates.kycRejected(userName, reason);
     return this.sendEmail(email, 'KYC Verification Update - OptigoBroker', html);
   }
+
+  // Generate secure reset token
+  private generateResetToken(): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let token = '';
+    for (let i = 0; i < 64; i++) {
+      token += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return token;
+  }
+
+  // Send password reset email
+  async sendPasswordResetEmail(email: string, userName: string, clientUrl: string): Promise<string | null> {
+    const token = this.generateResetToken();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    try {
+      // Store reset token in database
+      await prisma.emailVerification.create({
+        data: {
+          email,
+          code: token,
+          type: 'PASSWORD_RESET',
+          expiresAt,
+        },
+      });
+
+      const resetLink = `${clientUrl}/reset-password?token=${token}`;
+      const html = emailTemplates.passwordReset(userName, resetLink);
+      const sent = await this.sendEmail(email, 'Reset Your Password - OptigoBroker', html);
+
+      return sent ? token : null;
+    } catch (error) {
+      logger.error('Failed to create password reset token', { email, error });
+      return null;
+    }
+  }
+
+  // Verify password reset token
+  async verifyResetToken(token: string): Promise<string | null> {
+    try {
+      const verification = await prisma.emailVerification.findFirst({
+        where: {
+          code: token,
+          type: 'PASSWORD_RESET',
+          verified: false,
+          expiresAt: { gt: new Date() },
+        },
+      });
+
+      return verification?.email || null;
+    } catch (error) {
+      logger.error('Failed to verify reset token', { error });
+      return null;
+    }
+  }
+
+  // Mark reset token as used
+  async markResetTokenUsed(token: string): Promise<boolean> {
+    try {
+      await prisma.emailVerification.updateMany({
+        where: { code: token, type: 'PASSWORD_RESET' },
+        data: { verified: true },
+      });
+      return true;
+    } catch (error) {
+      logger.error('Failed to mark reset token as used', { error });
+      return false;
+    }
+  }
+
+  // Send password changed notification
+  async sendPasswordChanged(email: string, userName: string): Promise<boolean> {
+    const html = emailTemplates.passwordChanged(userName);
+    return this.sendEmail(email, 'Password Changed - OptigoBroker', html);
+  }
 }
 
 export const emailService = new EmailService();
