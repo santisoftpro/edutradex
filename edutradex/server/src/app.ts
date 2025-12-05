@@ -39,25 +39,14 @@ app.use(cors({
 // Rate limiting - General API limiter
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 300, // Increased to handle trading activity
+  max: 600, // High limit to handle rapid trading and polling
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many requests, please try again later' }
 });
 
-// Rate limiting - Stricter limiter for auth endpoints (prevents brute force)
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // Allow 15 attempts per 15 minutes (1 per minute average)
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: 'Too many login attempts, please try again in 15 minutes' }
-});
-
-// Apply rate limiting
+// Apply rate limiting (auth rate limiting disabled for testing phase)
 app.use('/api', apiLimiter);
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/register', authLimiter);
 
 // Body parsing with size limits
 app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
