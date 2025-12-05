@@ -86,11 +86,11 @@ export default function HistoryPage() {
           <p className="text-2xl font-bold text-emerald-400">{stats.wonTrades}</p>
         </div>
         <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-          <p className="text-slate-400 text-sm">Lost</p>
+          <p className="text-slate-400 text-sm">Loss</p>
           <p className="text-2xl font-bold text-red-400">{stats.lostTrades}</p>
         </div>
         <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-          <p className="text-slate-400 text-sm">Win Rate</p>
+          <p className="text-slate-400 text-sm">Profit Rate</p>
           <p className="text-2xl font-bold text-white">{stats.winRate.toFixed(1)}%</p>
         </div>
       </div>
@@ -113,7 +113,7 @@ export default function HistoryPage() {
                   : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
               )}
             >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === 'all' ? 'All' : f === 'won' ? 'Profit' : 'Loss'}
             </button>
           ))}
         </div>

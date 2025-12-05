@@ -21,8 +21,26 @@ router.get('/prices/forex', (_req: Request, res: Response) => {
   });
 });
 
-router.get('/prices/otc', (_req: Request, res: Response) => {
-  const prices = marketService.getOtcPrices();
+router.get('/prices/crypto', (_req: Request, res: Response) => {
+  const prices = marketService.getCryptoPrices();
+  res.json({
+    success: true,
+    data: prices,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+router.get('/prices/stocks', (_req: Request, res: Response) => {
+  const prices = marketService.getStockPrices();
+  res.json({
+    success: true,
+    data: prices,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+router.get('/prices/indices', (_req: Request, res: Response) => {
+  const prices = marketService.getIndexPrices();
   res.json({
     success: true,
     data: prices,
@@ -106,8 +124,24 @@ router.get('/assets/forex', (_req: Request, res: Response) => {
   });
 });
 
-router.get('/assets/otc', (_req: Request, res: Response) => {
-  const assets = marketService.getOtcAssets();
+router.get('/assets/crypto', (_req: Request, res: Response) => {
+  const assets = marketService.getCryptoAssets();
+  res.json({
+    success: true,
+    data: assets,
+  });
+});
+
+router.get('/assets/indices', (_req: Request, res: Response) => {
+  const assets = marketService.getIndexAssets();
+  res.json({
+    success: true,
+    data: assets,
+  });
+});
+
+router.get('/assets/stocks', (_req: Request, res: Response) => {
+  const assets = marketService.getStockAssets();
   res.json({
     success: true,
     data: assets,

@@ -220,15 +220,15 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center p-4 bg-slate-700/50 rounded-lg">
               <p className="text-emerald-400 text-2xl font-bold">{stats.wonTrades}</p>
-              <p className="text-slate-400 text-sm">Winning Trades</p>
+              <p className="text-slate-400 text-sm">Profitable Trades</p>
             </div>
             <div className="text-center p-4 bg-slate-700/50 rounded-lg">
               <p className="text-red-400 text-2xl font-bold">{stats.lostTrades}</p>
-              <p className="text-slate-400 text-sm">Losing Trades</p>
+              <p className="text-slate-400 text-sm">Loss Trades</p>
             </div>
             <div className="text-center p-4 bg-slate-700/50 rounded-lg">
               <p className="text-white text-2xl font-bold">{stats.winRate.toFixed(0)}%</p>
-              <p className="text-slate-400 text-sm">Win Rate</p>
+              <p className="text-slate-400 text-sm">Profit Rate</p>
             </div>
             <div className="text-center p-4 bg-slate-700/50 rounded-lg">
               <p

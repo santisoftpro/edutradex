@@ -36,6 +36,9 @@ const envSchema = z.object({
   MIN_SPREAD_MARKUP: z.string().default('0.5'),
   MAX_SPREAD_MARKUP: z.string().default('10'),
 
+  // Finnhub API (for stocks/indices)
+  FINNHUB_API_KEY: z.string().default(''),
+
   // Email/SMTP Configuration
   SMTP_HOST: z.string().default('smtp.gmail.com'),
   SMTP_PORT: z.string().default('587'),
@@ -97,6 +100,10 @@ export const config = {
     defaultMarkup: parseFloat(env.DEFAULT_SPREAD_MARKUP),
     minMarkup: parseFloat(env.MIN_SPREAD_MARKUP),
     maxMarkup: parseFloat(env.MAX_SPREAD_MARKUP),
+  },
+
+  finnhub: {
+    apiKey: env.FINNHUB_API_KEY,
   },
 
   email: {

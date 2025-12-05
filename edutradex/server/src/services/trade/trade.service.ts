@@ -4,6 +4,7 @@ import { logger } from '../../utils/logger.js';
 import { authService } from '../auth/auth.service.js';
 import { marketService } from '../market/market.service.js';
 import { copyExecutionService } from '../copy-trading/index.js';
+import { wsManager } from '../websocket/websocket.manager.js';
 
 interface PlaceTradeInput {
   symbol: string;
@@ -77,6 +78,7 @@ export class TradeService {
       );
     }
 
+    // Quick check for obviously insufficient balance (non-atomic)
     if (data.amount > user.demoBalance) {
       throw new TradeServiceError('Insufficient balance', 400);
     }
@@ -90,6 +92,7 @@ export class TradeService {
     const expiresAt = new Date(now.getTime() + data.duration * 1000);
     const payoutPercent = config.trading.defaultPayoutPercentage;
 
+    // Create trade and deduct balance atomically
     const [trade] = await prisma.$transaction([
       prisma.trade.create({
         data: {
@@ -211,6 +214,17 @@ export class TradeService {
 
     logger.info('Trade settled', {
       tradeId,
+      result: won ? 'WON' : 'LOST',
+      profit: won ? profit : -trade.amount,
+      exitPrice,
+    });
+
+    // Send real-time WebSocket notification to user
+    wsManager.notifyTradeSettled(trade.userId, {
+      id: tradeId,
+      symbol: trade.symbol,
+      direction: trade.direction,
+      amount: trade.amount,
       result: won ? 'WON' : 'LOST',
       profit: won ? profit : -trade.amount,
       exitPrice,

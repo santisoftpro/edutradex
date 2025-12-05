@@ -16,8 +16,8 @@ import { MobileTradesSheet } from '@/components/trading/MobileTradesSheet';
 import { useAuthStore } from '@/store/auth.store';
 import { useTradeStore } from '@/store/trade.store';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { api, PriceTick } from '@/lib/api';
-import { playBuySound, playSellSound, playWinSound, playLoseSound } from '@/lib/sounds';
+import { PriceTick } from '@/lib/api';
+import { playBuySound, playSellSound } from '@/lib/sounds';
 
 export default function TradePage() {
   const { user, syncBalanceFromServer, isHydrated } = useAuthStore();
@@ -52,11 +52,21 @@ export default function TradePage() {
     }
   }, [latestPrices, selectedAsset]);
 
-  const getMarketType = (symbol: string) => {
-    if (symbol.startsWith('OTC') || symbol.startsWith('VOL')) {
-      return 'otc' as const;
+  const getMarketType = (symbol: string): 'forex' | 'crypto' | 'stock' | 'index' => {
+    // Crypto symbols
+    if (symbol.endsWith('/USDT') || symbol.includes('BTC') || symbol.includes('ETH')) {
+      return 'crypto';
     }
-    return 'forex' as const;
+    // Index symbols
+    if (['SPX500', 'NASDAQ', 'DJI', 'DAX', 'FTSE100', 'NIKKEI'].some(idx => symbol.includes(idx))) {
+      return 'index';
+    }
+    // Stock symbols (typically single uppercase words like AAPL, GOOGL)
+    if (/^[A-Z]{1,5}$/.test(symbol)) {
+      return 'stock';
+    }
+    // Default to forex (currency pairs like EUR/USD)
+    return 'forex';
   };
 
   const handleTrade = useCallback(
@@ -90,33 +100,6 @@ export default function TradePage() {
 
         // Sync balance in background (don't block next trade)
         syncBalanceFromServer();
-
-        const pollResult = async () => {
-          const updatedTrade = await api.getTradeById(trade.id);
-          if (updatedTrade && updatedTrade.status === 'CLOSED') {
-            const won = updatedTrade.result === 'WON';
-            const profit = updatedTrade.profit || 0;
-
-            if (won) {
-              playWinSound();
-              toast.success(`Profit! +$${profit.toFixed(2)}`, {
-                duration: 4000,
-              });
-            } else {
-              playLoseSound();
-              toast.error(`Loss! -$${amount.toFixed(2)}`, {
-                duration: 4000,
-              });
-            }
-
-            syncBalanceFromServer();
-            syncFromApi();
-          } else {
-            setTimeout(pollResult, 1000);
-          }
-        };
-
-        setTimeout(pollResult, duration * 1000 + 500);
       } catch (error) {
         console.error('Trade failed:', error);
         toast.error('Failed to place trade. Please try again.', {
@@ -124,7 +107,7 @@ export default function TradePage() {
         });
       }
     },
-    [user, selectedAsset, currentPrice, syncBalanceFromServer, placeTrade, syncFromApi]
+    [user, selectedAsset, currentPrice, syncBalanceFromServer, placeTrade]
   );
 
   if (!user) {

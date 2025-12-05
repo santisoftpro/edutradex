@@ -3,6 +3,11 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { api } from '@/lib/api';
 import type { User, AuthResponse, AccountType } from '@/types';
 
+// Throttle state for preventing rapid API calls
+let lastRefreshTime = 0;
+let pendingRefresh: Promise<void> | null = null;
+const REFRESH_THROTTLE_MS = 2000; // Minimum 2 seconds between profile refreshes
+
 interface AuthState {
   user: User | null;
   token: string | null;
@@ -124,22 +129,22 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       // Sync balance from server - this is the source of truth
+      // Uses the same throttle as refreshProfile since they call the same API
       syncBalanceFromServer: async () => {
-        try {
-          const profile = await api.getProfile();
-          const user = get().user;
-          if (user && profile) {
-            set({
-              user: {
-                ...user,
-                demoBalance: profile.demoBalance,
-                liveBalance: profile.liveBalance,
-              }
-            });
-          }
-        } catch (error) {
-          console.error('Failed to sync balance from server:', error);
+        const now = Date.now();
+
+        // If there's a pending refresh, wait for it
+        if (pendingRefresh) {
+          return pendingRefresh;
         }
+
+        // Throttle: skip if called too recently
+        if (now - lastRefreshTime < REFRESH_THROTTLE_MS) {
+          return;
+        }
+
+        // Just call refreshProfile since it updates the same data
+        return get().refreshProfile();
       },
 
       resetBalance: async () => {
@@ -182,29 +187,49 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       refreshProfile: async () => {
-        try {
-          const profile = await api.getProfile();
-          if (profile) {
-            // Set user data from server profile
-            set({
-              user: {
-                id: profile.id,
-                email: profile.email,
-                name: profile.name,
-                role: profile.role,
-                demoBalance: profile.demoBalance,
-                liveBalance: profile.liveBalance,
-                activeAccountType: profile.activeAccountType,
-                emailVerified: profile.emailVerified,
-              }
-            });
-          }
-        } catch (error) {
-          console.error('Failed to refresh profile:', error);
-          // If profile fetch fails (e.g., token expired), logout the user
-          const { logout } = get();
-          logout();
+        const now = Date.now();
+
+        // If there's a pending refresh, return that promise
+        if (pendingRefresh) {
+          return pendingRefresh;
         }
+
+        // Throttle: skip if called too recently
+        if (now - lastRefreshTime < REFRESH_THROTTLE_MS) {
+          return;
+        }
+
+        lastRefreshTime = now;
+
+        pendingRefresh = (async () => {
+          try {
+            const profile = await api.getProfile();
+            if (profile) {
+              // Set user data from server profile
+              set({
+                user: {
+                  id: profile.id,
+                  email: profile.email,
+                  name: profile.name,
+                  role: profile.role,
+                  demoBalance: profile.demoBalance,
+                  liveBalance: profile.liveBalance,
+                  activeAccountType: profile.activeAccountType,
+                  emailVerified: profile.emailVerified,
+                }
+              });
+            }
+          } catch (error) {
+            console.error('Failed to refresh profile:', error);
+            // If profile fetch fails (e.g., token expired), logout the user
+            const { logout } = get();
+            logout();
+          } finally {
+            pendingRefresh = null;
+          }
+        })();
+
+        return pendingRefresh;
       },
 
       setHydrated: () => {

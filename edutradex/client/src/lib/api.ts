@@ -61,7 +61,7 @@ export interface PlaceTradeData {
   amount: number;
   duration: number;
   entryPrice: number;
-  marketType: 'forex' | 'otc';
+  marketType: 'forex' | 'crypto' | 'stock' | 'index';
 }
 
 export interface TradeStats {
@@ -85,9 +85,8 @@ export interface PriceTick {
 export interface MarketAsset {
   symbol: string;
   name: string;
-  marketType: 'forex' | 'otc';
+  marketType: 'forex' | 'crypto' | 'stock' | 'index';
   basePrice: number;
-  volatility: number;
   pipSize: number;
   isActive: boolean;
   payoutPercent: number;
@@ -283,8 +282,18 @@ class ApiClient {
     return response.data;
   }
 
-  async getOtcAssets(): Promise<MarketAsset[]> {
-    const response = await this.get<ApiResponse<MarketAsset[]>>('/market/assets/otc');
+  async getCryptoAssets(): Promise<MarketAsset[]> {
+    const response = await this.get<ApiResponse<MarketAsset[]>>('/market/assets/crypto');
+    return response.data;
+  }
+
+  async getIndexAssets(): Promise<MarketAsset[]> {
+    const response = await this.get<ApiResponse<MarketAsset[]>>('/market/assets/indices');
+    return response.data;
+  }
+
+  async getStockAssets(): Promise<MarketAsset[]> {
+    const response = await this.get<ApiResponse<MarketAsset[]>>('/market/assets/stocks');
     return response.data;
   }
 

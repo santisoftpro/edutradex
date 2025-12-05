@@ -471,11 +471,6 @@ class AdminService {
 
     logger.info('Market config updated', { symbol, data });
 
-    // Reload volatility configs in market service so changes take effect immediately
-    if (data.volatilityMode !== undefined) {
-      await marketService.reloadVolatilityConfigs();
-    }
-
     return {
       ...config,
       payoutPercent: Number(config.payoutPercent),
@@ -511,11 +506,6 @@ class AdminService {
     }
 
     logger.info('Market configs initialized', { created });
-
-    // Reload volatility configs so new markets are picked up
-    if (created > 0) {
-      await marketService.reloadVolatilityConfigs();
-    }
 
     return { created };
   }

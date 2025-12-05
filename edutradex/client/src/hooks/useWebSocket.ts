@@ -3,6 +3,8 @@ import toast from 'react-hot-toast';
 import { PriceTick } from '@/lib/api';
 import { useNotificationStore } from '@/store/notification.store';
 import { useAuthStore } from '@/store/auth.store';
+import { useTradeStore, markTradeNotified } from '@/store/trade.store';
+import { playWinSound, playLoseSound } from '@/lib/sounds';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:5000/ws';
 const RECONNECT_INTERVAL = 3000;
@@ -227,6 +229,46 @@ export function useWebSocket(): UseWebSocketReturn {
                   ? `Your leader account has been suspended.${adminNote ? ` Reason: ${adminNote}` : ''}`
                   : `Your leader application has been rejected.${adminNote ? ` Reason: ${adminNote}` : ''}`,
               });
+              break;
+            }
+
+            case 'trade_settled': {
+              console.log('[WebSocket] Trade settled received:', message.payload);
+              const { id, symbol, result, profit, amount } = message.payload || {};
+              const won = result === 'WON';
+              const profitAmount = typeof profit === 'number' ? profit : 0;
+              const tradeAmount = typeof amount === 'number' ? amount : 0;
+
+              // Only show notification if not already shown (prevents duplicates)
+              if (id && markTradeNotified(id)) {
+                console.log('[WebSocket] Trade result:', { won, profitAmount, tradeAmount, symbol });
+
+                // Play sound and show notification
+                if (won) {
+                  playWinSound();
+                  toast.success(`Profit +$${profitAmount.toFixed(2)} on ${symbol || 'trade'}`, { duration: 4000 });
+                } else {
+                  playLoseSound();
+                  toast.error(`Loss -$${tradeAmount.toFixed(2)} on ${symbol || 'trade'}`, { duration: 4000 });
+                }
+              }
+
+              // Remove trade from active trades (don't call full syncFromApi to save API calls)
+              if (id) {
+                const tradeStore = useTradeStore.getState();
+                const activeTrade = tradeStore.activeTrades.find(t => t.id === id);
+                if (activeTrade) {
+                  useTradeStore.setState({
+                    activeTrades: tradeStore.activeTrades.filter(t => t.id !== id),
+                    trades: tradeStore.trades.map(t =>
+                      t.id === id ? { ...t, status: won ? 'won' : 'lost', profit: profitAmount } : t
+                    ),
+                  });
+                }
+              }
+
+              // Refresh balance only
+              useAuthStore.getState().refreshProfile();
               break;
             }
 

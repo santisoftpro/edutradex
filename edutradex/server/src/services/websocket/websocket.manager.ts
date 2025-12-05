@@ -81,7 +81,11 @@ class WebSocketManager {
   sendToUser(userId: string, message: WebSocketMessage): void {
     const clientIds = this.userClients.get(userId);
     if (!clientIds || clientIds.size === 0) {
-      logger.debug('No connected clients for user', { userId });
+      logger.warn('No connected clients for user - message not delivered', {
+        userId,
+        messageType: message.type,
+        totalAuthenticatedUsers: this.userClients.size
+      });
       return;
     }
 
@@ -89,7 +93,7 @@ class WebSocketManager {
       this.sendToClient(clientId, message);
     });
 
-    logger.debug('Message sent to user', { userId, clientCount: clientIds.size, type: message.type });
+    logger.info('Message sent to user', { userId, clientCount: clientIds.size, type: message.type });
   }
 
   notifyWithdrawalUpdate(userId: string, withdrawal: {
@@ -119,6 +123,50 @@ class WebSocketManager {
       type: 'deposit_update',
       payload: {
         ...deposit,
+        timestamp: Date.now(),
+      },
+    });
+  }
+
+  // Trade Notifications
+  notifyTradeUpdate(userId: string, trade: {
+    id: string;
+    symbol: string;
+    direction: string;
+    amount: number;
+    status: 'OPEN' | 'CLOSED';
+    result?: 'WON' | 'LOST' | null;
+    profit?: number | null;
+    exitPrice?: number | null;
+  }): void {
+    this.sendToUser(userId, {
+      type: 'trade_update',
+      payload: {
+        ...trade,
+        timestamp: Date.now(),
+      },
+    });
+  }
+
+  notifyTradeSettled(userId: string, trade: {
+    id: string;
+    symbol: string;
+    direction: string;
+    amount: number;
+    result: 'WON' | 'LOST';
+    profit: number;
+    exitPrice: number;
+  }): void {
+    logger.info('Sending trade_settled notification', {
+      userId,
+      tradeId: trade.id,
+      result: trade.result,
+      profit: trade.profit
+    });
+    this.sendToUser(userId, {
+      type: 'trade_settled',
+      payload: {
+        ...trade,
         timestamp: Date.now(),
       },
     });

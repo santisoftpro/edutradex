@@ -42,7 +42,9 @@ export default function AnalyticsPage() {
         worstTrade: 0,
         totalVolume: 0,
         forexTrades: 0,
-        otcTrades: 0,
+        cryptoTrades: 0,
+        stockTrades: 0,
+        indexTrades: 0,
         upTrades: 0,
         downTrades: 0,
         profitByDay: [] as { day: string; profit: number }[],
@@ -66,7 +68,9 @@ export default function AnalyticsPage() {
       worstTrade: Math.min(...profits),
       totalVolume: amounts.reduce((a, b) => a + b, 0),
       forexTrades: closedTrades.filter((t) => t.marketType === 'forex').length,
-      otcTrades: closedTrades.filter((t) => t.marketType === 'otc').length,
+      cryptoTrades: closedTrades.filter((t) => t.marketType === 'crypto').length,
+      stockTrades: closedTrades.filter((t) => t.marketType === 'stock').length,
+      indexTrades: closedTrades.filter((t) => t.marketType === 'index').length,
       upTrades: closedTrades.filter((t) => t.direction === 'UP').length,
       downTrades: closedTrades.filter((t) => t.direction === 'DOWN').length,
       profitByDay: Object.entries(byDay).map(([day, profit]) => ({ day, profit })),
@@ -97,10 +101,10 @@ export default function AnalyticsPage() {
           color={stats.totalProfit >= 0 ? 'emerald' : 'red'}
         />
         <StatCard
-          title="Win Rate"
+          title="Profit Rate"
           value={`${stats.winRate.toFixed(1)}%`}
           icon={Target}
-          subtitle={`${stats.wonTrades}W / ${stats.lostTrades}L`}
+          subtitle={`${stats.wonTrades}P / ${stats.lostTrades}L`}
           color="blue"
         />
         <StatCard
@@ -125,7 +129,7 @@ export default function AnalyticsPage() {
         <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <PieChart className="h-5 w-5 text-emerald-500" />
-            Win/Loss Distribution
+            Profit/Loss Distribution
           </h2>
           {stats.totalTrades === 0 ? (
             <EmptyState message="Complete some trades to see distribution" />
@@ -164,7 +168,7 @@ export default function AnalyticsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-4 h-4 bg-slate-600 rounded" />
-                  <span className="text-slate-300">Lost: {stats.lostTrades}</span>
+                  <span className="text-slate-300">Loss: {stats.lostTrades}</span>
                 </div>
               </div>
             </div>
@@ -185,30 +189,52 @@ export default function AnalyticsPage() {
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-slate-400">Market Type</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {analytics.forexTrades > 0 && (
                     <div
                       className="h-8 bg-blue-600 rounded flex items-center justify-center text-white text-xs font-medium px-3"
                       style={{
                         flex: analytics.forexTrades,
-                        minWidth: '80px',
+                        minWidth: '70px',
                       }}
                     >
                       Forex ({analytics.forexTrades})
                     </div>
                   )}
-                  {analytics.otcTrades > 0 && (
+                  {analytics.cryptoTrades > 0 && (
+                    <div
+                      className="h-8 bg-orange-600 rounded flex items-center justify-center text-white text-xs font-medium px-3"
+                      style={{
+                        flex: analytics.cryptoTrades,
+                        minWidth: '70px',
+                      }}
+                    >
+                      Crypto ({analytics.cryptoTrades})
+                    </div>
+                  )}
+                  {analytics.stockTrades > 0 && (
                     <div
                       className="h-8 bg-purple-600 rounded flex items-center justify-center text-white text-xs font-medium px-3"
                       style={{
-                        flex: analytics.otcTrades,
-                        minWidth: '80px',
+                        flex: analytics.stockTrades,
+                        minWidth: '70px',
                       }}
                     >
-                      OTC ({analytics.otcTrades})
+                      Stocks ({analytics.stockTrades})
                     </div>
                   )}
-                  {analytics.forexTrades === 0 && analytics.otcTrades === 0 && (
+                  {analytics.indexTrades > 0 && (
+                    <div
+                      className="h-8 bg-cyan-600 rounded flex items-center justify-center text-white text-xs font-medium px-3"
+                      style={{
+                        flex: analytics.indexTrades,
+                        minWidth: '70px',
+                      }}
+                    >
+                      Indices ({analytics.indexTrades})
+                    </div>
+                  )}
+                  {analytics.forexTrades === 0 && analytics.cryptoTrades === 0 && analytics.stockTrades === 0 && analytics.indexTrades === 0 && (
                     <div className="h-8 bg-slate-700 rounded flex items-center justify-center text-slate-400 text-xs font-medium w-full">
                       No trades yet
                     </div>
