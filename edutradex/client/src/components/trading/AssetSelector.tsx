@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ChevronDown, Search, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { api, MarketAsset } from '@/lib/api';
+import { api, MarketAsset, PriceTick } from '@/lib/api';
 
 type AssetCategory = 'all' | 'forex' | 'crypto' | 'stocks' | 'indices';
 
@@ -12,6 +12,7 @@ interface AssetSelectorProps {
   onSelectAsset: (symbol: string) => void;
   currentPrice?: number | null;
   currentChange?: number | null;
+  livePrices?: Map<string, PriceTick>;
 }
 
 // Helper function to determine asset category from marketType
@@ -40,7 +41,7 @@ const CATEGORY_LABELS: Record<AssetCategory, string> = {
   indices: 'Indices',
 };
 
-export function AssetSelector({ selectedAsset, onSelectAsset, currentPrice, currentChange }: AssetSelectorProps) {
+export function AssetSelector({ selectedAsset, onSelectAsset, currentPrice, currentChange, livePrices }: AssetSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<AssetCategory>('all');
@@ -196,32 +197,47 @@ export function AssetSelector({ selectedAsset, onSelectAsset, currentPrice, curr
                   No assets found
                 </div>
               ) : (
-                filteredAssets.map((asset) => (
-                  <button
-                    key={asset.symbol}
-                    onClick={() => {
-                      onSelectAsset(asset.symbol);
-                      setIsOpen(false);
-                    }}
-                    className={cn(
-                      'w-full flex items-center justify-between px-4 py-3 hover:bg-[#252542] transition-colors',
-                      selectedAsset === asset.symbol && 'bg-[#252542]'
-                    )}
-                  >
-                    <div className="text-left">
-                      <div className="text-white font-medium">{asset.symbol}</div>
-                      <div className="text-gray-500 text-xs truncate max-w-[180px]">{asset.name}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-white text-sm">
-                        ${asset.basePrice.toFixed(asset.basePrice > 100 ? 2 : asset.basePrice < 0.01 ? 8 : 4)}
+                filteredAssets.map((asset) => {
+                  // Get live price data if available
+                  const liveData = livePrices?.get(asset.symbol);
+                  const price = liveData?.price ?? asset.basePrice;
+                  const change = liveData?.change ?? 0;
+
+                  return (
+                    <button
+                      key={asset.symbol}
+                      onClick={() => {
+                        onSelectAsset(asset.symbol);
+                        setIsOpen(false);
+                      }}
+                      className={cn(
+                        'w-full flex items-center justify-between px-4 py-3 hover:bg-[#252542] transition-colors',
+                        selectedAsset === asset.symbol && 'bg-[#252542]'
+                      )}
+                    >
+                      <div className="text-left">
+                        <div className="text-white font-medium">{asset.symbol}</div>
+                        <div className="text-gray-500 text-xs truncate max-w-[180px]">{asset.name}</div>
                       </div>
-                      <div className="text-xs text-emerald-400">
-                        {asset.payoutPercent}% payout
+                      <div className="text-right">
+                        <div className="text-white text-sm">
+                          ${price.toFixed(price > 100 ? 2 : price < 0.01 ? 8 : 4)}
+                        </div>
+                        <div className={cn(
+                          'text-xs flex items-center justify-end gap-1',
+                          change >= 0 ? 'text-emerald-400' : 'text-red-400'
+                        )}>
+                          {change >= 0 ? (
+                            <TrendingUp className="h-3 w-3" />
+                          ) : (
+                            <TrendingDown className="h-3 w-3" />
+                          )}
+                          {change >= 0 ? '+' : ''}{change.toFixed(2)}%
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>

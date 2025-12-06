@@ -129,6 +129,7 @@ export default function TradePage() {
           selectedAsset={selectedAsset}
           onSelectAsset={setSelectedAsset}
           currentPrice={currentPrice}
+          livePrices={latestPrices}
         />
       </div>
 

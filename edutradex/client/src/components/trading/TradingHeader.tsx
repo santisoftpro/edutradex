@@ -27,9 +27,10 @@ interface TradingHeaderProps {
   selectedAsset: string;
   onSelectAsset: (symbol: string) => void;
   currentPrice?: PriceTick | null;
+  livePrices?: Map<string, PriceTick>;
 }
 
-export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice }: TradingHeaderProps) {
+export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, livePrices }: TradingHeaderProps) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const [showMenu, setShowMenu] = useState(false);
@@ -69,6 +70,7 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice }: Tr
           onSelectAsset={onSelectAsset}
           currentPrice={currentPrice?.price}
           currentChange={currentPrice?.changePercent}
+          livePrices={livePrices}
         />
 
         {/* Current Price Display - Visible on all screens, compact on mobile */}
