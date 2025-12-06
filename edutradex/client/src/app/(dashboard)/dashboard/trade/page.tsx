@@ -19,6 +19,8 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 import { PriceTick } from '@/lib/api';
 import { playBuySound, playSellSound } from '@/lib/sounds';
 
+const SELECTED_ASSET_KEY = 'optigobroker-selected-asset';
+
 export default function TradePage() {
   const { user, syncBalanceFromServer, isHydrated } = useAuthStore();
   const { placeTrade, syncFromApi } = useTradeStore();
@@ -28,6 +30,20 @@ export default function TradePage() {
   const [isTradesPanelOpen, setIsTradesPanelOpen] = useState(true);
   const [isMobileTradesOpen, setIsMobileTradesOpen] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(300);
+
+  // Load saved asset from localStorage on mount
+  useEffect(() => {
+    const savedAsset = localStorage.getItem(SELECTED_ASSET_KEY);
+    if (savedAsset) {
+      setSelectedAsset(savedAsset);
+    }
+  }, []);
+
+  // Save selected asset to localStorage when it changes
+  const handleSelectAsset = useCallback((symbol: string) => {
+    setSelectedAsset(symbol);
+    localStorage.setItem(SELECTED_ASSET_KEY, symbol);
+  }, []);
 
   useEffect(() => {
     if (isHydrated && user) {
@@ -127,7 +143,7 @@ export default function TradePage() {
       <div className="hidden md:block">
         <TradingHeader
           selectedAsset={selectedAsset}
-          onSelectAsset={setSelectedAsset}
+          onSelectAsset={handleSelectAsset}
           currentPrice={currentPrice}
           livePrices={latestPrices}
         />
@@ -142,7 +158,7 @@ export default function TradePage() {
       {/* Mobile Asset Bar */}
       <MobileAssetBar
         selectedAsset={selectedAsset}
-        onSelectAsset={setSelectedAsset}
+        onSelectAsset={handleSelectAsset}
         currentPrice={currentPrice}
         expirationTime={selectedDuration}
       />
