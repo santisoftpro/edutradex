@@ -78,7 +78,7 @@ export function RightMenu({ isTradesPanelOpen, onToggleTradesPanel }: RightMenuP
   ];
 
   return (
-    <div className="hidden lg:flex fixed right-0 top-1/2 -translate-y-1/2 z-30 flex-col bg-[#1a1a2e]/95 backdrop-blur-sm border border-[#2d2d44] border-r-0 rounded-l-xl shadow-xl w-[68px]">
+    <div className="hidden lg:flex fixed right-0 top-16 z-30 flex-col bg-[#1a1a2e]/95 backdrop-blur-sm border border-[#2d2d44] border-r-0 rounded-l-xl shadow-xl w-[68px]">
       {/* Menu Items */}
       <div className="py-2">
         {menuItems.map((item, index) => {

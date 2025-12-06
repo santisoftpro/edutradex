@@ -8,7 +8,7 @@ import {
   History,
   BarChart3,
   Settings,
-  HelpCircle,
+  MessageSquare,
   Shield,
   Wallet,
   ArrowUpFromLine,
@@ -33,7 +33,7 @@ const navItems = [
 
 const bottomItems = [
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
-  { href: '/dashboard/help', label: 'Help', icon: HelpCircle },
+  { href: '/dashboard/support', label: 'Support', icon: MessageSquare },
 ];
 
 export function Sidebar() {

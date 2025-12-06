@@ -10,6 +10,14 @@ interface DerivTick {
   epoch: number;
 }
 
+interface DerivCandle {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
 interface SymbolSubscription {
   symbol: string;
   derivSymbol: string;
@@ -434,6 +442,83 @@ class DerivService {
     return this.symbolsFetched;
   }
 
+  /**
+   * Fetch historical candles from Deriv API
+   * @param symbol Our symbol format (e.g., 'EUR/USD')
+   * @param granularity Candle size in seconds (60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 14400, 28800, 86400)
+   * @param count Number of candles to fetch (max 5000)
+   */
+  public async getHistoricalCandles(
+    symbol: string,
+    granularity: number = 60,
+    count: number = 500
+  ): Promise<DerivCandle[]> {
+    const derivSymbol = this.symbolMap.get(symbol);
+    if (!derivSymbol) {
+      logger.warn(`[Deriv] Symbol ${symbol} not found in symbol map`);
+      return [];
+    }
+
+    // Validate granularity - Deriv only supports specific values
+    const validGranularities = [60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 14400, 28800, 86400];
+    const closestGranularity = validGranularities.reduce((prev, curr) =>
+      Math.abs(curr - granularity) < Math.abs(prev - granularity) ? curr : prev
+    );
+
+    try {
+      // Use Deriv REST API for historical data (more reliable than WebSocket for one-time requests)
+      const url = `https://api.deriv.com/api/v3/ticks_history?ticks_history=${derivSymbol}&style=candles&granularity=${closestGranularity}&count=${Math.min(count, 5000)}&end=latest`;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json() as {
+        error?: { message?: string };
+        candles?: Array<{ epoch: number; open: number; high: number; low: number; close: number }>;
+      };
+
+      if (data.error) {
+        throw new Error(data.error.message || 'Deriv API error');
+      }
+
+      if (!data.candles || !Array.isArray(data.candles)) {
+        logger.warn(`[Deriv] No candle data returned for ${symbol}`);
+        return [];
+      }
+
+      // Convert Deriv candles to our format
+      const candles: DerivCandle[] = data.candles.map((c) => ({
+        time: c.epoch,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+      }));
+
+      logger.debug(`[Deriv] Fetched ${candles.length} candles for ${symbol} (${closestGranularity}s)`);
+      return candles;
+    } catch (error) {
+      logger.error(`[Deriv] Failed to fetch candles for ${symbol}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Convert resolution in seconds to closest Deriv granularity
+   */
+  public static resolutionToGranularity(resolutionSeconds: number): number {
+    const granularities = [60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 14400, 28800, 86400];
+    return granularities.reduce((prev, curr) =>
+      Math.abs(curr - resolutionSeconds) < Math.abs(prev - resolutionSeconds) ? curr : prev
+    );
+  }
+
+  public getDerivSymbol(symbol: string): string | null {
+    return this.symbolMap.get(symbol) || null;
+  }
+
   public cleanup(): void {
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
@@ -458,3 +543,5 @@ class DerivService {
 
 // Export singleton instance
 export const derivService = new DerivService();
+export { DerivService };
+export type { DerivCandle };

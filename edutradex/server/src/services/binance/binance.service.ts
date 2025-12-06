@@ -9,6 +9,15 @@ interface BinanceTick {
   timestamp: number;
 }
 
+interface BinanceKline {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
 type PriceUpdateCallback = (tick: BinanceTick) => void;
 
 // Map our symbols to Binance symbols
@@ -214,6 +223,75 @@ class BinanceService {
     this.callbacks.clear();
     this.isAvailable = false;
   }
+
+  /**
+   * Fetch historical klines (candlesticks) from Binance REST API
+   * @param symbol Our symbol format (e.g., 'BTC/USD')
+   * @param interval Binance interval (1m, 5m, 15m, 1h, 4h, 1d, etc.)
+   * @param limit Number of candles to fetch (max 1000)
+   */
+  public async getHistoricalKlines(
+    symbol: string,
+    interval: string = '1m',
+    limit: number = 500
+  ): Promise<BinanceKline[]> {
+    const binanceSymbol = SYMBOL_MAP[symbol];
+    if (!binanceSymbol) {
+      logger.warn(`[Binance] Symbol ${symbol} not found in symbol map`);
+      return [];
+    }
+
+    try {
+      const url = `https://api.binance.com/api/v3/klines?symbol=${binanceSymbol.toUpperCase()}&interval=${interval}&limit=${limit}`;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json() as any[][];
+
+      // Binance kline format: [openTime, open, high, low, close, volume, closeTime, ...]
+      const klines: BinanceKline[] = data.map((kline) => ({
+        time: Math.floor(kline[0] / 1000), // Convert ms to seconds
+        open: parseFloat(kline[1]),
+        high: parseFloat(kline[2]),
+        low: parseFloat(kline[3]),
+        close: parseFloat(kline[4]),
+        volume: parseFloat(kline[5]),
+      }));
+
+      logger.debug(`[Binance] Fetched ${klines.length} klines for ${symbol} (${interval})`);
+      return klines;
+    } catch (error) {
+      logger.error(`[Binance] Failed to fetch klines for ${symbol}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Convert resolution in seconds to Binance interval string
+   */
+  public static resolutionToInterval(resolutionSeconds: number): string {
+    if (resolutionSeconds < 60) return '1m'; // Binance minimum is 1m
+    if (resolutionSeconds < 180) return '1m';
+    if (resolutionSeconds < 300) return '3m';
+    if (resolutionSeconds < 900) return '5m';
+    if (resolutionSeconds < 1800) return '15m';
+    if (resolutionSeconds < 3600) return '30m';
+    if (resolutionSeconds < 7200) return '1h';
+    if (resolutionSeconds < 14400) return '2h';
+    if (resolutionSeconds < 28800) return '4h';
+    if (resolutionSeconds < 43200) return '6h';
+    if (resolutionSeconds < 86400) return '12h';
+    return '1d';
+  }
+
+  public getBinanceSymbol(symbol: string): string | null {
+    return SYMBOL_MAP[symbol] || null;
+  }
 }
 
 export const binanceService = new BinanceService();
+export { BinanceService };
+export type { BinanceKline };

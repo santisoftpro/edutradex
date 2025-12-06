@@ -44,8 +44,8 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, live
 
   if (!user) return null;
 
-  const priceColor = currentPrice?.change && currentPrice.change >= 0 ? 'text-emerald-400' : 'text-red-400';
-  const TrendIcon = currentPrice?.change && currentPrice.change >= 0 ? TrendingUp : TrendingDown;
+  const priceColor = currentPrice?.changePercent !== undefined && currentPrice.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400';
+  const TrendIcon = currentPrice?.changePercent !== undefined && currentPrice.changePercent >= 0 ? TrendingUp : TrendingDown;
 
   return (
     <header className="h-12 md:h-14 bg-[#1a1a2e] border-b border-[#2d2d44] flex items-center justify-between px-2 md:px-4">

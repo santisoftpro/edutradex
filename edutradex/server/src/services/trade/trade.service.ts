@@ -12,7 +12,7 @@ interface PlaceTradeInput {
   amount: number;
   duration: number;
   entryPrice: number;
-  marketType: 'forex' | 'otc';
+  marketType: 'forex' | 'crypto' | 'stock' | 'index';
 }
 
 interface TradeResult {

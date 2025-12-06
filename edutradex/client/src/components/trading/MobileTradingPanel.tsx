@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowUp, ArrowDown, Clock, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -10,6 +10,7 @@ interface MobileTradingPanelProps {
   isLoading?: boolean;
   payoutPercent?: number;
   onDurationChange?: (duration: number) => void;
+  initialDuration?: number;
 }
 
 const DURATIONS = [
@@ -33,9 +34,17 @@ export function MobileTradingPanel({
   isLoading,
   payoutPercent = 79,
   onDurationChange,
+  initialDuration,
 }: MobileTradingPanelProps) {
   const [amount, setAmount] = useState(50);
   const [duration, setDuration] = useState(300);
+
+  // Sync duration from parent after hydration to avoid SSR mismatch
+  useEffect(() => {
+    if (initialDuration !== undefined && initialDuration !== duration) {
+      setDuration(initialDuration);
+    }
+  }, [initialDuration]);
   const [showTimeSheet, setShowTimeSheet] = useState(false);
   const [showAmountSheet, setShowAmountSheet] = useState(false);
 

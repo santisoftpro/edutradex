@@ -321,6 +321,65 @@ class EmailService {
     const html = emailTemplates.passwordChanged(userName);
     return this.sendEmail(email, 'Password Changed - OptigoBroker', html);
   }
+
+  // Send new ticket notification to admin
+  async sendNewTicketNotification(
+    adminEmail: string,
+    ticketNumber: string,
+    subject: string,
+    message: string,
+    userName: string,
+    userEmail: string,
+    category: string,
+    priority: string
+  ): Promise<boolean> {
+    const html = emailTemplates.newTicketAdmin(
+      ticketNumber,
+      subject,
+      message,
+      userName,
+      userEmail,
+      category,
+      priority
+    );
+    return this.sendEmail(
+      adminEmail,
+      `[${priority}] New Support Ticket: ${ticketNumber} - OptigoBroker`,
+      html
+    );
+  }
+
+  // Send ticket reply notification to user
+  async sendTicketReplyNotification(
+    userEmail: string,
+    userName: string,
+    ticketNumber: string,
+    subject: string,
+    reply: string,
+    isClosed: boolean
+  ): Promise<boolean> {
+    const html = emailTemplates.ticketReply(userName, ticketNumber, subject, reply, isClosed);
+    return this.sendEmail(
+      userEmail,
+      `Support Ticket Update: ${ticketNumber} - OptigoBroker`,
+      html
+    );
+  }
+
+  // Send ticket created confirmation to user
+  async sendTicketCreatedConfirmation(
+    userEmail: string,
+    userName: string,
+    ticketNumber: string,
+    subject: string
+  ): Promise<boolean> {
+    const html = emailTemplates.ticketCreatedConfirmation(userName, ticketNumber, subject);
+    return this.sendEmail(
+      userEmail,
+      `Ticket Received: ${ticketNumber} - OptigoBroker`,
+      html
+    );
+  }
 }
 
 export const emailService = new EmailService();

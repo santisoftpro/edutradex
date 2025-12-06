@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 export type NotificationType =
   | 'deposit_approved'
@@ -10,6 +10,7 @@ export type NotificationType =
   | 'copy_trading_rejected'
   | 'trade_win'
   | 'trade_loss'
+  | 'ticket_reply'
   | 'system';
 
 export interface Notification {
@@ -19,35 +20,40 @@ export interface Notification {
   message: string;
   amount?: number;
   read: boolean;
-  createdAt: Date;
+  createdAt: string; // Changed to string for serialization
 }
 
 interface NotificationState {
   notifications: Notification[];
   unreadCount: number;
+  isHydrated: boolean;
   addNotification: (notification: Omit<Notification, 'id' | 'read' | 'createdAt'>) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   removeNotification: (id: string) => void;
   clearAll: () => void;
+  setHydrated: () => void;
 }
 
 export const useNotificationStore = create<NotificationState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       notifications: [],
       unreadCount: 0,
+      isHydrated: false,
+
+      setHydrated: () => set({ isHydrated: true }),
 
       addNotification: (notification) => {
         const newNotification: Notification = {
           ...notification,
           id: crypto.randomUUID(),
           read: false,
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         };
 
         set((state) => ({
-          notifications: [newNotification, ...state.notifications].slice(0, 50), // Keep last 50
+          notifications: [newNotification, ...state.notifications].slice(0, 50),
           unreadCount: state.unreadCount + 1,
         }));
       },
@@ -92,9 +98,18 @@ export const useNotificationStore = create<NotificationState>()(
     }),
     {
       name: 'notifications-storage',
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        notifications: state.notifications.slice(0, 20), // Persist only last 20
+        notifications: state.notifications.slice(0, 20),
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // Recalculate unreadCount from notifications
+          const unreadCount = state.notifications.filter((n) => !n.read).length;
+          state.unreadCount = unreadCount;
+          state.isHydrated = true;
+        }
+      },
     }
   )
 );

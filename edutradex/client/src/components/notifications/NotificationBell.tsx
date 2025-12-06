@@ -5,7 +5,6 @@ import {
   Bell,
   CheckCircle2,
   XCircle,
-  DollarSign,
   ArrowUpFromLine,
   Users,
   TrendingUp,
@@ -14,8 +13,9 @@ import {
   X,
   Check,
   Trash2,
+  MessageCircle,
 } from 'lucide-react';
-import { useNotificationStore, type NotificationType } from '@/store/notification.store';
+import { useNotificationStore, type NotificationType, type Notification } from '@/store/notification.store';
 import { formatCurrency, cn } from '@/lib/utils';
 
 const notificationConfig: Record<
@@ -62,6 +62,11 @@ const notificationConfig: Record<
     color: 'text-red-400',
     bgColor: 'bg-red-500/20',
   },
+  ticket_reply: {
+    icon: MessageCircle,
+    color: 'text-emerald-400',
+    bgColor: 'bg-emerald-500/20',
+  },
   system: {
     icon: Info,
     color: 'text-blue-400',
@@ -69,28 +74,56 @@ const notificationConfig: Record<
   },
 };
 
-function formatTimeAgo(date: Date): string {
+function formatTimeAgo(dateString: string): string {
   const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - new Date(date).getTime()) / 1000);
+  const date = new Date(dateString);
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
   if (diffInSeconds < 60) return 'Just now';
   if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
   if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
   if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-  return new Date(date).toLocaleDateString();
+  return date.toLocaleDateString();
 }
 
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const {
-    notifications,
-    unreadCount,
-    markAsRead,
-    markAllAsRead,
-    removeNotification,
-    clearAll,
-  } = useNotificationStore();
+
+  // Store state - will only be used after mounting
+  const [storeData, setStoreData] = useState<{
+    notifications: Notification[];
+    unreadCount: number;
+  }>({ notifications: [], unreadCount: 0 });
+
+  // Get store actions (these are stable and don't cause hydration issues)
+  const markAsRead = useNotificationStore((state) => state.markAsRead);
+  const markAllAsRead = useNotificationStore((state) => state.markAllAsRead);
+  const removeNotification = useNotificationStore((state) => state.removeNotification);
+  const clearAll = useNotificationStore((state) => state.clearAll);
+
+  // Subscribe to store changes only after mounting
+  useEffect(() => {
+    setIsMounted(true);
+
+    // Get initial state after mount
+    const state = useNotificationStore.getState();
+    setStoreData({
+      notifications: state.notifications,
+      unreadCount: state.unreadCount,
+    });
+
+    // Subscribe to changes
+    const unsubscribe = useNotificationStore.subscribe((state) => {
+      setStoreData({
+        notifications: state.notifications,
+        unreadCount: state.unreadCount,
+      });
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -108,6 +141,8 @@ export function NotificationBell() {
     markAsRead(id);
   };
 
+  const { notifications, unreadCount } = storeData;
+
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Bell Button */}
@@ -116,7 +151,7 @@ export function NotificationBell() {
         className="relative p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
       >
         <Bell className="h-5 w-5" />
-        {unreadCount > 0 && (
+        {isMounted && unreadCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 h-5 w-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
@@ -131,14 +166,14 @@ export function NotificationBell() {
             <div className="flex items-center gap-2">
               <Bell className="h-5 w-5 text-emerald-400" />
               <h3 className="font-semibold text-white">Notifications</h3>
-              {unreadCount > 0 && (
+              {isMounted && unreadCount > 0 && (
                 <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs font-medium rounded-full">
                   {unreadCount} new
                 </span>
               )}
             </div>
             <div className="flex items-center gap-1">
-              {unreadCount > 0 && (
+              {isMounted && unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
                   className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-slate-700 rounded-lg transition-colors"
@@ -147,7 +182,7 @@ export function NotificationBell() {
                   <Check className="h-4 w-4" />
                 </button>
               )}
-              {notifications.length > 0 && (
+              {isMounted && notifications.length > 0 && (
                 <button
                   onClick={clearAll}
                   className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors"
@@ -161,7 +196,12 @@ export function NotificationBell() {
 
           {/* Notifications List */}
           <div className="max-h-[400px] overflow-y-auto">
-            {notifications.length === 0 ? (
+            {!isMounted ? (
+              <div className="py-12 text-center">
+                <div className="h-12 w-12 bg-slate-700 rounded-full mx-auto mb-3 animate-pulse" />
+                <div className="h-4 w-32 bg-slate-700 rounded mx-auto animate-pulse" />
+              </div>
+            ) : notifications.length === 0 ? (
               <div className="py-12 text-center">
                 <Bell className="h-12 w-12 text-slate-600 mx-auto mb-3" />
                 <p className="text-slate-400">No notifications yet</p>
@@ -240,7 +280,7 @@ export function NotificationBell() {
           </div>
 
           {/* Footer */}
-          {notifications.length > 0 && (
+          {isMounted && notifications.length > 0 && (
             <div className="px-4 py-3 border-t border-slate-700 bg-slate-800/80">
               <p className="text-center text-slate-500 text-xs">
                 Showing last {notifications.length} notifications

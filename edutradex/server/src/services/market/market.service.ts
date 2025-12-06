@@ -1,7 +1,7 @@
 import { logger } from '../../utils/logger.js';
 import { wsManager } from '../websocket/websocket.manager.js';
-import { derivService } from '../deriv/deriv.service.js';
-import { binanceService } from '../binance/binance.service.js';
+import { derivService, DerivService, DerivCandle } from '../deriv/deriv.service.js';
+import { binanceService, BinanceService, BinanceKline } from '../binance/binance.service.js';
 import { finnhubService } from '../finnhub/finnhub.service.js';
 import { config } from '../../config/env.js';
 import { prisma } from '../../config/database.js';
@@ -196,6 +196,10 @@ class MarketService {
   private binanceInitialized: Set<string> = new Set();
   private finnhubUnsubscribe: (() => void) | null = null;
   private finnhubInitialized: Set<string> = new Set();
+
+  // Cache for historical bars to speed up chart loading
+  private historicalBarsCache: Map<string, { bars: OHLCBar[]; timestamp: number }> = new Map();
+  private readonly CACHE_TTL_MS = 60000; // Cache for 1 minute
 
   constructor() {
     this.initializeAssets();
@@ -658,6 +662,75 @@ class MarketService {
     bars.sort((a, b) => a.time - b.time);
 
     return bars.slice(-limit);
+  }
+
+  /**
+   * Fetch real historical candles from external APIs
+   * - Crypto: Binance API (free)
+   * - Forex: Deriv API (free)
+   * Returns OHLC bars with real market data
+   * Includes caching to speed up chart loading
+   */
+  async getRealHistoricalBars(
+    symbol: string,
+    resolution: number = 60,
+    limit: number = 500
+  ): Promise<OHLCBar[]> {
+    const cacheKey = `${symbol}-${resolution}-${limit}`;
+    const cached = this.historicalBarsCache.get(cacheKey);
+
+    // Return cached data if still valid
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL_MS) {
+      return cached.bars;
+    }
+
+    const asset = this.assets.get(symbol);
+    let bars: OHLCBar[] = [];
+
+    // Fetch from Binance for crypto assets
+    if (asset?.marketType === 'crypto') {
+      const interval = BinanceService.resolutionToInterval(resolution);
+      const klines = await binanceService.getHistoricalKlines(symbol, interval, limit);
+
+      if (klines.length > 0) {
+        bars = klines.map((kline) => ({
+          time: kline.time,
+          open: kline.open,
+          high: kline.high,
+          low: kline.low,
+          close: kline.close,
+          volume: kline.volume,
+        }));
+      }
+    }
+
+    // Fetch from Deriv for forex assets
+    if (bars.length === 0 && asset?.marketType === 'forex') {
+      const granularity = DerivService.resolutionToGranularity(resolution);
+      const candles = await derivService.getHistoricalCandles(symbol, granularity, limit);
+
+      if (candles.length > 0) {
+        bars = candles.map((candle) => ({
+          time: candle.time,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+        }));
+      }
+    }
+
+    // Fallback to in-memory history for other assets or if API fails
+    if (bars.length === 0) {
+      bars = this.getHistoricalBars(symbol, resolution, limit);
+    }
+
+    // Cache the result
+    if (bars.length > 0) {
+      this.historicalBarsCache.set(cacheKey, { bars, timestamp: Date.now() });
+    }
+
+    return bars;
   }
 
   generateInitialHistory(symbol: string, bars: number = 100): void {

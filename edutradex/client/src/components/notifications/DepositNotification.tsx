@@ -35,12 +35,30 @@ interface WebSocketMessage {
     method?: string;
     adminNote?: string;
     timestamp?: number;
+    // Connection/auth payload
+    clientId?: string;
+    userId?: string;
+    message?: string;
+    // Ticket reply payload
+    ticketId?: string;
+    ticketNumber?: string;
+    subject?: string;
+    isClosed?: boolean;
   };
 }
 
 export function DepositNotificationProvider({ children }: { children: React.ReactNode }) {
   const { user, token, isAuthenticated, refreshProfile } = useAuthStore();
   const { addNotification } = useNotificationStore();
+
+  // Debug: Log when provider mounts
+  useEffect(() => {
+    console.log('[Notifications] DepositNotificationProvider mounted', {
+      isAuthenticated,
+      hasToken: !!token,
+      userId: user?.id,
+    });
+  }, [isAuthenticated, token, user?.id]);
   const [notification, setNotification] = useState<TransactionNotificationData | null>(null);
   const [showModal, setShowModal] = useState(false);
   const previousDepositsRef = useRef<Map<string, TransactionStatus>>(new Map());
@@ -56,7 +74,11 @@ export function DepositNotificationProvider({ children }: { children: React.Reac
 
   // Handle incoming WebSocket notification
   const handleWebSocketNotification = useCallback((type: 'deposit' | 'withdrawal', payload: WebSocketMessage['payload']) => {
-    if (!payload || !payload.id || !payload.status) return;
+    console.log('[Notifications] handleWebSocketNotification called:', type, payload);
+    if (!payload || !payload.id || !payload.status) {
+      console.log('[Notifications] Invalid payload, skipping notification');
+      return;
+    }
 
     const isApproved = payload.status === 'APPROVED';
     const isDeposit = type === 'deposit';
@@ -191,11 +213,12 @@ export function DepositNotificationProvider({ children }: { children: React.Reac
       const ws = new WebSocket(WS_URL);
 
       ws.onopen = () => {
-        console.log('[Notifications] WebSocket connected');
+        console.log('[Notifications] WebSocket connected to:', WS_URL);
         setWsConnected(true);
         clearWsTimers();
 
         // Authenticate immediately
+        console.log('[Notifications] Sending authentication...');
         ws.send(JSON.stringify({ type: 'authenticate', payload: { token } }));
 
         // Start ping interval
@@ -209,10 +232,15 @@ export function DepositNotificationProvider({ children }: { children: React.Reac
       ws.onmessage = (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
+          console.log('[Notifications] Received message:', message.type, message.payload);
 
           switch (message.type) {
             case 'authenticated':
-              console.log('[Notifications] WebSocket authenticated');
+              console.log('[Notifications] WebSocket authenticated successfully! User ID:', message.payload?.userId);
+              break;
+
+            case 'connected':
+              console.log('[Notifications] WebSocket connection confirmed, client ID:', message.payload?.clientId);
               break;
 
             case 'withdrawal_update':
@@ -223,6 +251,24 @@ export function DepositNotificationProvider({ children }: { children: React.Reac
             case 'deposit_update':
               console.log('[Notifications] Real-time deposit update received');
               handleWebSocketNotification('deposit', message.payload);
+              break;
+
+            case 'ticket_reply':
+              console.log('[Notifications] Ticket reply received');
+              if (message.payload?.ticketNumber) {
+                const { ticketNumber, subject, isClosed } = message.payload;
+                addNotification({
+                  type: 'ticket_reply',
+                  title: isClosed ? 'Ticket Closed' : 'New Reply to Your Ticket',
+                  message: `${ticketNumber}: ${subject}`,
+                });
+                toast.success(
+                  isClosed
+                    ? `Your ticket ${ticketNumber} has been resolved`
+                    : `You have a new reply on ticket ${ticketNumber}`,
+                  { duration: 5000 }
+                );
+              }
               break;
 
             case 'error':

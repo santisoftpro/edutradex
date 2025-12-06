@@ -69,7 +69,12 @@ class WebSocketManager {
     }
     this.userClients.get(userId)!.add(clientId);
 
-    logger.info('Client authenticated', { clientId, userId });
+    logger.info('Client authenticated', {
+      clientId,
+      userId,
+      totalAuthenticatedUsers: this.userClients.size,
+      userClientCount: this.userClients.get(userId)?.size,
+    });
 
     // Send confirmation
     this.sendToClient(clientId, {
@@ -119,6 +124,14 @@ class WebSocketManager {
     method: string;
     adminNote?: string;
   }): void {
+    logger.info('Sending deposit notification', {
+      userId,
+      depositId: deposit.id,
+      status: deposit.status,
+      amount: deposit.amount,
+      connectedUsers: this.userClients.size,
+      userHasConnections: this.userClients.has(userId),
+    });
     this.sendToUser(userId, {
       type: 'deposit_update',
       payload: {
@@ -231,6 +244,22 @@ class WebSocketManager {
   }): void {
     this.sendToUser(userId, {
       type: 'leader_status_change',
+      payload: {
+        ...data,
+        timestamp: Date.now(),
+      },
+    });
+  }
+
+  // Support Ticket Notifications
+  notifyTicketReply(userId: string, data: {
+    ticketId: string;
+    ticketNumber: string;
+    subject: string;
+    isClosed: boolean;
+  }): void {
+    this.sendToUser(userId, {
+      type: 'ticket_reply',
       payload: {
         ...data,
         timestamp: Date.now(),

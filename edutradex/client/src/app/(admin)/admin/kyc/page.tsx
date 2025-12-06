@@ -14,6 +14,13 @@ import {
   AlertCircle,
   Eye,
   Image,
+  X,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  Download,
+  FileText,
+  ExternalLink,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
@@ -53,6 +60,267 @@ function StatCard({
   );
 }
 
+// Document Viewer Component
+function DocumentViewer({
+  url,
+  title,
+  onClose,
+}: {
+  url: string;
+  title: string;
+  onClose: () => void;
+}) {
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  const isPDF = url.toLowerCase().endsWith('.pdf');
+
+  // Get the base URL (remove /api if present)
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+
+  // Clean the path - remove leading slashes
+  let cleanPath = url.replace(/^\/+/, '');
+
+  // If path doesn't start with 'uploads/', add it
+  if (!cleanPath.startsWith('uploads/')) {
+    cleanPath = `uploads/${cleanPath}`;
+  }
+
+  const fullUrl = `${baseUrl}/${cleanPath}`;
+
+  const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 3));
+  const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5));
+  const handleRotate = () => setRotation((r) => (r + 90) % 360);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90">
+      {/* Header */}
+      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-gradient-to-b from-black/80 to-transparent z-10">
+        <h3 className="text-white font-medium">{title}</h3>
+        <div className="flex items-center gap-2">
+          {!isPDF && (
+            <>
+              <button
+                onClick={handleZoomOut}
+                className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
+                title="Zoom Out"
+              >
+                <ZoomOut className="h-5 w-5" />
+              </button>
+              <span className="text-white text-sm min-w-[60px] text-center">{Math.round(zoom * 100)}%</span>
+              <button
+                onClick={handleZoomIn}
+                className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
+                title="Zoom In"
+              >
+                <ZoomIn className="h-5 w-5" />
+              </button>
+              <button
+                onClick={handleRotate}
+                className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
+                title="Rotate"
+              >
+                <RotateCw className="h-5 w-5" />
+              </button>
+            </>
+          )}
+          <a
+            href={fullUrl}
+            download
+            className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
+            title="Download"
+          >
+            <Download className="h-5 w-5" />
+          </a>
+          <a
+            href={fullUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
+            title="Open in New Tab"
+          >
+            <ExternalLink className="h-5 w-5" />
+          </a>
+          <button
+            onClick={onClose}
+            className="p-2 bg-white/10 hover:bg-red-500/50 rounded-lg text-white transition-colors ml-2"
+            title="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="w-full h-full flex items-center justify-center overflow-auto pt-16 pb-4 px-4">
+        {loading && !error && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin text-white" />
+          </div>
+        )}
+
+        {error ? (
+          <div className="text-center text-white">
+            <AlertCircle className="h-16 w-16 mx-auto mb-4 text-red-400" />
+            <p className="text-lg font-medium">Failed to load document</p>
+            <p className="text-slate-400 mt-2">The document could not be displayed.</p>
+            <a
+              href={fullUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open in New Tab
+            </a>
+          </div>
+        ) : isPDF ? (
+          <div className="w-full h-full max-w-5xl flex flex-col items-center justify-center">
+            <object
+              data={fullUrl}
+              type="application/pdf"
+              className="w-full h-full rounded-lg"
+              onLoad={() => setLoading(false)}
+            >
+              {/* Fallback for browsers that don't support object tag for PDFs */}
+              <div className="flex flex-col items-center justify-center h-full bg-slate-800 rounded-lg p-8">
+                <FileText className="h-20 w-20 text-red-400 mb-4" />
+                <p className="text-white text-lg font-medium mb-2">PDF Document</p>
+                <p className="text-slate-400 text-center mb-6">Your browser cannot display this PDF inline.</p>
+                <div className="flex gap-3">
+                  <a
+                    href={fullUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors text-white"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Open in New Tab
+                  </a>
+                  <a
+                    href={fullUrl}
+                    download
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors text-white"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download
+                  </a>
+                </div>
+              </div>
+            </object>
+          </div>
+        ) : (
+          <img
+            src={fullUrl}
+            alt={title}
+            className="max-w-full max-h-full object-contain transition-transform duration-200"
+            style={{
+              transform: `scale(${zoom}) rotate(${rotation}deg)`,
+            }}
+            onLoad={() => setLoading(false)}
+            onError={() => {
+              setLoading(false);
+              setError(true);
+            }}
+          />
+        )}
+      </div>
+
+      {/* Click outside to close */}
+      <div
+        className="absolute inset-0 -z-10"
+        onClick={onClose}
+      />
+    </div>
+  );
+}
+
+// Helper to construct proper file URL
+function getFileUrl(path: string | undefined): string {
+  if (!path) return '';
+
+  // Get the base URL (remove /api if present)
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+
+  // Clean the path - remove leading slashes
+  let cleanPath = path.replace(/^\/+/, '');
+
+  // If path doesn't start with 'uploads/', add it
+  if (!cleanPath.startsWith('uploads/')) {
+    cleanPath = `uploads/${cleanPath}`;
+  }
+
+  return `${baseUrl}/${cleanPath}`;
+}
+
+// Document Preview Card
+function DocumentPreviewCard({
+  label,
+  url,
+  onView,
+}: {
+  label: string;
+  url: string | undefined;
+  onView: (url: string, label: string) => void;
+}) {
+  const [imageError, setImageError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  if (!url) return null;
+
+  const isPDF = url.toLowerCase().endsWith('.pdf');
+  const fullUrl = getFileUrl(url);
+
+  return (
+    <div className="group relative">
+      <p className="text-slate-400 text-sm mb-2">{label}</p>
+      <div
+        onClick={() => onView(url, label)}
+        className="relative h-40 bg-slate-600 rounded-xl overflow-hidden cursor-pointer border-2 border-transparent hover:border-emerald-500 transition-all"
+      >
+        {isPDF ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-700">
+            <FileText className="h-12 w-12 text-red-400 mb-2" />
+            <span className="text-slate-300 text-sm">PDF Document</span>
+          </div>
+        ) : imageError ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-700">
+            <Image className="h-12 w-12 text-slate-500 mb-2" />
+            <span className="text-slate-400 text-sm">Click to view</span>
+          </div>
+        ) : (
+          <>
+            {!imageLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-700">
+                <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+              </div>
+            )}
+            <img
+              src={fullUrl}
+              alt={label}
+              className={cn(
+                "w-full h-full object-cover transition-opacity",
+                imageLoaded ? "opacity-100" : "opacity-0"
+              )}
+              onLoad={() => setImageLoaded(true)}
+              onError={() => setImageError(true)}
+            />
+          </>
+        )}
+        {/* Hover overlay */}
+        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div className="flex items-center gap-2 text-white">
+            <Eye className="h-5 w-5" />
+            <span className="font-medium">View</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ViewKYCModal({
   kyc,
   onClose,
@@ -66,212 +334,237 @@ function ViewKYCModal({
 }) {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [viewingDocument, setViewingDocument] = useState<{ url: string; title: string } | null>(null);
+
+  const handleViewDocument = (url: string, title: string) => {
+    setViewingDocument({ url, title });
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-auto">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-slate-800 rounded-xl p-6 max-w-3xl w-full mx-4 my-8 border border-slate-700 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-white">KYC Submission Details</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
-            <XCircle className="h-6 w-6" />
-          </button>
-        </div>
-
-        {/* User Info */}
-        <div className="bg-slate-700/50 rounded-lg p-4 mb-6">
-          <h4 className="text-white font-medium mb-3">User Information</h4>
-          <div className="grid grid-cols-2 gap-4 text-sm">
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center overflow-auto">
+        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        <div className="relative bg-slate-800 rounded-2xl p-6 max-w-4xl w-full mx-4 my-8 border border-slate-700 max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-700">
             <div>
-              <span className="text-slate-400">Name:</span>
-              <span className="text-white ml-2">{kyc.user?.name}</span>
+              <h3 className="text-xl font-bold text-white">KYC Verification Review</h3>
+              <p className="text-slate-400 text-sm mt-1">Review submitted documents and information</p>
             </div>
-            <div>
-              <span className="text-slate-400">Email:</span>
-              <span className="text-white ml-2">{kyc.user?.email}</span>
-            </div>
-            <div>
-              <span className="text-slate-400">Registered:</span>
-              <span className="text-white ml-2">{kyc.user?.createdAt ? formatDate(kyc.user.createdAt) : 'N/A'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Personal Info */}
-        <div className="bg-slate-700/50 rounded-lg p-4 mb-6">
-          <h4 className="text-white font-medium mb-3">Personal Information</h4>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-slate-400">Full Name:</span>
-              <span className="text-white ml-2">{kyc.firstName} {kyc.lastName}</span>
-            </div>
-            <div>
-              <span className="text-slate-400">Date of Birth:</span>
-              <span className="text-white ml-2">{kyc.dateOfBirth ? formatDate(kyc.dateOfBirth) : 'N/A'}</span>
-            </div>
-            <div>
-              <span className="text-slate-400">Nationality:</span>
-              <span className="text-white ml-2">{kyc.nationality}</span>
-            </div>
-            <div>
-              <span className="text-slate-400">Phone:</span>
-              <span className="text-white ml-2">{kyc.phoneNumber}</span>
-            </div>
-            <div className="col-span-2">
-              <span className="text-slate-400">Address:</span>
-              <span className="text-white ml-2">{kyc.address}, {kyc.city}, {kyc.country} {kyc.postalCode}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Document Info */}
-        <div className="bg-slate-700/50 rounded-lg p-4 mb-6">
-          <h4 className="text-white font-medium mb-3">Document Information</h4>
-          <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-            <div>
-              <span className="text-slate-400">Document Type:</span>
-              <span className="text-white ml-2">{kyc.documentType?.replace(/_/g, ' ')}</span>
-            </div>
-            <div>
-              <span className="text-slate-400">Document Number:</span>
-              <span className="text-white ml-2">{kyc.documentNumber}</span>
-            </div>
+            <button onClick={onClose} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors">
+              <X className="h-6 w-6" />
+            </button>
           </div>
 
-          {/* Document Images */}
-          <div className="grid grid-cols-3 gap-4">
-            {kyc.documentFront && (
-              <div>
-                <p className="text-slate-400 text-sm mb-2">Document Front</p>
-                <a
-                  href={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')}/${kyc.documentFront}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center h-24 bg-slate-600 rounded-lg hover:bg-slate-500 transition-colors"
-                >
-                  <Image className="h-8 w-8 text-slate-400" />
-                </a>
-              </div>
-            )}
-            {kyc.documentBack && (
-              <div>
-                <p className="text-slate-400 text-sm mb-2">Document Back</p>
-                <a
-                  href={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')}/${kyc.documentBack}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center h-24 bg-slate-600 rounded-lg hover:bg-slate-500 transition-colors"
-                >
-                  <Image className="h-8 w-8 text-slate-400" />
-                </a>
-              </div>
-            )}
-            {kyc.selfieWithId && (
-              <div>
-                <p className="text-slate-400 text-sm mb-2">Selfie with ID</p>
-                <a
-                  href={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')}/${kyc.selfieWithId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center h-24 bg-slate-600 rounded-lg hover:bg-slate-500 transition-colors"
-                >
-                  <Image className="h-8 w-8 text-slate-400" />
-                </a>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Submission Info */}
-        <div className="bg-slate-700/50 rounded-lg p-4 mb-6">
-          <h4 className="text-white font-medium mb-3">Submission Details</h4>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-slate-400">Submitted:</span>
-              <span className="text-white ml-2">{kyc.submittedAt ? formatDate(kyc.submittedAt) : 'N/A'}</span>
-            </div>
-            <div>
-              <span className="text-slate-400">Status:</span>
-              <span className={cn(
-                'ml-2 px-2 py-0.5 rounded-full text-xs font-medium',
-                kyc.status === 'PENDING' && 'bg-yellow-600/20 text-yellow-500',
-                kyc.status === 'APPROVED' && 'bg-emerald-600/20 text-emerald-500',
-                kyc.status === 'REJECTED' && 'bg-red-600/20 text-red-500',
-              )}>
-                {kyc.status}
-              </span>
-            </div>
-            {kyc.reviewedAt && (
-              <div>
-                <span className="text-slate-400">Reviewed:</span>
-                <span className="text-white ml-2">{formatDate(kyc.reviewedAt)}</span>
-              </div>
-            )}
-            {kyc.rejectionReason && (
-              <div className="col-span-2">
-                <span className="text-slate-400">Rejection Reason:</span>
-                <span className="text-red-400 ml-2">{kyc.rejectionReason}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Actions */}
-        {kyc.status === 'PENDING' && (
-          <div className="space-y-4">
-            {!showRejectForm ? (
-              <div className="flex gap-3">
-                <button
-                  onClick={onApprove}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
-                >
-                  <CheckCircle className="h-5 w-5" />
-                  Approve KYC
-                </button>
-                <button
-                  onClick={() => setShowRejectForm(true)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors"
-                >
-                  <XCircle className="h-5 w-5" />
-                  Reject KYC
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <label className="block text-slate-400 text-sm">Rejection Reason *</label>
-                <textarea
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  placeholder="Please provide a reason for rejection..."
-                  className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  rows={3}
-                />
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowRejectForm(false)}
-                    className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!rejectionReason.trim()) {
-                        toast.error('Please provide a rejection reason');
-                        return;
-                      }
-                      onReject(rejectionReason);
-                    }}
-                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-                  >
-                    Confirm Rejection
-                  </button>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column - Info */}
+            <div className="space-y-4">
+              {/* User Info */}
+              <div className="bg-slate-700/50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <User className="h-4 w-4 text-emerald-400" />
+                  <h4 className="text-white font-medium">Account Information</h4>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Username:</span>
+                    <span className="text-white font-medium">{kyc.user?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Email:</span>
+                    <span className="text-white">{kyc.user?.email}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Registered:</span>
+                    <span className="text-white">{kyc.user?.createdAt ? formatDate(kyc.user.createdAt) : 'N/A'}</span>
+                  </div>
                 </div>
               </div>
-            )}
+
+              {/* Personal Info */}
+              <div className="bg-slate-700/50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileCheck className="h-4 w-4 text-emerald-400" />
+                  <h4 className="text-white font-medium">Personal Details</h4>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Full Name:</span>
+                    <span className="text-white font-medium">{kyc.firstName} {kyc.lastName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Date of Birth:</span>
+                    <span className="text-white">{kyc.dateOfBirth ? formatDate(kyc.dateOfBirth) : 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Nationality:</span>
+                    <span className="text-white">{kyc.nationality}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Phone:</span>
+                    <span className="text-white">{kyc.phoneNumber}</span>
+                  </div>
+                  <div className="pt-2 border-t border-slate-600 mt-2">
+                    <span className="text-slate-400">Address:</span>
+                    <p className="text-white mt-1">{kyc.address}, {kyc.city}, {kyc.country} {kyc.postalCode}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Document Info */}
+              <div className="bg-slate-700/50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="h-4 w-4 text-emerald-400" />
+                  <h4 className="text-white font-medium">Document Details</h4>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Document Type:</span>
+                    <span className="text-white font-medium">{kyc.documentType?.replace(/_/g, ' ')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Document Number:</span>
+                    <span className="text-white font-mono">{kyc.documentNumber}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Info */}
+              <div className="bg-slate-700/50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="h-4 w-4 text-emerald-400" />
+                  <h4 className="text-white font-medium">Submission Status</h4>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Status:</span>
+                    <span className={cn(
+                      'px-3 py-1 rounded-full text-xs font-medium',
+                      kyc.status === 'PENDING' && 'bg-yellow-600/20 text-yellow-400',
+                      kyc.status === 'APPROVED' && 'bg-emerald-600/20 text-emerald-400',
+                      kyc.status === 'REJECTED' && 'bg-red-600/20 text-red-400',
+                    )}>
+                      {kyc.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Submitted:</span>
+                    <span className="text-white">{kyc.submittedAt ? formatDate(kyc.submittedAt) : 'N/A'}</span>
+                  </div>
+                  {kyc.reviewedAt && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Reviewed:</span>
+                      <span className="text-white">{formatDate(kyc.reviewedAt)}</span>
+                    </div>
+                  )}
+                  {kyc.rejectionReason && (
+                    <div className="pt-2 border-t border-slate-600 mt-2">
+                      <span className="text-slate-400">Rejection Reason:</span>
+                      <p className="text-red-400 mt-1">{kyc.rejectionReason}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column - Documents */}
+            <div className="space-y-4">
+              <div className="bg-slate-700/50 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Image className="h-4 w-4 text-emerald-400" />
+                  <h4 className="text-white font-medium">Uploaded Documents</h4>
+                </div>
+                <p className="text-slate-400 text-sm mb-4">Click on any document to view it in full screen</p>
+
+                <div className="space-y-4">
+                  <DocumentPreviewCard
+                    label="Document Front"
+                    url={kyc.documentFront}
+                    onView={handleViewDocument}
+                  />
+                  <DocumentPreviewCard
+                    label="Document Back"
+                    url={kyc.documentBack}
+                    onView={handleViewDocument}
+                  />
+                  <DocumentPreviewCard
+                    label="Selfie with ID"
+                    url={kyc.selfieWithId}
+                    onView={handleViewDocument}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* Actions */}
+          {kyc.status === 'PENDING' && (
+            <div className="mt-6 pt-6 border-t border-slate-700">
+              {!showRejectForm ? (
+                <div className="flex gap-3">
+                  <button
+                    onClick={onApprove}
+                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-colors"
+                  >
+                    <CheckCircle className="h-5 w-5" />
+                    Approve Verification
+                  </button>
+                  <button
+                    onClick={() => setShowRejectForm(true)}
+                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl transition-colors"
+                  >
+                    <XCircle className="h-5 w-5" />
+                    Reject Verification
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-slate-400 text-sm mb-2">Rejection Reason *</label>
+                    <textarea
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="Please provide a clear reason for rejection so the user can correct their submission..."
+                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                      rows={3}
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowRejectForm(false)}
+                      className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-xl transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!rejectionReason.trim()) {
+                          toast.error('Please provide a rejection reason');
+                          return;
+                        }
+                        onReject(rejectionReason);
+                      }}
+                      className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl transition-colors"
+                    >
+                      Confirm Rejection
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Document Viewer Modal */}
+      {viewingDocument && (
+        <DocumentViewer
+          url={viewingDocument.url}
+          title={viewingDocument.title}
+          onClose={() => setViewingDocument(null)}
+        />
+      )}
+    </>
   );
 }
 

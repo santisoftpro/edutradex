@@ -92,6 +92,15 @@ export interface MarketAsset {
   payoutPercent: number;
 }
 
+export interface OHLCBar {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+}
+
 interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -107,6 +116,8 @@ interface ApiResponse<T> {
 class ApiClient {
   private client: AxiosInstance;
   private token: string | null = null;
+  private barsCache: Map<string, { bars: OHLCBar[]; timestamp: number }> = new Map();
+  private readonly BARS_CACHE_TTL_MS = 30000; // 30 seconds client-side cache
 
   constructor() {
     this.client = axios.create({
@@ -304,6 +315,40 @@ class ApiClient {
     } catch {
       return null;
     }
+  }
+
+  async getHistoricalBars(
+    symbol: string,
+    resolution: number = 60,
+    limit: number = 500
+  ): Promise<OHLCBar[]> {
+    const cacheKey = `${symbol}-${resolution}-${limit}`;
+    const cached = this.barsCache.get(cacheKey);
+
+    // Return cached data if still valid
+    if (cached && Date.now() - cached.timestamp < this.BARS_CACHE_TTL_MS) {
+      return cached.bars;
+    }
+
+    try {
+      const response = await this.get<ApiResponse<OHLCBar[]>>(
+        `/market/bars/${encodeURIComponent(symbol)}?resolution=${resolution}&limit=${limit}`
+      );
+      const bars = response.data;
+
+      // Cache the result
+      if (bars.length > 0) {
+        this.barsCache.set(cacheKey, { bars, timestamp: Date.now() });
+      }
+
+      return bars;
+    } catch {
+      return [];
+    }
+  }
+
+  clearBarsCache(): void {
+    this.barsCache.clear();
   }
 
   // Admin API Methods

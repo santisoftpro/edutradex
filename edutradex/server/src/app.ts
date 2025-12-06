@@ -26,7 +26,9 @@ const server: Server = createServer(app);
 
 // Security middleware
 app.use(helmet({
-  contentSecurityPolicy: config.isProduction ? undefined : false
+  contentSecurityPolicy: config.isProduction ? undefined : false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginEmbedderPolicy: false,
 }));
 
 app.use(cors({
@@ -52,8 +54,25 @@ app.use('/api', apiLimiter);
 app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: REQUEST_BODY_LIMIT }));
 
-// Serve static files for uploads
-app.use('/uploads', express.static('uploads'));
+// Serve static files for uploads with CORS headers
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+  // Set proper headers for PDFs to allow inline viewing
+  if (req.path.toLowerCase().endsWith('.pdf')) {
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+  }
+  next();
+}, express.static('uploads', {
+  setHeaders: (res, filePath) => {
+    // Ensure PDFs are served with correct MIME type
+    if (filePath.toLowerCase().endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+    }
+  }
+}));
 
 // Request logging middleware (skip frequent polling endpoints)
 app.use((req: Request, _res: Response, next: NextFunction) => {
@@ -127,7 +146,7 @@ wss.on('connection', (ws: WebSocket) => {
   const clientId = randomUUID();
   wsManager.addClient(ws, clientId);
 
-  logger.info('WebSocket client connected', { clientId });
+  logger.info('WebSocket client connected', { clientId, totalClients: wsManager.getClientCount() });
 
   ws.send(JSON.stringify({
     type: 'connected',
@@ -152,18 +171,22 @@ wss.on('connection', (ws: WebSocket) => {
           break;
 
         case 'authenticate':
+          logger.info('WebSocket authentication attempt', { clientId, hasToken: !!message.payload?.token });
           if (message.payload?.token) {
             try {
               const decoded = jwt.verify(message.payload.token, config.jwt.secret) as { id: string };
+              logger.info('Token verified successfully', { clientId, userId: decoded.id });
               wsManager.authenticateClient(clientId, decoded.id);
               logger.info('WebSocket client authenticated', { clientId, userId: decoded.id });
-            } catch {
+            } catch (error) {
+              logger.error('Token verification failed', { clientId, error: (error as Error).message });
               ws.send(JSON.stringify({
                 type: 'error',
                 payload: { message: 'Invalid authentication token' }
               }));
             }
           } else {
+            logger.warn('No token provided for authentication', { clientId });
             ws.send(JSON.stringify({
               type: 'error',
               payload: { message: 'Token is required for authentication' }

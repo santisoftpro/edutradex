@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { TradingHeader } from '@/components/trading/TradingHeader';
 import { TradingPanel } from '@/components/trading/TradingPanel';
@@ -16,33 +16,65 @@ import { MobileTradesSheet } from '@/components/trading/MobileTradesSheet';
 import { useAuthStore } from '@/store/auth.store';
 import { useTradeStore } from '@/store/trade.store';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { PriceTick } from '@/lib/api';
+import { api, PriceTick } from '@/lib/api';
 import { playBuySound, playSellSound } from '@/lib/sounds';
 
 const SELECTED_ASSET_KEY = 'optigobroker-selected-asset';
+const SELECTED_DURATION_KEY = 'optigobroker-selected-duration';
 
 export default function TradePage() {
   const { user, syncBalanceFromServer, isHydrated } = useAuthStore();
   const { placeTrade, syncFromApi } = useTradeStore();
-  const { isConnected, latestPrices, priceHistory, subscribe, unsubscribe } = useWebSocket();
+  const { isConnected, latestPrices, priceHistory, subscribe, unsubscribe, subscribeAll } = useWebSocket();
   const [selectedAsset, setSelectedAsset] = useState('EUR/USD');
   const [currentPrice, setCurrentPrice] = useState<PriceTick | null>(null);
   const [isTradesPanelOpen, setIsTradesPanelOpen] = useState(true);
   const [isMobileTradesOpen, setIsMobileTradesOpen] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(300);
+  const hasSubscribedAllRef = useRef(false);
 
-  // Load saved asset from localStorage on mount
+  // Load saved preferences from localStorage on mount
   useEffect(() => {
     const savedAsset = localStorage.getItem(SELECTED_ASSET_KEY);
     if (savedAsset) {
       setSelectedAsset(savedAsset);
     }
+    const savedDuration = localStorage.getItem(SELECTED_DURATION_KEY);
+    if (savedDuration) {
+      setSelectedDuration(parseInt(savedDuration, 10));
+    }
   }, []);
+
+  // Subscribe to ALL assets for live prices in the dropdown
+  useEffect(() => {
+    async function subscribeToAllAssets() {
+      if (!isConnected || hasSubscribedAllRef.current) return;
+
+      try {
+        const allAssets = await api.getAllAssets();
+        const symbols = allAssets.map(asset => asset.symbol);
+        if (symbols.length > 0) {
+          subscribeAll(symbols);
+          hasSubscribedAllRef.current = true;
+        }
+      } catch (error) {
+        console.error('Failed to subscribe to all assets:', error);
+      }
+    }
+
+    subscribeToAllAssets();
+  }, [isConnected, subscribeAll]);
 
   // Save selected asset to localStorage when it changes
   const handleSelectAsset = useCallback((symbol: string) => {
     setSelectedAsset(symbol);
     localStorage.setItem(SELECTED_ASSET_KEY, symbol);
+  }, []);
+
+  // Save selected duration to localStorage when it changes
+  const handleSelectDuration = useCallback((duration: number) => {
+    setSelectedDuration(duration);
+    localStorage.setItem(SELECTED_DURATION_KEY, duration.toString());
   }, []);
 
   useEffect(() => {
@@ -52,14 +84,13 @@ export default function TradePage() {
     }
   }, [isHydrated, user, syncBalanceFromServer, syncFromApi]);
 
+  // Note: We subscribe to ALL assets in the earlier useEffect
+  // This ensures the selected asset is also subscribed (in case subscribeAll hasn't completed yet)
   useEffect(() => {
-    if (isConnected) {
+    if (isConnected && !hasSubscribedAllRef.current) {
       subscribe(selectedAsset);
-      return () => {
-        unsubscribe(selectedAsset);
-      };
     }
-  }, [selectedAsset, isConnected, subscribe, unsubscribe]);
+  }, [selectedAsset, isConnected, subscribe]);
 
   useEffect(() => {
     const price = latestPrices.get(selectedAsset);
@@ -161,6 +192,7 @@ export default function TradePage() {
         onSelectAsset={handleSelectAsset}
         currentPrice={currentPrice}
         expirationTime={selectedDuration}
+        livePrices={latestPrices}
       />
 
       {/* ===== MAIN CONTENT AREA ===== */}
@@ -183,6 +215,8 @@ export default function TradePage() {
           onTrade={handleTrade}
           currentPrice={currentPrice?.price}
           isTradesPanelOpen={isTradesPanelOpen}
+          initialDuration={selectedDuration}
+          onDurationChange={handleSelectDuration}
         />
 
         {/* Desktop Trades Sidebar */}
@@ -205,7 +239,8 @@ export default function TradePage() {
       <MobileTradingPanel
         balance={user.demoBalance}
         onTrade={handleTrade}
-        onDurationChange={setSelectedDuration}
+        onDurationChange={handleSelectDuration}
+        initialDuration={selectedDuration}
       />
 
       {/* Mobile Bottom Navigation - at very bottom */}

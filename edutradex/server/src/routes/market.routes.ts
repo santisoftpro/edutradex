@@ -86,26 +86,34 @@ router.get('/history/:symbol', (req: Request, res: Response) => {
   });
 });
 
-router.get('/bars/:symbol', (req: Request, res: Response) => {
+router.get('/bars/:symbol', async (req: Request, res: Response) => {
   const { symbol } = req.params;
   const decodedSymbol = decodeURIComponent(symbol);
   const resolution = parseInt(req.query.resolution as string) || 60;
-  const limit = parseInt(req.query.limit as string) || 100;
+  const limit = Math.min(parseInt(req.query.limit as string) || 500, 1000);
 
-  const bars = marketService.getHistoricalBars(decodedSymbol, resolution, limit);
+  try {
+    // Use real historical data from Binance for crypto symbols
+    const bars = await marketService.getRealHistoricalBars(decodedSymbol, resolution, limit);
 
-  if (bars.length === 0) {
-    res.status(404).json({
-      success: false,
-      error: 'No data available for symbol',
+    if (bars.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: 'No data available for symbol',
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: bars,
     });
-    return;
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch historical data',
+    });
   }
-
-  res.json({
-    success: true,
-    data: bars,
-  });
 });
 
 router.get('/assets', (_req: Request, res: Response) => {

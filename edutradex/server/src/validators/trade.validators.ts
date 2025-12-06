@@ -6,7 +6,7 @@ export const placeTradeSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
   duration: z.number().int().positive('Duration must be a positive integer'),
   entryPrice: z.number().positive('Entry price must be positive'),
-  marketType: z.enum(['forex', 'otc']),
+  marketType: z.enum(['forex', 'crypto', 'stock', 'index']),
 });
 
 export const getTradesQuerySchema = z.object({

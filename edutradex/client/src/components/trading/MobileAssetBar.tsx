@@ -1,40 +1,90 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown, MoreHorizontal, Trash2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ChevronDown, MoreHorizontal, Trash2, TrendingUp, TrendingDown, Search, Loader2 } from 'lucide-react';
 import { useTradeStore } from '@/store/trade.store';
-import { PriceTick } from '@/lib/api';
+import { api, PriceTick, MarketAsset } from '@/lib/api';
+import { cn, isMarketOpen, MarketType } from '@/lib/utils';
+
+type AssetCategory = 'all' | 'forex' | 'crypto' | 'stocks' | 'indices';
 
 interface MobileAssetBarProps {
   selectedAsset: string;
   onSelectAsset: (symbol: string) => void;
   currentPrice: PriceTick | null;
   expirationTime: number;
+  livePrices?: Map<string, PriceTick>;
 }
 
-const ASSETS = [
-  { symbol: 'EUR/USD', name: 'Euro / US Dollar' },
-  { symbol: 'GBP/USD', name: 'British Pound / US Dollar' },
-  { symbol: 'USD/JPY', name: 'US Dollar / Japanese Yen' },
-  { symbol: 'AUD/USD', name: 'Australian Dollar / US Dollar' },
-  { symbol: 'USD/CAD', name: 'US Dollar / Canadian Dollar' },
-  { symbol: 'EUR/GBP', name: 'Euro / British Pound' },
-  { symbol: 'EUR/JPY', name: 'Euro / Japanese Yen' },
-  { symbol: 'GBP/JPY', name: 'British Pound / Japanese Yen' },
-  { symbol: 'BTC/USD', name: 'Bitcoin / US Dollar' },
-  { symbol: 'ETH/USD', name: 'Ethereum / US Dollar' },
-  { symbol: 'XAU/USD', name: 'Gold / US Dollar' },
-  { symbol: 'OTC_EUR/USD', name: 'OTC Euro / US Dollar' },
-  { symbol: 'OTC_GBP/USD', name: 'OTC British Pound / US Dollar' },
-  { symbol: 'VOL_10', name: 'Volatility 10 Index' },
-  { symbol: 'VOL_25', name: 'Volatility 25 Index' },
-  { symbol: 'VOL_50', name: 'Volatility 50 Index' },
-  { symbol: 'VOL_100', name: 'Volatility 100 Index' },
-];
+function getAssetCategory(asset: MarketAsset): AssetCategory {
+  if (asset.marketType === 'forex') return 'forex';
+  if (asset.marketType === 'crypto') return 'crypto';
+  if (asset.marketType === 'stock') return 'stocks';
+  if (asset.marketType === 'index') return 'indices';
+  return 'forex';
+}
 
-export function MobileAssetBar({ selectedAsset, onSelectAsset, currentPrice, expirationTime }: MobileAssetBarProps) {
+function getMarketType(asset: MarketAsset): MarketType {
+  if (asset.marketType === 'forex') return 'forex';
+  if (asset.marketType === 'crypto') return 'crypto';
+  if (asset.marketType === 'stock') return 'stock';
+  if (asset.marketType === 'index') return 'index';
+  return 'forex';
+}
+
+const CATEGORY_LABELS: Record<AssetCategory, string> = {
+  all: 'All',
+  forex: 'Forex',
+  crypto: 'Crypto',
+  stocks: 'Stocks',
+  indices: 'Indices',
+};
+
+export function MobileAssetBar({ selectedAsset, onSelectAsset, currentPrice, expirationTime, livePrices }: MobileAssetBarProps) {
   const [showAssetMenu, setShowAssetMenu] = useState(false);
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState<AssetCategory>('all');
+  const [assets, setAssets] = useState<MarketAsset[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { activeTrades } = useTradeStore();
+
+  // Fetch assets on mount
+  useEffect(() => {
+    async function fetchAssets() {
+      try {
+        setIsLoading(true);
+        const allAssets = await api.getAllAssets();
+        setAssets(allAssets);
+      } catch (error) {
+        console.error('Failed to fetch assets:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchAssets();
+  }, []);
+
+  // Check market status
+  const [marketStatus, setMarketStatus] = useState<Record<MarketType, boolean>>({
+    forex: true,
+    crypto: true,
+    stock: true,
+    index: true,
+  });
+
+  useEffect(() => {
+    const checkMarkets = () => {
+      setMarketStatus({
+        forex: isMarketOpen('forex'),
+        crypto: isMarketOpen('crypto'),
+        stock: isMarketOpen('stock'),
+        index: isMarketOpen('index'),
+      });
+    };
+    checkMarkets();
+    const interval = setInterval(checkMarkets, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const formatTime = (timestamp: string | Date) => {
     const date = new Date(timestamp);
@@ -57,6 +107,42 @@ export function MobileAssetBar({ selectedAsset, onSelectAsset, currentPrice, exp
     });
   };
 
+  // Filter assets
+  const filteredAssets = useMemo(() => {
+    return assets.filter((asset) => {
+      const matchesSearch =
+        asset.symbol.toLowerCase().includes(search.toLowerCase()) ||
+        asset.name.toLowerCase().includes(search.toLowerCase());
+      const assetCategory = getAssetCategory(asset);
+      const matchesCategory = category === 'all' || assetCategory === category;
+      return matchesSearch && matchesCategory;
+    });
+  }, [assets, search, category]);
+
+  // Category counts
+  const categoryCounts = useMemo(() => {
+    const counts: Record<AssetCategory, number> = {
+      all: assets.length,
+      forex: 0,
+      crypto: 0,
+      stocks: 0,
+      indices: 0,
+    };
+    assets.forEach((asset) => {
+      const cat = getAssetCategory(asset);
+      counts[cat]++;
+    });
+    return counts;
+  }, [assets]);
+
+  const visibleCategories: AssetCategory[] = (['all', 'forex', 'crypto', 'stocks', 'indices'] as AssetCategory[])
+    .filter(cat => cat === 'all' || categoryCounts[cat] > 0);
+
+  // Current asset
+  const currentAsset = useMemo(() => {
+    return assets.find((a) => a.symbol === selectedAsset);
+  }, [assets, selectedAsset]);
+
   return (
     <div className="md:hidden bg-[#0d0d1a]">
       {/* Asset Row */}
@@ -75,23 +161,118 @@ export function MobileAssetBar({ selectedAsset, onSelectAsset, currentPrice, exp
 
             {showAssetMenu && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowAssetMenu(false)} />
-                <div className="absolute left-0 top-full mt-1 w-64 max-h-80 overflow-y-auto bg-[#1a1a2e] border border-[#2d2d44] rounded-xl shadow-2xl z-50">
-                  {ASSETS.map((asset) => (
-                    <button
-                      key={asset.symbol}
-                      onClick={() => {
-                        onSelectAsset(asset.symbol);
-                        setShowAssetMenu(false);
-                      }}
-                      className={`w-full flex flex-col px-4 py-3 text-left hover:bg-[#252542] transition-colors ${
-                        selectedAsset === asset.symbol ? 'bg-[#252542]' : ''
-                      }`}
-                    >
-                      <span className="text-white font-medium text-sm">{asset.symbol}</span>
-                      <span className="text-gray-500 text-xs">{asset.name}</span>
-                    </button>
-                  ))}
+                <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setShowAssetMenu(false)} />
+                <div className="fixed inset-x-2 bottom-2 top-auto max-h-[70vh] bg-[#1a1a2e] border border-[#2d2d44] rounded-xl shadow-2xl z-50 flex flex-col">
+                  {/* Search */}
+                  <div className="p-3 border-b border-[#2d2d44]">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                      <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search assets..."
+                        className="w-full pl-9 pr-4 py-2 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Categories */}
+                  <div className="flex flex-wrap gap-1 p-2 border-b border-[#2d2d44]">
+                    {visibleCategories.map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setCategory(cat)}
+                        className={cn(
+                          'px-2 py-1 rounded text-xs font-medium transition-colors',
+                          category === cat
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-[#252542] text-gray-400 hover:text-white'
+                        )}
+                      >
+                        {CATEGORY_LABELS[cat]}
+                        {cat !== 'all' && (
+                          <span className="ml-1 opacity-60">({categoryCounts[cat]})</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Asset List */}
+                  <div className="flex-1 overflow-y-auto">
+                    {isLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                      </div>
+                    ) : filteredAssets.length === 0 ? (
+                      <div className="p-4 text-center text-gray-500 text-sm">
+                        No assets found
+                      </div>
+                    ) : (
+                      filteredAssets.map((asset) => {
+                        const liveData = livePrices?.get(asset.symbol);
+                        const price = liveData?.price ?? asset.basePrice;
+                        const change = liveData?.changePercent ?? 0;
+                        const assetMarketType = getMarketType(asset);
+                        const isAssetMarketOpen = marketStatus[assetMarketType];
+
+                        return (
+                          <button
+                            key={asset.symbol}
+                            onClick={() => {
+                              if (isAssetMarketOpen) {
+                                onSelectAsset(asset.symbol);
+                                setShowAssetMenu(false);
+                                setSearch('');
+                              }
+                            }}
+                            disabled={!isAssetMarketOpen}
+                            className={cn(
+                              'w-full flex items-center justify-between px-4 py-3 transition-colors',
+                              selectedAsset === asset.symbol && 'bg-[#252542]',
+                              isAssetMarketOpen
+                                ? 'hover:bg-[#252542] active:bg-[#2d2d52]'
+                                : 'opacity-50 bg-[#151525]'
+                            )}
+                          >
+                            <div className="text-left">
+                              <div className={cn(
+                                'font-medium text-sm',
+                                isAssetMarketOpen ? 'text-white' : 'text-gray-500'
+                              )}>
+                                {asset.symbol}
+                              </div>
+                              <div className="text-gray-500 text-xs truncate max-w-[150px]">
+                                {isAssetMarketOpen ? asset.name : 'Market Closed'}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              {isAssetMarketOpen ? (
+                                <>
+                                  <div className="text-white text-sm">
+                                    ${price.toFixed(price > 100 ? 2 : price < 0.01 ? 6 : 4)}
+                                  </div>
+                                  <div className={cn(
+                                    'text-xs flex items-center justify-end gap-1',
+                                    change >= 0 ? 'text-emerald-400' : 'text-red-400'
+                                  )}>
+                                    {change >= 0 ? (
+                                      <TrendingUp className="h-3 w-3" />
+                                    ) : (
+                                      <TrendingDown className="h-3 w-3" />
+                                    )}
+                                    {change >= 0 ? '+' : ''}{change.toFixed(2)}%
+                                  </div>
+                                </>
+                              ) : (
+                                <span className="text-xs text-red-400/70 font-medium">CLOSED</span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </>
             )}

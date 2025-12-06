@@ -11,7 +11,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -36,6 +36,7 @@ model User {
   emailVerifiedAt DateTime?
 
   kyc             KYC?
+  supportTickets  SupportTicket[]
 
   leaderProfile CopyTradingLeader?
   following     CopyTradingFollower[] @relation("Follower")
@@ -454,4 +455,34 @@ model KYC {
 
   @@index([userId])
   @@index([status])
+}
+
+model SupportTicket {
+  id          String   @id @default(uuid())
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  ticketNumber String  @unique
+  subject     String
+  message     String
+  category    String   @default("GENERAL")
+  priority    String   @default("MEDIUM")
+  status      String   @default("OPEN")
+
+  adminReply  String?
+  repliedBy   String?
+  repliedAt   DateTime?
+
+  closedBy    String?
+  closedAt    DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+  @@index([ticketNumber])
+  @@index([createdAt])
 }

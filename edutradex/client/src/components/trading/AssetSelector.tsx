@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { ChevronDown, Search, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, isMarketOpen, MarketType } from '@/lib/utils';
 import { api, MarketAsset, PriceTick } from '@/lib/api';
 
 type AssetCategory = 'all' | 'forex' | 'crypto' | 'stocks' | 'indices';
@@ -33,6 +33,15 @@ function getAssetCategory(asset: MarketAsset): AssetCategory {
   return 'forex';
 }
 
+// Helper function to get MarketType from asset
+function getMarketType(asset: MarketAsset): MarketType {
+  if (asset.marketType === 'forex') return 'forex';
+  if (asset.marketType === 'crypto') return 'crypto';
+  if (asset.marketType === 'stock') return 'stock';
+  if (asset.marketType === 'index') return 'index';
+  return 'forex';
+}
+
 const CATEGORY_LABELS: Record<AssetCategory, string> = {
   all: 'All',
   forex: 'Forex',
@@ -47,6 +56,29 @@ export function AssetSelector({ selectedAsset, onSelectAsset, currentPrice, curr
   const [category, setCategory] = useState<AssetCategory>('all');
   const [assets, setAssets] = useState<MarketAsset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [marketStatus, setMarketStatus] = useState<Record<MarketType, boolean>>({
+    forex: true,
+    crypto: true,
+    stock: true,
+    index: true,
+  });
+
+  // Check market status on mount and periodically
+  useEffect(() => {
+    const checkMarkets = () => {
+      setMarketStatus({
+        forex: isMarketOpen('forex'),
+        crypto: isMarketOpen('crypto'),
+        stock: isMarketOpen('stock'),
+        index: isMarketOpen('index'),
+      });
+    };
+
+    checkMarkets();
+    // Check every minute
+    const interval = setInterval(checkMarkets, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Fetch assets on mount
   useEffect(() => {
@@ -201,39 +233,62 @@ export function AssetSelector({ selectedAsset, onSelectAsset, currentPrice, curr
                   // Get live price data if available
                   const liveData = livePrices?.get(asset.symbol);
                   const price = liveData?.price ?? asset.basePrice;
-                  const change = liveData?.change ?? 0;
+                  const change = liveData?.changePercent ?? 0;
+
+                  // Check if market is open for this asset
+                  const assetMarketType = getMarketType(asset);
+                  const isAssetMarketOpen = marketStatus[assetMarketType];
 
                   return (
                     <button
                       key={asset.symbol}
                       onClick={() => {
-                        onSelectAsset(asset.symbol);
-                        setIsOpen(false);
+                        if (isAssetMarketOpen) {
+                          onSelectAsset(asset.symbol);
+                          setIsOpen(false);
+                        }
                       }}
+                      disabled={!isAssetMarketOpen}
                       className={cn(
-                        'w-full flex items-center justify-between px-4 py-3 hover:bg-[#252542] transition-colors',
-                        selectedAsset === asset.symbol && 'bg-[#252542]'
+                        'w-full flex items-center justify-between px-4 py-3 transition-colors',
+                        selectedAsset === asset.symbol && 'bg-[#252542]',
+                        isAssetMarketOpen
+                          ? 'hover:bg-[#252542] cursor-pointer'
+                          : 'opacity-50 cursor-not-allowed bg-[#151525]'
                       )}
                     >
                       <div className="text-left">
-                        <div className="text-white font-medium">{asset.symbol}</div>
-                        <div className="text-gray-500 text-xs truncate max-w-[180px]">{asset.name}</div>
+                        <div className={cn(
+                          'font-medium',
+                          isAssetMarketOpen ? 'text-white' : 'text-gray-500'
+                        )}>
+                          {asset.symbol}
+                        </div>
+                        <div className="text-gray-500 text-xs truncate max-w-[180px]">
+                          {isAssetMarketOpen ? asset.name : 'Market Closed'}
+                        </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-white text-sm">
-                          ${price.toFixed(price > 100 ? 2 : price < 0.01 ? 8 : 4)}
-                        </div>
-                        <div className={cn(
-                          'text-xs flex items-center justify-end gap-1',
-                          change >= 0 ? 'text-emerald-400' : 'text-red-400'
-                        )}>
-                          {change >= 0 ? (
-                            <TrendingUp className="h-3 w-3" />
-                          ) : (
-                            <TrendingDown className="h-3 w-3" />
-                          )}
-                          {change >= 0 ? '+' : ''}{change.toFixed(2)}%
-                        </div>
+                        {isAssetMarketOpen ? (
+                          <>
+                            <div className="text-white text-sm">
+                              ${price.toFixed(price > 100 ? 2 : price < 0.01 ? 8 : 4)}
+                            </div>
+                            <div className={cn(
+                              'text-xs flex items-center justify-end gap-1',
+                              change >= 0 ? 'text-emerald-400' : 'text-red-400'
+                            )}>
+                              {change >= 0 ? (
+                                <TrendingUp className="h-3 w-3" />
+                              ) : (
+                                <TrendingDown className="h-3 w-3" />
+                              )}
+                              {change >= 0 ? '+' : ''}{change.toFixed(2)}%
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-xs text-red-400/70 font-medium">CLOSED</span>
+                        )}
                       </div>
                     </button>
                   );

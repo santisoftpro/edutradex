@@ -274,4 +274,120 @@ export const emailTemplates = {
       <p>Thank you for your patience!<br><strong>The OptigoBroker Team</strong></p>
     `);
   },
+
+  newTicketAdmin: (
+    ticketNumber: string,
+    subject: string,
+    message: string,
+    userName: string,
+    userEmail: string,
+    category: string,
+    priority: string
+  ): string => {
+    const priorityColor = priority === 'URGENT' ? '#dc2626' : priority === 'HIGH' ? '#f59e0b' : '#10b981';
+    return wrapTemplate(`
+      <h2>New Support Ticket</h2>
+      <div class="info">
+        <strong>A new support ticket has been submitted</strong>
+      </div>
+      <div style="padding: 20px; background-color: #f8f9fa; border-radius: 8px; margin: 20px 0;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 8px 0; color: #666; width: 120px;">Ticket Number:</td>
+            <td style="padding: 8px 0; font-weight: 600;">${ticketNumber}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #666;">From:</td>
+            <td style="padding: 8px 0;">${userName} (${userEmail})</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #666;">Category:</td>
+            <td style="padding: 8px 0;">${category}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #666;">Priority:</td>
+            <td style="padding: 8px 0;"><span style="color: ${priorityColor}; font-weight: 600;">${priority}</span></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #666;">Subject:</td>
+            <td style="padding: 8px 0; font-weight: 600;">${subject}</td>
+          </tr>
+        </table>
+      </div>
+      <div style="padding: 20px; background-color: #fff; border: 1px solid #e5e7eb; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0 0 10px 0; color: #666; font-size: 14px;">Message:</p>
+        <div style="white-space: pre-wrap;">${message}</div>
+      </div>
+      <p>Please log in to the admin panel to respond to this ticket.</p>
+    `);
+  },
+
+  ticketReply: (
+    userName: string,
+    ticketNumber: string,
+    subject: string,
+    reply: string,
+    isClosed: boolean
+  ): string => {
+    const statusBadge = isClosed
+      ? '<span style="background-color: #6b7280; color: #fff; padding: 4px 12px; border-radius: 4px; font-size: 12px;">CLOSED</span>'
+      : '<span style="background-color: #10b981; color: #fff; padding: 4px 12px; border-radius: 4px; font-size: 12px;">REPLIED</span>';
+
+    return wrapTemplate(`
+      <h2>Hello ${userName},</h2>
+      <div class="success">
+        <strong>Your support ticket has been updated!</strong>
+      </div>
+      <div style="padding: 20px; background-color: #f8f9fa; border-radius: 8px; margin: 20px 0;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 8px 0; color: #666; width: 120px;">Ticket:</td>
+            <td style="padding: 8px 0; font-weight: 600;">${ticketNumber}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #666;">Subject:</td>
+            <td style="padding: 8px 0;">${subject}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #666;">Status:</td>
+            <td style="padding: 8px 0;">${statusBadge}</td>
+          </tr>
+        </table>
+      </div>
+      <div style="padding: 20px; background-color: #fff; border: 1px solid #10b981; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 0 0 10px 0; color: #10b981; font-weight: 600; font-size: 14px;">Response from Support Team:</p>
+        <div style="white-space: pre-wrap;">${reply}</div>
+      </div>
+      ${isClosed ? '<p>This ticket has been marked as closed. If you need further assistance, please create a new ticket.</p>' : '<p>If you have any follow-up questions, please reply through your dashboard.</p>'}
+      <p>Thank you for contacting us!<br><strong>The OptigoBroker Team</strong></p>
+    `);
+  },
+
+  ticketCreatedConfirmation: (
+    userName: string,
+    ticketNumber: string,
+    subject: string
+  ): string => {
+    return wrapTemplate(`
+      <h2>Hello ${userName},</h2>
+      <div class="success">
+        <strong>Your support ticket has been received!</strong>
+      </div>
+      <div style="padding: 20px; background-color: #f8f9fa; border-radius: 8px; margin: 20px 0; text-align: center;">
+        <p style="margin: 0; color: #666;">Ticket Number</p>
+        <p style="font-size: 24px; font-weight: 700; color: #1a1a2e; margin: 10px 0;">${ticketNumber}</p>
+        <p style="margin: 0; color: #666;">${subject}</p>
+      </div>
+      <div class="info">
+        <strong>What happens next?</strong>
+        <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+          <li>Our support team will review your request</li>
+          <li>You will receive an email when we respond</li>
+          <li>You can also check the status in your dashboard</li>
+        </ul>
+      </div>
+      <p style="margin-top: 20px;">Average response time: <strong>24-48 hours</strong></p>
+      <p>Thank you for your patience!<br><strong>The OptigoBroker Team</strong></p>
+    `);
+  },
 };

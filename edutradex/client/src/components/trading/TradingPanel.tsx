@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowUp, ArrowDown, DollarSign, Zap, Edit3 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 
@@ -11,6 +11,8 @@ interface TradingPanelProps {
   currentPrice?: number;
   payoutPercent?: number;
   isTradesPanelOpen?: boolean;
+  initialDuration?: number;
+  onDurationChange?: (duration: number) => void;
 }
 
 const DURATIONS = [
@@ -28,15 +30,29 @@ const DURATIONS = [
 
 const QUICK_AMOUNTS = [5, 10, 25, 50, 100, 500, 1000, 5000];
 
-export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 85, isTradesPanelOpen = true }: TradingPanelProps) {
+export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 85, isTradesPanelOpen = true, initialDuration, onDurationChange }: TradingPanelProps) {
   const [amount, setAmount] = useState(10);
   const [duration, setDuration] = useState(60);
+
+  // Sync duration from parent after hydration to avoid SSR mismatch
+  useEffect(() => {
+    if (initialDuration !== undefined && initialDuration !== duration) {
+      setDuration(initialDuration);
+    }
+  }, [initialDuration]);
   const [showCustomDuration, setShowCustomDuration] = useState(false);
   const [customHours, setCustomHours] = useState(0);
   const [customMinutes, setCustomMinutes] = useState(1);
   const [customSeconds, setCustomSeconds] = useState(0);
 
   const potentialProfit = amount * (payoutPercent / 100);
+
+  const handleDurationChange = (newDuration: number) => {
+    setDuration(newDuration);
+    if (onDurationChange) {
+      onDurationChange(newDuration);
+    }
+  };
 
   const handleTrade = (direction: 'UP' | 'DOWN') => {
     if (amount > 0 && amount <= balance) {
@@ -114,7 +130,7 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 85, 
                 onClick={() => {
                   const totalSeconds = customHours * 3600 + customMinutes * 60 + customSeconds;
                   if (totalSeconds >= 5 && totalSeconds <= 86400) {
-                    setDuration(totalSeconds);
+                    handleDurationChange(totalSeconds);
                     setShowCustomDuration(false);
                   }
                 }}
@@ -135,7 +151,7 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 85, 
               <button
                 key={d.value}
                 onClick={() => {
-                  setDuration(d.value);
+                  handleDurationChange(d.value);
                   setShowCustomDuration(false);
                 }}
                 className={cn(

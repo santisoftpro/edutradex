@@ -17,6 +17,7 @@ import {
   CreditCard,
   Copy,
   FileCheck,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -27,6 +28,7 @@ const navItems = [
   { href: '/admin/kyc', label: 'KYC Verification', icon: FileCheck, badgeKey: 'kyc' },
   { href: '/admin/deposits', label: 'Deposits', icon: Wallet, badgeKey: 'deposits' },
   { href: '/admin/withdrawals', label: 'Withdrawals', icon: ArrowUpFromLine, badgeKey: 'withdrawals' },
+  { href: '/admin/tickets', label: 'Support Tickets', icon: MessageSquare, badgeKey: 'tickets' },
   { href: '/admin/payment-methods', label: 'Payment Methods', icon: CreditCard },
   { href: '/admin/copy-trading', label: 'Copy Trading', icon: Copy, badgeKey: 'pendingLeaders' },
   { href: '/admin/markets', label: 'Markets', icon: TrendingUp },
@@ -40,6 +42,7 @@ export function AdminSidebar() {
   const [pendingWithdrawals, setPendingWithdrawals] = useState(0);
   const [pendingLeaders, setPendingLeaders] = useState(0);
   const [pendingKYC, setPendingKYC] = useState(0);
+  const [openTickets, setOpenTickets] = useState(0);
 
   useEffect(() => {
     const fetchPendingCounts = async () => {
@@ -54,6 +57,16 @@ export function AdminSidebar() {
         setPendingWithdrawals(withdrawalCount);
         setPendingLeaders(leadersCount);
         setPendingKYC(kycCount);
+
+        // Fetch ticket stats separately to avoid breaking the whole request
+        try {
+          const ticketRes = await api.get<{ success: boolean; data: { open: number } }>('/support/admin/stats');
+          if (ticketRes.success && ticketRes.data) {
+            setOpenTickets(ticketRes.data.open || 0);
+          }
+        } catch {
+          // Tickets endpoint not available yet, ignore
+        }
       } catch (error) {
         console.error('Failed to fetch pending counts:', error);
       }
@@ -85,7 +98,8 @@ export function AdminSidebar() {
             const badgeCount = item.badgeKey === 'deposits' ? pendingDeposits :
                                item.badgeKey === 'withdrawals' ? pendingWithdrawals :
                                item.badgeKey === 'pendingLeaders' ? pendingLeaders :
-                               item.badgeKey === 'kyc' ? pendingKYC : 0;
+                               item.badgeKey === 'kyc' ? pendingKYC :
+                               item.badgeKey === 'tickets' ? openTickets : 0;
             const showBadge = badgeCount > 0;
 
             return (

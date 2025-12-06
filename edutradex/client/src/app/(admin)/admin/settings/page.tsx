@@ -10,6 +10,9 @@ import {
   AlertCircle,
   Save,
   X,
+  ToggleLeft,
+  ToggleRight,
+  History,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAdminStore } from '@/store/admin.store';
@@ -106,6 +109,64 @@ function SettingModal({
   );
 }
 
+interface FeatureToggle {
+  key: string;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+}
+
+const FEATURE_TOGGLES: FeatureToggle[] = [
+  {
+    key: 'USER_CLEAR_HISTORY_ENABLED',
+    label: 'Allow Users to Clear History',
+    description: 'When enabled, users can clear their trade history from the history page',
+    icon: <History className="h-5 w-5" />,
+  },
+];
+
+function FeatureToggleItem({
+  toggle,
+  value,
+  onChange,
+  isLoading,
+}: {
+  toggle: FeatureToggle;
+  value: boolean;
+  onChange: (enabled: boolean) => void;
+  isLoading: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg">
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-slate-600 rounded-lg text-slate-300">
+          {toggle.icon}
+        </div>
+        <div>
+          <p className="text-white font-medium">{toggle.label}</p>
+          <p className="text-slate-400 text-sm">{toggle.description}</p>
+        </div>
+      </div>
+      <button
+        onClick={() => onChange(!value)}
+        disabled={isLoading}
+        className={cn(
+          'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-800',
+          value ? 'bg-emerald-600' : 'bg-slate-600',
+          isLoading && 'opacity-50 cursor-not-allowed'
+        )}
+      >
+        <span
+          className={cn(
+            'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+            value ? 'translate-x-6' : 'translate-x-1'
+          )}
+        />
+      </button>
+    </div>
+  );
+}
+
 function DeleteConfirmModal({
   settingKey,
   onConfirm,
@@ -156,10 +217,32 @@ export default function SystemSettingsPage() {
   const [editingSetting, setEditingSetting] = useState<SystemSetting | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [togglingKeys, setTogglingKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchSystemSettings();
   }, [fetchSystemSettings]);
+
+  const getToggleValue = (key: string): boolean => {
+    const setting = systemSettings.find((s) => s.key === key);
+    return setting?.value === 'true';
+  };
+
+  const handleToggle = async (key: string, enabled: boolean) => {
+    setTogglingKeys((prev) => new Set(prev).add(key));
+    try {
+      await setSystemSetting(key, enabled ? 'true' : 'false');
+      toast.success(`${enabled ? 'Enabled' : 'Disabled'} successfully`);
+    } catch {
+      toast.error('Failed to update setting');
+    } finally {
+      setTogglingKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
 
   const handleSave = async (key: string, value: string) => {
     try {
@@ -225,6 +308,25 @@ export default function SystemSettingsPage() {
           <Plus className="h-4 w-4" />
           Add Setting
         </button>
+      </div>
+
+      {/* Feature Toggles */}
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
+        <h2 className="text-lg font-semibold text-white mb-4">Feature Toggles</h2>
+        <p className="text-slate-400 text-sm mb-4">
+          Enable or disable specific features for users
+        </p>
+        <div className="space-y-3">
+          {FEATURE_TOGGLES.map((toggle) => (
+            <FeatureToggleItem
+              key={toggle.key}
+              toggle={toggle}
+              value={getToggleValue(toggle.key)}
+              onChange={(enabled) => handleToggle(toggle.key, enabled)}
+              isLoading={togglingKeys.has(toggle.key)}
+            />
+          ))}
+        </div>
       </div>
 
       <div className="bg-slate-800 rounded-xl border border-slate-700">

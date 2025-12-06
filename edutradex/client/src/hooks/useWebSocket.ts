@@ -136,59 +136,8 @@ export function useWebSocket(): UseWebSocketReturn {
               }
               break;
 
-            case 'deposit_update': {
-              const { amount, status, adminNote } = message.payload;
-              const isApproved = status === 'APPROVED';
-              const depositMessage = isApproved
-                ? `Your deposit of $${amount.toFixed(2)} has been approved and added to your balance.`
-                : `Your deposit of $${amount.toFixed(2)} has been rejected.${adminNote ? ` Reason: ${adminNote}` : ''}`;
-
-              // Add to notification store
-              useNotificationStore.getState().addNotification({
-                type: isApproved ? 'deposit_approved' : 'deposit_rejected',
-                title: isApproved ? 'Deposit Approved' : 'Deposit Rejected',
-                message: depositMessage,
-                amount,
-              });
-
-              // Show toast for immediate feedback
-              if (isApproved) {
-                toast.success(depositMessage, { duration: 5000 });
-              } else {
-                toast.error(depositMessage, { duration: 5000 });
-              }
-
-              // Refresh user profile to get updated balance
-              useAuthStore.getState().refreshProfile();
-              break;
-            }
-
-            case 'withdrawal_update': {
-              const { amount, status, adminNote } = message.payload;
-              const isApproved = status === 'APPROVED';
-              const withdrawalMessage = isApproved
-                ? `Your withdrawal of $${amount.toFixed(2)} has been approved and processed.`
-                : `Your withdrawal of $${amount.toFixed(2)} has been rejected.${adminNote ? ` Reason: ${adminNote}` : ''}`;
-
-              // Add to notification store
-              useNotificationStore.getState().addNotification({
-                type: isApproved ? 'withdrawal_approved' : 'withdrawal_rejected',
-                title: isApproved ? 'Withdrawal Approved' : 'Withdrawal Rejected',
-                message: withdrawalMessage,
-                amount,
-              });
-
-              // Show toast for immediate feedback
-              if (isApproved) {
-                toast.success(withdrawalMessage, { duration: 5000 });
-              } else {
-                toast.error(withdrawalMessage, { duration: 5000 });
-              }
-
-              // Refresh user profile to get updated balance
-              useAuthStore.getState().refreshProfile();
-              break;
-            }
+            // deposit_update and withdrawal_update are handled by DepositNotificationProvider
+            // to avoid duplicate notifications
 
             case 'copy_trade_executed': {
               const { symbol, direction, amount, leaderName } = message.payload;

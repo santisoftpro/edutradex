@@ -1,19 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ArrowUp,
   ArrowDown,
   Calendar,
   Filter,
   Download,
-  Trash2,
   TrendingUp,
   TrendingDown,
+  Trash2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useTradeStore, Trade } from '@/store/trade.store';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 type FilterType = 'all' | 'won' | 'lost';
 
@@ -21,6 +23,34 @@ export default function HistoryPage() {
   const { trades, stats, clearHistory } = useTradeStore();
   const [filter, setFilter] = useState<FilterType>('all');
   const [dateRange, setDateRange] = useState<'all' | '7d' | '30d'>('all');
+  const [clearHistoryEnabled, setClearHistoryEnabled] = useState(false);
+
+  useEffect(() => {
+    const fetchSetting = async () => {
+      try {
+        const response = await api.get<{ success: boolean; data: { value: string } }>('/settings/USER_CLEAR_HISTORY_ENABLED');
+        if (response.success) {
+          setClearHistoryEnabled(response.data.value === 'true');
+        }
+      } catch {
+        // Setting not found or error - keep disabled by default
+        setClearHistoryEnabled(false);
+      }
+    };
+    fetchSetting();
+  }, []);
+
+  const handleClearHistory = async () => {
+    if (!confirm('Are you sure you want to clear all trade history? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      await clearHistory();
+      toast.success('Trade history cleared');
+    } catch {
+      toast.error('Failed to clear history');
+    }
+  };
 
   const filteredTrades = trades.filter((trade) => {
     if (trade.status === 'active') return false;
@@ -46,6 +76,74 @@ export default function HistoryPage() {
     return `${Math.floor(seconds / 60)}m`;
   };
 
+  const handleExport = () => {
+    if (filteredTrades.length === 0) {
+      toast.error('No trades to export');
+      return;
+    }
+
+    // CSV headers
+    const headers = [
+      'Date',
+      'Asset',
+      'Market Type',
+      'Direction',
+      'Amount ($)',
+      'Duration',
+      'Entry Price',
+      'Exit Price',
+      'Result',
+      'Profit/Loss ($)',
+    ];
+
+    // Convert trades to CSV rows
+    const rows = filteredTrades.map((trade) => [
+      format(new Date(trade.createdAt), 'yyyy-MM-dd HH:mm:ss'),
+      trade.symbol,
+      trade.marketType.toUpperCase(),
+      trade.direction,
+      trade.amount.toFixed(2),
+      formatDuration(trade.duration),
+      trade.entryPrice?.toFixed(5) || 'N/A',
+      trade.exitPrice?.toFixed(5) || 'N/A',
+      trade.status === 'won' ? 'PROFIT' : 'LOSS',
+      (trade.profit || 0).toFixed(2),
+    ]);
+
+    // Build CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
+    ].join('\n');
+
+    // Add summary at the end
+    const summary = [
+      '',
+      '',
+      'Summary',
+      `Total Trades,${filteredTrades.length}`,
+      `Profit,${filteredTrades.filter((t) => t.status === 'won').length}`,
+      `Loss,${filteredTrades.filter((t) => t.status === 'lost').length}`,
+      `Total Profit/Loss,$${filteredTrades.reduce((sum, t) => sum + (t.profit || 0), 0).toFixed(2)}`,
+      `Profit Rate,${stats.winRate.toFixed(1)}%`,
+    ].join('\n');
+
+    const fullCsv = csvContent + '\n' + summary;
+
+    // Create and download file
+    const blob = new Blob([fullCsv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `trade-history-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`Exported ${filteredTrades.length} trades`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -54,24 +152,23 @@ export default function HistoryPage() {
           <h1 className="text-2xl font-bold text-white">Trade History</h1>
           <p className="text-slate-400 mt-1">View all your past trades and performance</p>
         </div>
-        <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
-            <Download className="h-4 w-4" />
-            Export
-          </button>
-          {trades.length > 0 && (
+        <div className="flex items-center gap-2">
+          {clearHistoryEnabled && (
             <button
-              onClick={() => {
-                if (confirm('Are you sure you want to clear all trade history?')) {
-                  clearHistory();
-                }
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+              onClick={handleClearHistory}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors"
             >
               <Trash2 className="h-4 w-4" />
               Clear
             </button>
           )}
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </button>
         </div>
       </div>
 
@@ -241,7 +338,7 @@ function TradeRow({
               : 'bg-red-600/20 text-red-400'
           )}
         >
-          {trade.status.toUpperCase()}
+          {trade.status === 'won' ? 'PROFIT' : 'LOSS'}
         </span>
       </td>
       <td className="px-6 py-4">

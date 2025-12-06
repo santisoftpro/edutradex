@@ -11,6 +11,8 @@ import copyTradingRoutes from './copy-trading.routes.js';
 import referralRoutes from './referral.routes.js';
 import emailRoutes from './email.routes.js';
 import kycRoutes from './kyc.routes.js';
+import settingsRoutes from './settings.routes.js';
+import supportRoutes from './support.routes.js';
 
 const router = Router();
 
@@ -27,5 +29,7 @@ router.use('/copy-trading', copyTradingRoutes);
 router.use('/referral', referralRoutes);
 router.use('/email', emailRoutes);
 router.use('/kyc', kycRoutes);
+router.use('/settings', settingsRoutes);
+router.use('/support', supportRoutes);
 
 export default router;
