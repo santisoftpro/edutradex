@@ -68,6 +68,7 @@ interface TradeState {
   pollTradeStatus: (tradeId: string, retryCount?: number) => void;
   clearHistory: () => Promise<void>;
   syncFromApi: () => Promise<void>;
+  resetStore: () => void; // Clear all data (for logout)
 }
 
 function mapApiTradeToTrade(apiTrade: ApiTrade): Trade {
@@ -95,6 +96,24 @@ function mapApiTradeToTrade(apiTrade: ApiTrade): Trade {
     expiresAt: apiTrade.expiresAt,
     closedAt: apiTrade.closedAt ?? undefined,
   };
+}
+
+// Helper to get user-specific storage key
+function getUserStorageKey(): string {
+  // Get userId from auth store (if available) to make storage user-specific
+  try {
+    const authData = localStorage.getItem('auth-storage');
+    if (authData) {
+      const parsed = JSON.parse(authData);
+      const userId = parsed?.state?.user?.id;
+      if (userId) {
+        return `trade-storage-${userId}`;
+      }
+    }
+  } catch {
+    // Fallback to default key if parsing fails
+  }
+  return 'trade-storage';
 }
 
 export const useTradeStore = create<TradeState>()(
@@ -356,9 +375,37 @@ export const useTradeStore = create<TradeState>()(
 
         return pendingSync;
       },
+
+      resetStore: () => {
+        // Clear all trade data (called on logout)
+        set({
+          trades: [],
+          activeTrades: [],
+          stats: {
+            totalTrades: 0,
+            wonTrades: 0,
+            lostTrades: 0,
+            totalProfit: 0,
+            winRate: 0,
+          },
+          isLoading: false,
+          pollingTrades: new Set<string>(),
+        });
+        // Clear localStorage for ALL possible user keys
+        try {
+          const keys = Object.keys(localStorage);
+          keys.forEach(key => {
+            if (key.startsWith('trade-storage')) {
+              localStorage.removeItem(key);
+            }
+          });
+        } catch (error) {
+          console.error('Failed to clear trade storage:', error);
+        }
+      },
     }),
     {
-      name: 'optigobroker-trades',
+      name: getUserStorageKey(), // User-specific storage key
       partialize: (state) => ({
         trades: state.trades,
         activeTrades: state.activeTrades,

@@ -135,48 +135,49 @@ function LeaderCard({
 }) {
   return (
     <div className="bg-slate-800 rounded-lg p-3 border border-slate-700 hover:border-slate-600 transition-colors">
-      <div className="flex items-center gap-3">
-        {/* Avatar */}
-        <div className="h-10 w-10 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-          {leader.displayName.charAt(0).toUpperCase()}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        {/* Avatar & name */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-10 w-10 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+            {leader.displayName.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-white font-medium text-sm truncate">{leader.displayName}</h3>
+            <p className="text-slate-400 text-xs">Win {leader.winRate.toFixed(0)}% • {leader.totalTrades} trades</p>
+          </div>
         </div>
 
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="text-white font-medium text-sm truncate">{leader.displayName}</h3>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
-            <span className="text-emerald-400 font-medium">{leader.winRate.toFixed(0)}% win</span>
-            <span>{leader.totalTrades} trades</span>
-            <span className={leader.totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-              {leader.totalProfit >= 0 ? '+' : ''}${leader.totalProfit.toFixed(0)}
-            </span>
-            <span className="flex items-center gap-1">
-              <Users className="h-3 w-3" />
-              {leader.followerCount}
-            </span>
-          </div>
+        {/* Stats */}
+        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+          <span className={leader.totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+            {leader.totalProfit >= 0 ? '+' : ''}${leader.totalProfit.toFixed(0)}
+          </span>
+          <span className="flex items-center gap-1">
+            <Users className="h-3 w-3" />
+            {leader.followerCount}
+          </span>
         </div>
 
         {/* Action Button */}
-        {leader.isFollowing ? (
-          <button
-            disabled
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 text-emerald-400 text-xs rounded-lg font-medium"
-          >
-            <Check className="h-3.5 w-3.5" />
-            Following
-          </button>
-        ) : (
-          <button
-            onClick={onFollow}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-lg transition-colors font-medium"
-          >
-            <UserPlus className="h-3.5 w-3.5" />
-            Follow
-          </button>
-        )}
+        <div className="flex sm:ml-auto">
+          {leader.isFollowing ? (
+            <button
+              disabled
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 text-emerald-400 text-xs rounded-lg font-medium"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Following
+            </button>
+          ) : (
+            <button
+              onClick={onFollow}
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-lg transition-colors font-medium"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Follow
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

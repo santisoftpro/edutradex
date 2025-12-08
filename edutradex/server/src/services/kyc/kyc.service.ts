@@ -1,6 +1,7 @@
-import { prisma } from '../../config/database.js';
+import { query, queryOne, queryMany } from '../../config/db.js';
 import { logger } from '../../utils/logger.js';
 import { emailService } from '../email/email.service.js';
+import { randomUUID } from 'crypto';
 
 export type KYCStatus = 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
 export type DocumentType = 'NATIONAL_ID' | 'PASSPORT' | 'DRIVERS_LICENSE';
@@ -25,6 +26,33 @@ interface DocumentInfo {
   selfieWithId: string;
 }
 
+interface KYCRow {
+  id: string;
+  userId: string;
+  firstName: string | null;
+  lastName: string | null;
+  dateOfBirth: Date | null;
+  nationality: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  postalCode: string | null;
+  phoneNumber: string | null;
+  documentType: string | null;
+  documentNumber: string | null;
+  documentFront: string | null;
+  documentBack: string | null;
+  selfieWithId: string | null;
+  status: string;
+  submittedAt: Date | null;
+  reviewedAt: Date | null;
+  reviewedBy: string | null;
+  rejectionReason: string | null;
+  adminNote: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 class KYCServiceError extends Error {
   constructor(message: string, public statusCode: number = 400) {
     super(message);
@@ -34,10 +62,15 @@ class KYCServiceError extends Error {
 
 export class KYCService {
   async getKYCStatus(userId: string) {
-    const kyc = await prisma.kYC.findUnique({ where: { userId } });
+    const kyc = await queryOne<KYCRow>(
+      `SELECT * FROM "KYC" WHERE "userId" = $1`,
+      [userId]
+    );
+
     if (!kyc) {
       return { status: 'NOT_SUBMITTED', message: 'KYC verification not started' };
     }
+
     return {
       id: kyc.id,
       status: kyc.status,
@@ -51,7 +84,11 @@ export class KYCService {
   }
 
   async submitPersonalInfo(userId: string, data: PersonalInfo) {
-    const existing = await prisma.kYC.findUnique({ where: { userId } });
+    const existing = await queryOne<KYCRow>(
+      `SELECT * FROM "KYC" WHERE "userId" = $1`,
+      [userId]
+    );
+
     if (existing && existing.status === 'APPROVED') {
       throw new KYCServiceError('KYC already approved', 400);
     }
@@ -59,43 +96,47 @@ export class KYCService {
       throw new KYCServiceError('KYC verification is pending review', 400);
     }
 
-    const kyc = await prisma.kYC.upsert({
-      where: { userId },
-      update: {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        dateOfBirth: new Date(data.dateOfBirth),
-        nationality: data.nationality,
-        address: data.address,
-        city: data.city,
-        country: data.country,
-        postalCode: data.postalCode,
-        phoneNumber: data.phoneNumber,
-        status: 'NOT_SUBMITTED',
-      },
-      create: {
-        userId,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        dateOfBirth: new Date(data.dateOfBirth),
-        nationality: data.nationality,
-        address: data.address,
-        city: data.city,
-        country: data.country,
-        postalCode: data.postalCode,
-        phoneNumber: data.phoneNumber,
-        status: 'NOT_SUBMITTED',
-      },
-    });
+    const now = new Date();
+    const dateOfBirth = new Date(data.dateOfBirth);
+
+    let kyc: KYCRow;
+
+    if (existing) {
+      kyc = (await queryOne<KYCRow>(
+        `UPDATE "KYC" SET
+          "firstName" = $1, "lastName" = $2, "dateOfBirth" = $3, nationality = $4,
+          address = $5, city = $6, country = $7, "postalCode" = $8, "phoneNumber" = $9,
+          status = 'NOT_SUBMITTED', "updatedAt" = $10
+         WHERE "userId" = $11 RETURNING *`,
+        [data.firstName, data.lastName, dateOfBirth, data.nationality, data.address,
+         data.city, data.country, data.postalCode, data.phoneNumber, now, userId]
+      ))!;
+    } else {
+      const id = randomUUID();
+      kyc = (await queryOne<KYCRow>(
+        `INSERT INTO "KYC" (
+          id, "userId", "firstName", "lastName", "dateOfBirth", nationality,
+          address, city, country, "postalCode", "phoneNumber", status, "createdAt", "updatedAt"
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        RETURNING *`,
+        [id, userId, data.firstName, data.lastName, dateOfBirth, data.nationality,
+         data.address, data.city, data.country, data.postalCode, data.phoneNumber, 'NOT_SUBMITTED', now, now]
+      ))!;
+    }
+
     logger.info('KYC personal info submitted', { userId, kycId: kyc.id });
     return kyc;
   }
 
   async submitDocuments(userId: string, data: DocumentInfo) {
-    const existing = await prisma.kYC.findUnique({
-      where: { userId },
-      include: { user: { select: { email: true, name: true } } },
-    });
+    const existing = await queryOne<KYCRow & { userEmail: string; userName: string }>(
+      `SELECT k.*, u.email as "userEmail", u.name as "userName"
+       FROM "KYC" k
+       JOIN "User" u ON u.id = k."userId"
+       WHERE k."userId" = $1`,
+      [userId]
+    );
+
     if (!existing) {
       throw new KYCServiceError('Please submit personal information first', 400);
     }
@@ -106,123 +147,185 @@ export class KYCService {
       throw new KYCServiceError('KYC verification is pending review', 400);
     }
 
-    const kyc = await prisma.kYC.update({
-      where: { userId },
-      data: {
-        documentType: data.documentType,
-        documentNumber: data.documentNumber,
-        documentFront: data.documentFront,
-        documentBack: data.documentBack,
-        selfieWithId: data.selfieWithId,
-        status: 'PENDING',
-        submittedAt: new Date(),
-        rejectionReason: null,
-      },
-      include: { user: { select: { email: true, name: true } } },
-    });
+    const now = new Date();
+
+    const kyc = await queryOne<KYCRow>(
+      `UPDATE "KYC" SET
+        "documentType" = $1, "documentNumber" = $2, "documentFront" = $3,
+        "documentBack" = $4, "selfieWithId" = $5, status = 'PENDING',
+        "submittedAt" = $6, "rejectionReason" = NULL, "updatedAt" = $6
+       WHERE "userId" = $7 RETURNING *`,
+      [data.documentType, data.documentNumber, data.documentFront,
+       data.documentBack, data.selfieWithId, now, userId]
+    );
 
     // Send email notification
-    await emailService.sendKYCSubmitted(kyc.user.email, kyc.user.name);
+    await emailService.sendKYCSubmitted(existing.userEmail, existing.userName);
 
-    logger.info('KYC documents submitted', { userId, kycId: kyc.id });
-    return kyc;
+    logger.info('KYC documents submitted', { userId, kycId: kyc!.id });
+
+    return {
+      ...kyc,
+      user: { email: existing.userEmail, name: existing.userName },
+    };
   }
 
   async getAllKYCSubmissions(filters: { status?: KYCStatus; page?: number; limit?: number } = {}) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
-    const skip = (page - 1) * limit;
-    const where: Record<string, unknown> = {};
-    if (filters.status) where.status = filters.status;
+    const offset = (page - 1) * limit;
 
-    const [submissions, total] = await Promise.all([
-      prisma.kYC.findMany({
-        where,
-        include: { user: { select: { id: true, email: true, name: true, createdAt: true } } },
-        orderBy: { submittedAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.kYC.count({ where }),
+    let whereClause = '1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (filters.status) {
+      whereClause += ` AND k.status = $${paramIndex++}`;
+      params.push(filters.status);
+    }
+
+    const countParams = [...params];
+    params.push(limit, offset);
+
+    const [submissions, countResult] = await Promise.all([
+      queryMany<KYCRow & { userName: string; userEmail: string; userCreatedAt: Date }>(
+        `SELECT k.*, u.name as "userName", u.email as "userEmail", u."createdAt" as "userCreatedAt"
+         FROM "KYC" k
+         JOIN "User" u ON u.id = k."userId"
+         WHERE ${whereClause}
+         ORDER BY k."submittedAt" DESC NULLS LAST
+         LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+        params
+      ),
+      queryOne<{ count: string }>(
+        `SELECT COUNT(*) as count FROM "KYC" k WHERE ${whereClause}`,
+        countParams
+      ),
     ]);
-    return { data: submissions, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+
+    const total = parseInt(countResult?.count || '0', 10);
+
+    return {
+      data: submissions.map(s => ({
+        ...s,
+        user: { id: s.userId, email: s.userEmail, name: s.userName, createdAt: s.userCreatedAt },
+      })),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async getKYCById(kycId: string) {
-    const kyc = await prisma.kYC.findUnique({
-      where: { id: kycId },
-      include: { user: { select: { id: true, email: true, name: true, createdAt: true } } },
-    });
+    const kyc = await queryOne<KYCRow & { userName: string; userEmail: string; userCreatedAt: Date }>(
+      `SELECT k.*, u.name as "userName", u.email as "userEmail", u."createdAt" as "userCreatedAt"
+       FROM "KYC" k
+       JOIN "User" u ON u.id = k."userId"
+       WHERE k.id = $1`,
+      [kycId]
+    );
+
     if (!kyc) throw new KYCServiceError('KYC submission not found', 404);
-    return kyc;
+
+    return {
+      ...kyc,
+      user: { id: kyc.userId, email: kyc.userEmail, name: kyc.userName, createdAt: kyc.userCreatedAt },
+    };
   }
 
   async approveKYC(kycId: string, adminId: string, adminNote?: string) {
-    const kyc = await prisma.kYC.findUnique({
-      where: { id: kycId },
-      include: { user: { select: { id: true, email: true, name: true } } },
-    });
+    const kyc = await queryOne<KYCRow & { userName: string; userEmail: string }>(
+      `SELECT k.*, u.name as "userName", u.email as "userEmail"
+       FROM "KYC" k
+       JOIN "User" u ON u.id = k."userId"
+       WHERE k.id = $1`,
+      [kycId]
+    );
+
     if (!kyc) throw new KYCServiceError('KYC submission not found', 404);
     if (kyc.status === 'APPROVED') throw new KYCServiceError('KYC already approved', 400);
 
-    const updated = await prisma.kYC.update({
-      where: { id: kycId },
-      data: {
-        status: 'APPROVED',
-        reviewedBy: adminId,
-        reviewedAt: new Date(),
-        adminNote,
-        rejectionReason: null,
-      },
-      include: { user: { select: { id: true, email: true, name: true } } },
-    });
+    const now = new Date();
+
+    const updated = await queryOne<KYCRow>(
+      `UPDATE "KYC" SET
+        status = 'APPROVED', "reviewedBy" = $1, "reviewedAt" = $2, "adminNote" = $3,
+        "rejectionReason" = NULL, "updatedAt" = $2
+       WHERE id = $4 RETURNING *`,
+      [adminId, now, adminNote, kycId]
+    );
 
     // Send email notification
-    await emailService.sendKYCApproved(updated.user.email, updated.user.name);
+    await emailService.sendKYCApproved(kyc.userEmail, kyc.userName);
 
     logger.info('KYC approved', { kycId, userId: kyc.userId, approvedBy: adminId });
-    return updated;
+
+    return {
+      ...updated,
+      user: { id: kyc.userId, email: kyc.userEmail, name: kyc.userName },
+    };
   }
 
   async rejectKYC(kycId: string, adminId: string, reason: string, adminNote?: string) {
-    const kyc = await prisma.kYC.findUnique({
-      where: { id: kycId },
-      include: { user: { select: { id: true, email: true, name: true } } },
-    });
+    const kyc = await queryOne<KYCRow & { userName: string; userEmail: string }>(
+      `SELECT k.*, u.name as "userName", u.email as "userEmail"
+       FROM "KYC" k
+       JOIN "User" u ON u.id = k."userId"
+       WHERE k.id = $1`,
+      [kycId]
+    );
+
     if (!kyc) throw new KYCServiceError('KYC submission not found', 404);
     if (kyc.status === 'APPROVED') throw new KYCServiceError('Cannot reject approved KYC', 400);
 
-    const updated = await prisma.kYC.update({
-      where: { id: kycId },
-      data: {
-        status: 'REJECTED',
-        reviewedBy: adminId,
-        reviewedAt: new Date(),
-        rejectionReason: reason,
-        adminNote,
-      },
-      include: { user: { select: { id: true, email: true, name: true } } },
-    });
+    const now = new Date();
+
+    const updated = await queryOne<KYCRow>(
+      `UPDATE "KYC" SET
+        status = 'REJECTED', "reviewedBy" = $1, "reviewedAt" = $2,
+        "rejectionReason" = $3, "adminNote" = $4, "updatedAt" = $2
+       WHERE id = $5 RETURNING *`,
+      [adminId, now, reason, adminNote, kycId]
+    );
 
     // Send email notification
-    await emailService.sendKYCRejected(updated.user.email, updated.user.name, reason);
+    await emailService.sendKYCRejected(kyc.userEmail, kyc.userName, reason);
 
     logger.info('KYC rejected', { kycId, userId: kyc.userId, rejectedBy: adminId, reason });
-    return updated;
+
+    return {
+      ...updated,
+      user: { id: kyc.userId, email: kyc.userEmail, name: kyc.userName },
+    };
   }
 
   async getPendingKYCCount() {
-    return prisma.kYC.count({ where: { status: 'PENDING' } });
+    const result = await queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM "KYC" WHERE status = 'PENDING'`
+    );
+    return parseInt(result?.count || '0', 10);
   }
 
   async getKYCStats() {
-    const [notSubmitted, pending, approved, rejected] = await Promise.all([
-      prisma.kYC.count({ where: { status: 'NOT_SUBMITTED' } }),
-      prisma.kYC.count({ where: { status: 'PENDING' } }),
-      prisma.kYC.count({ where: { status: 'APPROVED' } }),
-      prisma.kYC.count({ where: { status: 'REJECTED' } }),
-    ]);
-    return { notSubmitted, pending, approved, rejected };
+    // Single query with FILTER for all counts
+    const result = await queryOne<{
+      not_submitted: string;
+      pending: string;
+      approved: string;
+      rejected: string;
+    }>(`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'NOT_SUBMITTED') as not_submitted,
+        COUNT(*) FILTER (WHERE status = 'PENDING') as pending,
+        COUNT(*) FILTER (WHERE status = 'APPROVED') as approved,
+        COUNT(*) FILTER (WHERE status = 'REJECTED') as rejected
+      FROM "KYC"
+    `);
+
+    return {
+      notSubmitted: parseInt(result?.not_submitted || '0', 10),
+      pending: parseInt(result?.pending || '0', 10),
+      approved: parseInt(result?.approved || '0', 10),
+      rejected: parseInt(result?.rejected || '0', 10),
+    };
   }
 }
 

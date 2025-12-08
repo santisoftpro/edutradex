@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { AccountDropdown } from './AccountDropdown';
 
@@ -39,6 +39,7 @@ const navItems = [
 
 export function Header() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -54,6 +55,7 @@ export function Header() {
   if (!user) return null;
 
   const balance = user.demoBalance ?? 0;
+  const hideLogoOnMobile = pathname?.startsWith('/dashboard/trade');
 
   return (
     <>
@@ -68,8 +70,17 @@ export function Header() {
             <Menu className="h-6 w-6" />
           </button>
 
-          <Image src="/logo.png" alt="OptigoBroker" width={32} height={32} className="h-6 w-6 md:h-8 md:w-8" />
-          <span className="text-lg md:text-xl font-bold text-white">OptigoBroker</span>
+          <Image
+            src="/logo.png"
+            alt="OptigoBroker"
+            width={32}
+            height={32}
+            className={cn(
+              'h-6 w-6 md:h-8 md:w-8',
+              hideLogoOnMobile ? 'hidden sm:block' : ''
+            )}
+          />
+          <span className="hidden sm:block text-lg md:text-xl font-bold text-white">OptigoBroker</span>
         </div>
 
         {/* Right - Balance, Notifications & Profile */}
@@ -125,14 +136,6 @@ export function Header() {
               </>
             )}
           </div>
-
-          {/* Mobile Profile Icon */}
-          <button
-            onClick={() => setShowMobileMenu(true)}
-            className="md:hidden h-8 w-8 bg-emerald-600 rounded-full flex items-center justify-center"
-          >
-            <User className="h-4 w-4 text-white" />
-          </button>
         </div>
       </header>
 

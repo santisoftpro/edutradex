@@ -227,7 +227,17 @@ router.post(
         });
         return;
       }
-      next(error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[CopyTrading] Follow leader failed', {
+        leaderId: req.params.leaderId,
+        userId: req.user?.id,
+        error: errorMessage,
+      });
+      res.status(500).json({
+        success: false,
+        error: 'Unable to follow leader right now. Please try again.',
+        details: errorMessage,
+      });
     }
   }
 );

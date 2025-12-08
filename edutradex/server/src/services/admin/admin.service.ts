@@ -1,7 +1,8 @@
-import { prisma } from '../../config/database.js';
+import { query, queryOne, queryMany } from '../../config/db.js';
 import { config } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { marketService } from '../market/market.service.js';
+import { randomUUID } from 'crypto';
 
 interface UserListItem {
   id: string;
@@ -107,50 +108,62 @@ class AdminService {
       sortOrder = 'desc',
     } = options;
 
-    const skip = (page - 1) * limit;
-
-    const where: {
-      role?: string;
-      isActive?: boolean;
-      OR?: { email?: { contains: string }; name?: { contains: string } }[];
-    } = {};
+    const offset = (page - 1) * limit;
+    let whereClause = '1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
 
     if (role) {
-      where.role = role;
+      whereClause += ` AND u.role = $${paramIndex++}`;
+      params.push(role);
     }
 
     if (typeof isActive === 'boolean') {
-      where.isActive = isActive;
+      whereClause += ` AND u."isActive" = $${paramIndex++}`;
+      params.push(isActive);
     }
 
     if (search) {
-      where.OR = [
-        { email: { contains: search } },
-        { name: { contains: search } },
-      ];
+      whereClause += ` AND (u.email ILIKE $${paramIndex} OR u.name ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
     }
 
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { [sortBy]: sortOrder },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          demoBalance: true,
-          isActive: true,
-          createdAt: true,
-          _count: {
-            select: { trades: true },
-          },
-        },
-      }),
-      prisma.user.count({ where }),
+    const validSortColumns = ['createdAt', 'email', 'name', 'demoBalance'];
+    const sortColumn = validSortColumns.includes(sortBy) ? sortBy : 'createdAt';
+    const sortDir = sortOrder === 'asc' ? 'ASC' : 'DESC';
+
+    const countParams = [...params];
+    params.push(limit, offset);
+
+    const [users, countResult] = await Promise.all([
+      queryMany<{
+        id: string;
+        email: string;
+        name: string;
+        role: string;
+        demoBalance: number;
+        isActive: boolean;
+        createdAt: Date;
+        tradesCount: string;
+      }>(
+        `SELECT u.id, u.email, u.name, u.role, u."demoBalance", u."isActive", u."createdAt",
+                COUNT(t.id) as "tradesCount"
+         FROM "User" u
+         LEFT JOIN "Trade" t ON t."userId" = u.id
+         WHERE ${whereClause}
+         GROUP BY u.id
+         ORDER BY u."${sortColumn}" ${sortDir}
+         LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+        params
+      ),
+      queryOne<{ count: string }>(
+        `SELECT COUNT(*) as count FROM "User" u WHERE ${whereClause}`,
+        countParams
+      ),
     ]);
+
+    const total = parseInt(countResult?.count || '0', 10);
 
     return {
       users: users.map((user) => ({
@@ -161,7 +174,7 @@ class AdminService {
         demoBalance: Number(user.demoBalance),
         isActive: user.isActive,
         createdAt: user.createdAt,
-        tradesCount: user._count.trades,
+        tradesCount: parseInt(user.tradesCount, 10),
       })),
       total,
       page,
@@ -171,38 +184,42 @@ class AdminService {
   }
 
   async getUserDetail(userId: string): Promise<UserDetail> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        demoBalance: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-        trades: {
-          take: 10,
-          orderBy: { openedAt: 'desc' },
-          select: {
-            id: true,
-            symbol: true,
-            direction: true,
-            amount: true,
-            profit: true,
-            status: true,
-            openedAt: true,
-          },
-        },
-      },
-    });
+    const user = await queryOne<{
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      demoBalance: number;
+      isActive: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+    }>(
+      `SELECT id, email, name, role, "demoBalance", "isActive", "createdAt", "updatedAt"
+       FROM "User" WHERE id = $1`,
+      [userId]
+    );
 
     if (!user) {
       throw new AdminServiceError('User not found', 404);
     }
 
-    const stats = await this.getUserStats(userId);
+    const [stats, recentTrades] = await Promise.all([
+      this.getUserStats(userId),
+      queryMany<{
+        id: string;
+        symbol: string;
+        direction: string;
+        amount: number;
+        profit: number | null;
+        status: string;
+        openedAt: Date;
+      }>(
+        `SELECT id, symbol, direction, amount, profit, status, "openedAt"
+         FROM "Trade" WHERE "userId" = $1
+         ORDER BY "openedAt" DESC LIMIT 10`,
+        [userId]
+      ),
+    ]);
 
     return {
       id: user.id,
@@ -215,7 +232,7 @@ class AdminService {
       updatedAt: user.updatedAt,
       tradesCount: stats.totalTrades,
       stats,
-      recentTrades: user.trades.map((trade) => ({
+      recentTrades: recentTrades.map((trade) => ({
         ...trade,
         amount: Number(trade.amount),
         profit: trade.profit ? Number(trade.profit) : null,
@@ -224,18 +241,26 @@ class AdminService {
   }
 
   private async getUserStats(userId: string) {
-    const [totalTrades, wonTrades, lostTrades, profitResult] = await Promise.all([
-      prisma.trade.count({ where: { userId } }),
-      prisma.trade.count({ where: { userId, result: 'WON' } }),
-      prisma.trade.count({ where: { userId, result: 'LOST' } }),
-      prisma.trade.aggregate({
-        where: { userId, status: 'CLOSED' },
-        _sum: { profit: true },
-      }),
-    ]);
+    const result = await queryOne<{
+      totalTrades: string;
+      wonTrades: string;
+      lostTrades: string;
+      totalProfit: number;
+    }>(
+      `SELECT
+        COUNT(*) as "totalTrades",
+        COUNT(*) FILTER (WHERE result = 'WON') as "wonTrades",
+        COUNT(*) FILTER (WHERE result = 'LOST') as "lostTrades",
+        COALESCE(SUM(profit) FILTER (WHERE status = 'CLOSED'), 0) as "totalProfit"
+       FROM "Trade" WHERE "userId" = $1`,
+      [userId]
+    );
 
+    const totalTrades = parseInt(result?.totalTrades || '0', 10);
+    const wonTrades = parseInt(result?.wonTrades || '0', 10);
+    const lostTrades = parseInt(result?.lostTrades || '0', 10);
     const winRate = totalTrades > 0 ? (wonTrades / totalTrades) * 100 : 0;
-    const totalProfit = Number(profitResult._sum.profit || 0);
+    const totalProfit = Number(result?.totalProfit || 0);
 
     return {
       totalTrades,
@@ -247,10 +272,10 @@ class AdminService {
   }
 
   async updateUserStatus(userId: string, isActive: boolean): Promise<{ success: boolean }> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    });
+    const user = await queryOne<{ role: string }>(
+      `SELECT role FROM "User" WHERE id = $1`,
+      [userId]
+    );
 
     if (!user) {
       throw new AdminServiceError('User not found', 404);
@@ -260,10 +285,10 @@ class AdminService {
       throw new AdminServiceError('Cannot modify admin user status', 403);
     }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { isActive },
-    });
+    await query(
+      `UPDATE "User" SET "isActive" = $1, "updatedAt" = $2 WHERE id = $3`,
+      [isActive, new Date(), userId]
+    );
 
     logger.info('User status updated', { userId, isActive });
 
@@ -275,31 +300,30 @@ class AdminService {
       throw new AdminServiceError('Invalid role', 400);
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const user = await queryOne<{ id: string }>(
+      `SELECT id FROM "User" WHERE id = $1`,
+      [userId]
+    );
 
     if (!user) {
       throw new AdminServiceError('User not found', 404);
     }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { role },
-    });
+    await query(
+      `UPDATE "User" SET role = $1, "updatedAt" = $2 WHERE id = $3`,
+      [role, new Date(), userId]
+    );
 
     logger.info('User role updated', { userId, role });
 
     return { success: true };
   }
 
-  async resetUserBalance(
-    userId: string,
-    newBalance?: number
-  ): Promise<{ demoBalance: number }> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
+  async resetUserBalance(userId: string, newBalance?: number): Promise<{ demoBalance: number }> {
+    const user = await queryOne<{ id: string }>(
+      `SELECT id FROM "User" WHERE id = $1`,
+      [userId]
+    );
 
     if (!user) {
       throw new AdminServiceError('User not found', 404);
@@ -307,22 +331,21 @@ class AdminService {
 
     const balance = newBalance ?? config.trading.defaultDemoBalance;
 
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data: { demoBalance: balance },
-      select: { demoBalance: true },
-    });
+    const updated = await queryOne<{ demoBalance: number }>(
+      `UPDATE "User" SET "demoBalance" = $1, "updatedAt" = $2 WHERE id = $3 RETURNING "demoBalance"`,
+      [balance, new Date(), userId]
+    );
 
     logger.info('User balance reset by admin', { userId, newBalance: balance });
 
-    return { demoBalance: Number(updated.demoBalance) };
+    return { demoBalance: Number(updated?.demoBalance || 0) };
   }
 
   async deleteUser(userId: string): Promise<{ success: boolean }> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    });
+    const user = await queryOne<{ role: string }>(
+      `SELECT role FROM "User" WHERE id = $1`,
+      [userId]
+    );
 
     if (!user) {
       throw new AdminServiceError('User not found', 404);
@@ -332,9 +355,7 @@ class AdminService {
       throw new AdminServiceError('Cannot delete admin user', 403);
     }
 
-    await prisma.user.delete({
-      where: { id: userId },
-    });
+    await query(`DELETE FROM "User" WHERE id = $1`, [userId]);
 
     logger.info('User deleted by admin', { userId });
 
@@ -345,65 +366,64 @@ class AdminService {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    const [
-      totalUsers,
-      activeUsers,
-      totalTrades,
-      activeTrades,
-      wonTrades,
-      totalVolume,
-      todayTrades,
-      todayVolumeResult,
-      usersByRole,
-      tradesByStatus,
-    ] = await Promise.all([
-      prisma.user.count(),
-      prisma.user.count({ where: { isActive: true } }),
-      prisma.trade.count(),
-      prisma.trade.count({ where: { status: 'OPEN' } }),
-      prisma.trade.count({ where: { result: 'WON' } }),
-      prisma.trade.aggregate({ _sum: { amount: true } }),
-      prisma.trade.count({ where: { openedAt: { gte: todayStart } } }),
-      prisma.trade.aggregate({
-        where: { openedAt: { gte: todayStart } },
-        _sum: { amount: true },
-      }),
-      prisma.user.groupBy({
-        by: ['role'],
-        _count: { id: true },
-      }),
-      prisma.trade.groupBy({
-        by: ['status'],
-        _count: { id: true },
-      }),
+    const [stats, usersByRole, tradesByStatus] = await Promise.all([
+      queryOne<{
+        totalUsers: string;
+        activeUsers: string;
+        totalTrades: string;
+        activeTrades: string;
+        wonTrades: string;
+        totalVolume: number;
+        todayTrades: string;
+        todayVolume: number;
+      }>(
+        `SELECT
+          (SELECT COUNT(*) FROM "User") as "totalUsers",
+          (SELECT COUNT(*) FROM "User" WHERE "isActive" = true) as "activeUsers",
+          (SELECT COUNT(*) FROM "Trade") as "totalTrades",
+          (SELECT COUNT(*) FROM "Trade" WHERE status = 'OPEN') as "activeTrades",
+          (SELECT COUNT(*) FROM "Trade" WHERE result = 'WON') as "wonTrades",
+          (SELECT COALESCE(SUM(amount), 0) FROM "Trade") as "totalVolume",
+          (SELECT COUNT(*) FROM "Trade" WHERE "openedAt" >= $1) as "todayTrades",
+          (SELECT COALESCE(SUM(amount), 0) FROM "Trade" WHERE "openedAt" >= $1) as "todayVolume"`,
+        [todayStart]
+      ),
+      queryMany<{ role: string; count: string }>(
+        `SELECT role, COUNT(*) as count FROM "User" GROUP BY role`
+      ),
+      queryMany<{ status: string; count: string }>(
+        `SELECT status, COUNT(*) as count FROM "Trade" GROUP BY status`
+      ),
     ]);
 
+    const totalTrades = parseInt(stats?.totalTrades || '0', 10);
+    const wonTrades = parseInt(stats?.wonTrades || '0', 10);
     const platformWinRate = totalTrades > 0 ? (wonTrades / totalTrades) * 100 : 0;
 
     return {
-      totalUsers,
-      activeUsers,
+      totalUsers: parseInt(stats?.totalUsers || '0', 10),
+      activeUsers: parseInt(stats?.activeUsers || '0', 10),
       totalTrades,
-      activeTrades,
+      activeTrades: parseInt(stats?.activeTrades || '0', 10),
       platformWinRate: Number(platformWinRate.toFixed(2)),
-      totalVolume: Number(totalVolume._sum.amount || 0),
-      todayTrades,
-      todayVolume: Number(todayVolumeResult._sum.amount || 0),
+      totalVolume: Number(stats?.totalVolume || 0),
+      todayTrades: parseInt(stats?.todayTrades || '0', 10),
+      todayVolume: Number(stats?.todayVolume || 0),
       usersByRole: usersByRole.map((item) => ({
         role: item.role,
-        count: item._count.id,
+        count: parseInt(item.count, 10),
       })),
       tradesByStatus: tradesByStatus.map((item) => ({
         status: item.status,
-        count: item._count.id,
+        count: parseInt(item.count, 10),
       })),
     };
   }
 
   async getAllMarketConfigs(): Promise<MarketConfigData[]> {
-    const configs = await prisma.marketConfig.findMany({
-      orderBy: [{ marketType: 'asc' }, { symbol: 'asc' }],
-    });
+    const configs = await queryMany<MarketConfigData>(
+      `SELECT * FROM "MarketConfig" ORDER BY "marketType" ASC, symbol ASC`
+    );
 
     return configs.map((config) => ({
       ...config,
@@ -414,9 +434,10 @@ class AdminService {
   }
 
   async getMarketConfig(symbol: string): Promise<MarketConfigData | null> {
-    const config = await prisma.marketConfig.findUnique({
-      where: { symbol },
-    });
+    const config = await queryOne<MarketConfigData>(
+      `SELECT * FROM "MarketConfig" WHERE symbol = $1`,
+      [symbol]
+    );
 
     if (!config) {
       return null;
@@ -440,9 +461,12 @@ class AdminService {
       volatilityMode?: string;
     }
   ): Promise<MarketConfigData> {
-    let config = await prisma.marketConfig.findUnique({
-      where: { symbol },
-    });
+    let config = await queryOne<MarketConfigData>(
+      `SELECT * FROM "MarketConfig" WHERE symbol = $1`,
+      [symbol]
+    );
+
+    const now = new Date();
 
     if (!config) {
       const asset = marketService.getAsset(symbol);
@@ -450,57 +474,104 @@ class AdminService {
         throw new AdminServiceError('Market symbol not found', 404);
       }
 
-      config = await prisma.marketConfig.create({
-        data: {
+      config = await queryOne<MarketConfigData>(
+        `INSERT INTO "MarketConfig" (
+          id, symbol, "marketType", name, "isActive", "payoutPercent",
+          "minTradeAmount", "maxTradeAmount", "volatilityMode", "createdAt", "updatedAt"
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [
+          randomUUID(),
           symbol,
-          marketType: asset.marketType.toUpperCase(),
-          name: asset.name,
-          isActive: data.isActive ?? true,
-          payoutPercent: data.payoutPercent ?? asset.payoutPercent,
-          minTradeAmount: data.minTradeAmount ?? 1,
-          maxTradeAmount: data.maxTradeAmount ?? 1000,
-          volatilityMode: data.volatilityMode ?? 'MEDIUM',
-        },
-      });
+          asset.marketType.toUpperCase(),
+          asset.name,
+          data.isActive ?? true,
+          data.payoutPercent ?? asset.payoutPercent,
+          data.minTradeAmount ?? 1,
+          data.maxTradeAmount ?? 1000,
+          data.volatilityMode ?? 'MEDIUM',
+          now,
+          now,
+        ]
+      );
     } else {
-      config = await prisma.marketConfig.update({
-        where: { symbol },
-        data,
-      });
+      const updates: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      if (data.isActive !== undefined) {
+        updates.push(`"isActive" = $${paramIndex++}`);
+        params.push(data.isActive);
+      }
+      if (data.payoutPercent !== undefined) {
+        updates.push(`"payoutPercent" = $${paramIndex++}`);
+        params.push(data.payoutPercent);
+      }
+      if (data.minTradeAmount !== undefined) {
+        updates.push(`"minTradeAmount" = $${paramIndex++}`);
+        params.push(data.minTradeAmount);
+      }
+      if (data.maxTradeAmount !== undefined) {
+        updates.push(`"maxTradeAmount" = $${paramIndex++}`);
+        params.push(data.maxTradeAmount);
+      }
+      if (data.volatilityMode !== undefined) {
+        updates.push(`"volatilityMode" = $${paramIndex++}`);
+        params.push(data.volatilityMode);
+      }
+
+      if (updates.length > 0) {
+        updates.push(`"updatedAt" = $${paramIndex++}`);
+        params.push(now);
+        params.push(symbol);
+
+        config = await queryOne<MarketConfigData>(
+          `UPDATE "MarketConfig" SET ${updates.join(', ')} WHERE symbol = $${paramIndex} RETURNING *`,
+          params
+        );
+      }
     }
 
     logger.info('Market config updated', { symbol, data });
 
     return {
-      ...config,
-      payoutPercent: Number(config.payoutPercent),
-      minTradeAmount: Number(config.minTradeAmount),
-      maxTradeAmount: Number(config.maxTradeAmount),
+      ...config!,
+      payoutPercent: Number(config!.payoutPercent),
+      minTradeAmount: Number(config!.minTradeAmount),
+      maxTradeAmount: Number(config!.maxTradeAmount),
     };
   }
 
   async initializeMarketConfigs(): Promise<{ created: number }> {
     const assets = marketService.getAllAssets();
     let created = 0;
+    const now = new Date();
 
     for (const asset of assets) {
-      const existing = await prisma.marketConfig.findUnique({
-        where: { symbol: asset.symbol },
-      });
+      const existing = await queryOne<{ id: string }>(
+        `SELECT id FROM "MarketConfig" WHERE symbol = $1`,
+        [asset.symbol]
+      );
 
       if (!existing) {
-        await prisma.marketConfig.create({
-          data: {
-            symbol: asset.symbol,
-            marketType: asset.marketType.toUpperCase(),
-            name: asset.name,
-            isActive: asset.isActive,
-            payoutPercent: asset.payoutPercent,
-            minTradeAmount: 1,
-            maxTradeAmount: 1000,
-            volatilityMode: 'MEDIUM',
-          },
-        });
+        await query(
+          `INSERT INTO "MarketConfig" (
+            id, symbol, "marketType", name, "isActive", "payoutPercent",
+            "minTradeAmount", "maxTradeAmount", "volatilityMode", "createdAt", "updatedAt"
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            randomUUID(),
+            asset.symbol,
+            asset.marketType.toUpperCase(),
+            asset.name,
+            asset.isActive,
+            asset.payoutPercent,
+            1,
+            1000,
+            'MEDIUM',
+            now,
+            now,
+          ]
+        );
         created++;
       }
     }
@@ -511,43 +582,44 @@ class AdminService {
   }
 
   async getSystemSettings(): Promise<SystemSetting[]> {
-    return prisma.systemConfig.findMany({
-      orderBy: { key: 'asc' },
-    });
+    return queryMany<SystemSetting>(
+      `SELECT * FROM "SystemConfig" ORDER BY key ASC`
+    );
   }
 
   async getSystemSetting(key: string): Promise<string | null> {
-    const setting = await prisma.systemConfig.findUnique({
-      where: { key },
-    });
+    const setting = await queryOne<{ value: string }>(
+      `SELECT value FROM "SystemConfig" WHERE key = $1`,
+      [key]
+    );
 
     return setting?.value ?? null;
   }
 
   async setSystemSetting(key: string, value: string): Promise<SystemSetting> {
-    const setting = await prisma.systemConfig.upsert({
-      where: { key },
-      update: { value },
-      create: { key, value },
-    });
+    const now = new Date();
+    const setting = await queryOne<SystemSetting>(
+      `INSERT INTO "SystemConfig" (id, key, value, "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (key) DO UPDATE SET value = $3, "updatedAt" = $5
+       RETURNING *`,
+      [randomUUID(), key, value, now, now]
+    );
 
     logger.info('System setting updated', { key, value });
 
-    return setting;
+    return setting!;
   }
 
   async deleteSystemSetting(key: string): Promise<{ success: boolean }> {
-    const setting = await prisma.systemConfig.findUnique({
-      where: { key },
-    });
+    const result = await query(
+      `DELETE FROM "SystemConfig" WHERE key = $1`,
+      [key]
+    );
 
-    if (!setting) {
+    if (result.rowCount === 0) {
       throw new AdminServiceError('Setting not found', 404);
     }
-
-    await prisma.systemConfig.delete({
-      where: { key },
-    });
 
     logger.info('System setting deleted', { key });
 
@@ -573,42 +645,37 @@ class AdminService {
     }[];
   }> {
     const [recentTrades, recentUsers] = await Promise.all([
-      prisma.trade.findMany({
-        take: limit,
-        orderBy: { openedAt: 'desc' },
-        select: {
-          id: true,
-          userId: true,
-          user: { select: { name: true } },
-          symbol: true,
-          direction: true,
-          amount: true,
-          status: true,
-          openedAt: true,
-        },
-      }),
-      prisma.user.findMany({
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          createdAt: true,
-        },
-      }),
+      queryMany<{
+        id: string;
+        userId: string;
+        userName: string;
+        symbol: string;
+        direction: string;
+        amount: number;
+        status: string;
+        openedAt: Date;
+      }>(
+        `SELECT t.id, t."userId", u.name as "userName", t.symbol, t.direction, t.amount, t.status, t."openedAt"
+         FROM "Trade" t
+         JOIN "User" u ON u.id = t."userId"
+         ORDER BY t."openedAt" DESC LIMIT $1`,
+        [limit]
+      ),
+      queryMany<{
+        id: string;
+        name: string;
+        email: string;
+        createdAt: Date;
+      }>(
+        `SELECT id, name, email, "createdAt" FROM "User" ORDER BY "createdAt" DESC LIMIT $1`,
+        [limit]
+      ),
     ]);
 
     return {
       recentTrades: recentTrades.map((trade) => ({
-        id: trade.id,
-        userId: trade.userId,
-        userName: trade.user.name,
-        symbol: trade.symbol,
-        direction: trade.direction,
+        ...trade,
         amount: Number(trade.amount),
-        status: trade.status,
-        openedAt: trade.openedAt,
       })),
       recentUsers,
     };

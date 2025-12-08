@@ -1,8 +1,9 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
-import { prisma } from '../../config/database.js';
+import { query, queryOne, queryMany } from '../../config/db.js';
 import { logger } from '../../utils/logger.js';
 import { emailTemplates } from './email.templates.js';
+import { randomUUID } from 'crypto';
 
 interface EmailConfig {
   host: string;
@@ -65,21 +66,17 @@ class EmailService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  // Send verification code for signup
   async sendVerificationCode(email: string, userName: string): Promise<string | null> {
     const code = this.generateVerificationCode();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    const now = new Date();
 
     try {
-      // Store verification code in database
-      await prisma.emailVerification.create({
-        data: {
-          email,
-          code,
-          type: 'SIGNUP',
-          expiresAt,
-        },
-      });
+      await query(
+        `INSERT INTO "EmailVerification" (id, email, code, type, "expiresAt", verified, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [randomUUID(), email, code, 'SIGNUP', expiresAt, false, now]
+      );
 
       const html = emailTemplates.verificationCode(userName, code);
       const sent = await this.sendEmail(email, 'Your Verification Code - OptigoBroker', html);
@@ -91,28 +88,23 @@ class EmailService {
     }
   }
 
-  // Verify code
   async verifyCode(email: string, code: string): Promise<boolean> {
     try {
-      const verification = await prisma.emailVerification.findFirst({
-        where: {
-          email,
-          code,
-          type: 'SIGNUP',
-          verified: false,
-          expiresAt: { gt: new Date() },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+      const verification = await queryOne<{ id: string }>(
+        `SELECT id FROM "EmailVerification"
+         WHERE email = $1 AND code = $2 AND type = 'SIGNUP' AND verified = false AND "expiresAt" > $3
+         ORDER BY "createdAt" DESC LIMIT 1`,
+        [email, code, new Date()]
+      );
 
       if (!verification) {
         return false;
       }
 
-      await prisma.emailVerification.update({
-        where: { id: verification.id },
-        data: { verified: true },
-      });
+      await query(
+        `UPDATE "EmailVerification" SET verified = true WHERE id = $1`,
+        [verification.id]
+      );
 
       return true;
     } catch (error) {
@@ -157,7 +149,6 @@ class EmailService {
     return this.sendEmail(referrerEmail, 'New Referral Signup! - OptigoBroker', html);
   }
 
-  // Send admin message to specific user
   async sendAdminMessage(
     email: string,
     userName: string,
@@ -165,48 +156,36 @@ class EmailService {
     content: string,
     adminId: string
   ): Promise<boolean> {
-    // Store in database
-    await prisma.adminMessage.create({
-      data: {
-        senderId: adminId,
-        recipientId: null, // Will be looked up
-        subject,
-        content,
-        type: 'GENERAL',
-        sentViaEmail: true,
-      },
-    });
+    const now = new Date();
+    await query(
+      `INSERT INTO "AdminMessage" (id, "senderId", "recipientId", subject, content, type, "sentViaEmail", "createdAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [randomUUID(), adminId, null, subject, content, 'GENERAL', true, now]
+    );
 
     const html = emailTemplates.adminMessage(userName, subject, content);
     return this.sendEmail(email, subject, html);
   }
 
-  // Send admin message to all users
   async sendBulkAdminMessage(
     subject: string,
     content: string,
     adminId: string
   ): Promise<{ sent: number; failed: number }> {
-    const users = await prisma.user.findMany({
-      where: { isActive: true },
-      select: { id: true, email: true, name: true },
-    });
+    const users = await queryMany<{ id: string; email: string; name: string }>(
+      `SELECT id, email, name FROM "User" WHERE "isActive" = true`
+    );
 
     let sent = 0;
     let failed = 0;
+    const now = new Date();
 
     for (const user of users) {
-      // Store in database
-      await prisma.adminMessage.create({
-        data: {
-          senderId: adminId,
-          recipientId: user.id,
-          subject,
-          content,
-          type: 'ANNOUNCEMENT',
-          sentViaEmail: true,
-        },
-      });
+      await query(
+        `INSERT INTO "AdminMessage" (id, "senderId", "recipientId", subject, content, type, "sentViaEmail", "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [randomUUID(), adminId, user.id, subject, content, 'ANNOUNCEMENT', true, now]
+      );
 
       const html = emailTemplates.adminMessage(user.name, subject, content);
       const success = await this.sendEmail(user.email, subject, html);
@@ -256,21 +235,17 @@ class EmailService {
     return token;
   }
 
-  // Send password reset email
   async sendPasswordResetEmail(email: string, userName: string, clientUrl: string): Promise<string | null> {
     const token = this.generateResetToken();
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const now = new Date();
 
     try {
-      // Store reset token in database
-      await prisma.emailVerification.create({
-        data: {
-          email,
-          code: token,
-          type: 'PASSWORD_RESET',
-          expiresAt,
-        },
-      });
+      await query(
+        `INSERT INTO "EmailVerification" (id, email, code, type, "expiresAt", verified, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [randomUUID(), email, token, 'PASSWORD_RESET', expiresAt, false, now]
+      );
 
       const resetLink = `${clientUrl}/reset-password?token=${token}`;
       const html = emailTemplates.passwordReset(userName, resetLink);
@@ -283,17 +258,13 @@ class EmailService {
     }
   }
 
-  // Verify password reset token
   async verifyResetToken(token: string): Promise<string | null> {
     try {
-      const verification = await prisma.emailVerification.findFirst({
-        where: {
-          code: token,
-          type: 'PASSWORD_RESET',
-          verified: false,
-          expiresAt: { gt: new Date() },
-        },
-      });
+      const verification = await queryOne<{ email: string }>(
+        `SELECT email FROM "EmailVerification"
+         WHERE code = $1 AND type = 'PASSWORD_RESET' AND verified = false AND "expiresAt" > $2`,
+        [token, new Date()]
+      );
 
       return verification?.email || null;
     } catch (error) {
@@ -302,13 +273,12 @@ class EmailService {
     }
   }
 
-  // Mark reset token as used
   async markResetTokenUsed(token: string): Promise<boolean> {
     try {
-      await prisma.emailVerification.updateMany({
-        where: { code: token, type: 'PASSWORD_RESET' },
-        data: { verified: true },
-      });
+      await query(
+        `UPDATE "EmailVerification" SET verified = true WHERE code = $1 AND type = 'PASSWORD_RESET'`,
+        [token]
+      );
       return true;
     } catch (error) {
       logger.error('Failed to mark reset token as used', { error });

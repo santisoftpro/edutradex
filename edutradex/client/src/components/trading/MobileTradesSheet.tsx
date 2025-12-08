@@ -12,11 +12,13 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { useTradeStore, Trade } from '@/store/trade.store';
+import { PriceTick } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface MobileTradesSheetProps {
   isOpen: boolean;
   onClose: () => void;
+  latestPrices: Map<string, PriceTick>;
 }
 
 type TabType = 'opened' | 'closed';
@@ -33,15 +35,21 @@ function formatPrice(price: number, symbol: string): string {
   return price.toFixed(isJPYPair ? 3 : 5);
 }
 
-export function MobileTradesSheet({ isOpen, onClose }: MobileTradesSheetProps) {
+export function MobileTradesSheet({ isOpen, onClose, latestPrices }: MobileTradesSheetProps) {
   const [activeTab, setActiveTab] = useState<TabType>('opened');
+  const [isClient, setIsClient] = useState(false);
   const { activeTrades, trades } = useTradeStore();
+
+  // Prevent hydration mismatch - only render on client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const closedTrades = trades
     .filter(t => t.status === 'won' || t.status === 'lost')
     .slice(0, 20);
 
-  if (!isOpen) return null;
+  if (!isOpen || !isClient) return null;
 
   return (
     <>
@@ -54,37 +62,37 @@ export function MobileTradesSheet({ isOpen, onClose }: MobileTradesSheetProps) {
       {/* Sheet */}
       <div className="fixed inset-x-0 bottom-0 z-50 md:hidden bg-[#1a1a2e] rounded-t-2xl max-h-[80vh] flex flex-col animate-in slide-in-from-bottom duration-300">
         {/* Handle */}
-        <div className="flex justify-center py-2">
-          <div className="w-12 h-1 bg-gray-600 rounded-full" />
+        <div className="flex justify-center py-1.5">
+          <div className="w-10 h-1 bg-gray-600 rounded-full" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 pb-3 border-b border-[#2d2d44]">
-          <h2 className="text-white font-semibold text-lg">My Trades</h2>
+        <div className="flex items-center justify-between px-3 pb-2 border-b border-[#2d2d44]">
+          <h2 className="text-white font-semibold text-sm">My Trades</h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-[#252542] rounded-lg transition-colors"
+            className="p-1.5 hover:bg-[#252542] rounded-lg transition-colors"
           >
-            <X className="h-5 w-5 text-gray-400" />
+            <X className="h-4 w-4 text-gray-400" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex p-3 gap-2">
+        <div className="flex p-2.5 gap-1.5">
           <button
             onClick={() => setActiveTab('opened')}
             className={cn(
-              'flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2',
+              'flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5',
               activeTab === 'opened'
                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
                 : 'bg-[#252542] text-gray-400'
             )}
           >
-            <Clock className="h-4 w-4" />
+            <Clock className="h-3.5 w-3.5" />
             Open
             {activeTrades.length > 0 && (
               <span className={cn(
-                'px-2 py-0.5 text-xs rounded-full font-bold',
+                'px-1.5 py-0.5 text-[10px] rounded-full font-bold',
                 activeTab === 'opened' ? 'bg-white/20' : 'bg-blue-600 text-white'
               )}>
                 {activeTrades.length}
@@ -94,13 +102,13 @@ export function MobileTradesSheet({ isOpen, onClose }: MobileTradesSheetProps) {
           <button
             onClick={() => setActiveTab('closed')}
             className={cn(
-              'flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2',
+              'flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5',
               activeTab === 'closed'
                 ? 'bg-slate-600 text-white shadow-lg shadow-slate-600/20'
                 : 'bg-[#252542] text-gray-400'
             )}
           >
-            <History className="h-4 w-4" />
+            <History className="h-3.5 w-3.5" />
             History
           </button>
         </div>
@@ -108,7 +116,7 @@ export function MobileTradesSheet({ isOpen, onClose }: MobileTradesSheetProps) {
         {/* Content */}
         <div className="flex-1 overflow-y-auto pb-safe">
           {activeTab === 'opened' ? (
-            <MobileOpenedTrades trades={activeTrades} />
+            <MobileOpenedTrades trades={activeTrades} latestPrices={latestPrices} />
           ) : (
             <MobileClosedTrades trades={closedTrades} />
           )}
@@ -118,29 +126,29 @@ export function MobileTradesSheet({ isOpen, onClose }: MobileTradesSheetProps) {
   );
 }
 
-function MobileOpenedTrades({ trades }: { trades: Trade[] }) {
+function MobileOpenedTrades({ trades, latestPrices }: { trades: Trade[]; latestPrices: Map<string, any> }) {
   if (trades.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-        <div className="w-20 h-20 rounded-full bg-[#252542] flex items-center justify-center mb-4">
-          <Clock className="h-10 w-10 opacity-50" />
+      <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+        <div className="w-16 h-16 rounded-full bg-[#252542] flex items-center justify-center mb-3">
+          <Clock className="h-8 w-8 opacity-50" />
         </div>
-        <p className="text-base font-medium text-gray-400">No open trades</p>
-        <p className="text-sm text-gray-500 mt-1">Place a trade to see it here</p>
+        <p className="text-sm font-medium text-gray-400">No open trades</p>
+        <p className="text-xs text-gray-500 mt-1">Place a trade to see it here</p>
       </div>
     );
   }
 
   return (
-    <div className="px-3 pb-4 space-y-2">
+    <div className="px-2.5 pb-3 space-y-1.5">
       {trades.map((trade) => (
-        <MobileOpenedTradeCard key={trade.id} trade={trade} />
+        <MobileOpenedTradeCard key={trade.id} trade={trade} currentPrice={latestPrices.get(trade.symbol)?.price} />
       ))}
     </div>
   );
 }
 
-function MobileOpenedTradeCard({ trade }: { trade: Trade }) {
+function MobileOpenedTradeCard({ trade, currentPrice }: { trade: Trade; currentPrice?: number }) {
   const [timeLeft, setTimeLeft] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -173,65 +181,117 @@ function MobileOpenedTradeCard({ trade }: { trade: Trade }) {
   const isUp = trade.direction === 'UP';
   const potentialProfit = trade.amount * (trade.payout / 100);
 
+  // Calculate real-time P/L
+  const calculatePL = () => {
+    if (!currentPrice) return null;
+
+    const isInProfit = isUp
+      ? currentPrice > trade.entryPrice  // UP trade wins if price goes up
+      : currentPrice < trade.entryPrice; // DOWN trade wins if price goes down
+
+    const plAmount = isInProfit
+      ? trade.amount * (trade.payout / 100) // Potential profit
+      : -trade.amount;                       // Full loss
+
+    return { isInProfit, plAmount };
+  };
+
+  const pl = calculatePL();
+
+  // Determine colors based on P/L status (if available) or fallback to direction
+  const isWinning = pl ? pl.isInProfit : isUp;
+  const borderColor = isWinning ? 'border-l-emerald-500' : 'border-l-red-500';
+  const progressColor = isWinning ? 'bg-emerald-500/50' : 'bg-red-500/50';
+  const iconBgColor = isWinning ? 'bg-emerald-500/20' : 'bg-red-500/20';
+  const iconColor = isWinning ? 'text-emerald-400' : 'text-red-400';
+  const labelColor = isWinning ? 'text-emerald-400' : 'text-red-400';
+
   return (
     <div
       className={cn(
-        'bg-[#252542] rounded-xl relative overflow-hidden',
-        'border-l-4',
-        isUp ? 'border-l-emerald-500' : 'border-l-red-500'
+        'bg-[#252542] rounded-lg relative overflow-hidden transition-colors duration-300',
+        'border-l-2',
+        borderColor
       )}
       onClick={() => setIsExpanded(!isExpanded)}
     >
       {/* Progress bar */}
       <div
         className={cn(
-          'absolute bottom-0 left-0 h-1 transition-all',
-          isUp ? 'bg-emerald-500/50' : 'bg-red-500/50'
+          'absolute bottom-0 left-0 h-0.5 transition-all duration-300',
+          progressColor
         )}
         style={{ width: `${progress}%` }}
       />
 
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
+      <div className="p-2.5">
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-2">
             <div className={cn(
-              'w-10 h-10 rounded-full flex items-center justify-center',
-              isUp ? 'bg-emerald-500/20' : 'bg-red-500/20'
+              'w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-300',
+              iconBgColor
             )}>
               {isUp ? (
-                <ArrowUp className="h-5 w-5 text-emerald-400" />
+                <ArrowUp className={cn('h-3.5 w-3.5 transition-colors duration-300', iconColor)} />
               ) : (
-                <ArrowDown className="h-5 w-5 text-red-400" />
+                <ArrowDown className={cn('h-3.5 w-3.5 transition-colors duration-300', iconColor)} />
               )}
             </div>
             <div>
-              <span className="text-white font-semibold block">{trade.symbol}</span>
+              <span className="text-white font-semibold text-sm block leading-tight">{trade.symbol}</span>
               <span className={cn(
-                'text-xs font-medium',
-                isUp ? 'text-emerald-400' : 'text-red-400'
+                'text-[10px] font-medium transition-colors duration-300',
+                labelColor
               )}>
                 {isUp ? 'BUY' : 'SELL'}
               </span>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-white font-bold text-lg font-mono">{formatTime(timeLeft)}</div>
-            <div className="text-emerald-400 text-sm font-medium">+{trade.payout}%</div>
+            <div className="text-white font-bold text-sm font-mono leading-tight">{formatTime(timeLeft)}</div>
+            <div className="text-emerald-400 text-[10px] font-medium">+{trade.payout}%</div>
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between text-xs">
           <span className="text-gray-400">Investment</span>
           <span className="text-white font-semibold">${trade.amount.toFixed(2)}</span>
         </div>
 
+        {/* Real-time P/L display - always visible */}
+        {pl && (
+          <div className={cn(
+            'flex items-center justify-between text-xs mt-1.5 py-1.5 px-2 rounded-md',
+            pl.isInProfit ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-red-500/10 border border-red-500/30'
+          )}>
+            <span className={cn(
+              'font-medium text-[11px]',
+              pl.isInProfit ? 'text-emerald-400' : 'text-red-400'
+            )}>
+              Real-time P/L
+            </span>
+            <span className={cn(
+              'font-bold text-sm',
+              pl.isInProfit ? 'text-emerald-400' : 'text-red-400'
+            )}>
+              {pl.isInProfit ? '+' : '-'}${Math.abs(pl.plAmount).toFixed(2)}
+            </span>
+          </div>
+        )}
+
         {isExpanded && (
-          <div className="mt-3 pt-3 border-t border-[#3d3d5c] space-y-2">
-            <div className="flex justify-between text-sm">
+          <div className="mt-2 pt-2 border-t border-[#3d3d5c] space-y-1">
+            <div className="flex justify-between text-xs">
               <span className="text-gray-400">Entry Price</span>
               <span className="text-white font-mono">{formatPrice(trade.entryPrice, trade.symbol)}</span>
             </div>
-            <div className="flex justify-between text-sm">
+            {currentPrice && (
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400">Current Price</span>
+                <span className="text-blue-400 font-mono">{formatPrice(currentPrice, trade.symbol)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-xs">
               <span className="text-gray-400">Potential Profit</span>
               <span className="text-emerald-400 font-semibold">+${potentialProfit.toFixed(2)}</span>
             </div>
@@ -239,7 +299,7 @@ function MobileOpenedTradeCard({ trade }: { trade: Trade }) {
         )}
 
         <ChevronDown className={cn(
-          'h-4 w-4 text-gray-500 mx-auto mt-2 transition-transform',
+          'h-3 w-3 text-gray-500 mx-auto mt-1 transition-transform',
           isExpanded && 'rotate-180'
         )} />
       </div>
@@ -250,18 +310,18 @@ function MobileOpenedTradeCard({ trade }: { trade: Trade }) {
 function MobileClosedTrades({ trades }: { trades: Trade[] }) {
   if (trades.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-        <div className="w-20 h-20 rounded-full bg-[#252542] flex items-center justify-center mb-4">
-          <History className="h-10 w-10 opacity-50" />
+      <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+        <div className="w-16 h-16 rounded-full bg-[#252542] flex items-center justify-center mb-3">
+          <History className="h-8 w-8 opacity-50" />
         </div>
-        <p className="text-base font-medium text-gray-400">No trade history</p>
-        <p className="text-sm text-gray-500 mt-1">Completed trades appear here</p>
+        <p className="text-sm font-medium text-gray-400">No trade history</p>
+        <p className="text-xs text-gray-500 mt-1">Completed trades appear here</p>
       </div>
     );
   }
 
   return (
-    <div className="px-3 pb-4 space-y-2">
+    <div className="px-2.5 pb-3 space-y-1.5">
       {trades.map((trade) => (
         <MobileClosedTradeCard key={trade.id} trade={trade} />
       ))}
@@ -292,39 +352,39 @@ function MobileClosedTradeCard({ trade }: { trade: Trade }) {
   return (
     <div
       className={cn(
-        'bg-[#252542] rounded-xl overflow-hidden',
-        'border-l-4',
+        'bg-[#252542] rounded-lg overflow-hidden',
+        'border-l-2',
         isWon ? 'border-l-emerald-500' : 'border-l-red-500'
       )}
       onClick={() => setIsExpanded(!isExpanded)}
     >
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3">
+      <div className="p-2.5">
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-2">
             <div className={cn(
-              'w-10 h-10 rounded-full flex items-center justify-center',
+              'w-7 h-7 rounded-full flex items-center justify-center',
               isWon ? 'bg-emerald-500/20' : 'bg-red-500/20'
             )}>
               {isWon ? (
-                <CheckCircle className="h-5 w-5 text-emerald-400" />
+                <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
               ) : (
-                <XCircle className="h-5 w-5 text-red-400" />
+                <XCircle className="h-3.5 w-3.5 text-red-400" />
               )}
             </div>
             <div>
-              <span className="text-white font-semibold block">{trade.symbol}</span>
-              <span className="text-gray-500 text-xs">{formatTime(trade.closedAt || trade.createdAt)}</span>
+              <span className="text-white font-semibold text-sm block leading-tight">{trade.symbol}</span>
+              <span className="text-gray-500 text-[10px]">{formatTime(trade.closedAt || trade.createdAt)}</span>
             </div>
           </div>
           <div className="text-right">
             <span className={cn(
-              'font-bold text-xl',
+              'font-bold text-sm leading-tight block',
               isWon ? 'text-emerald-400' : 'text-red-400'
             )}>
               {isWon ? '+' : '-'}${Math.abs(isWon ? profit : trade.amount).toFixed(2)}
             </span>
             <div className={cn(
-              'text-xs font-medium',
+              'text-[10px] font-medium',
               isWon ? 'text-emerald-400' : 'text-red-400'
             )}>
               {isWon ? 'PROFIT' : 'LOSS'}
@@ -333,28 +393,28 @@ function MobileClosedTradeCard({ trade }: { trade: Trade }) {
         </div>
 
         {isExpanded && (
-          <div className="mt-3 pt-3 border-t border-[#3d3d5c] grid grid-cols-2 gap-3 text-sm">
-            <div className="bg-[#1a1a2e] rounded-lg p-3">
-              <span className="text-gray-500 text-xs block mb-1">Direction</span>
-              <span className={cn('font-semibold', isUp ? 'text-emerald-400' : 'text-red-400')}>
+          <div className="mt-2 pt-2 border-t border-[#3d3d5c] grid grid-cols-2 gap-1.5 text-xs">
+            <div className="bg-[#1a1a2e] rounded-lg p-1.5">
+              <span className="text-gray-500 text-[10px] block mb-0.5">Direction</span>
+              <span className={cn('font-semibold text-xs', isUp ? 'text-emerald-400' : 'text-red-400')}>
                 {isUp ? 'BUY' : 'SELL'}
               </span>
             </div>
-            <div className="bg-[#1a1a2e] rounded-lg p-3">
-              <span className="text-gray-500 text-xs block mb-1">Payout</span>
-              <span className="text-blue-400 font-semibold">+{trade.payout}%</span>
+            <div className="bg-[#1a1a2e] rounded-lg p-1.5">
+              <span className="text-gray-500 text-[10px] block mb-0.5">Payout</span>
+              <span className="text-blue-400 font-semibold text-xs">+{trade.payout}%</span>
             </div>
-            <div className="bg-[#1a1a2e] rounded-lg p-3">
-              <span className="text-gray-500 text-xs block mb-1">Entry</span>
-              <span className="text-white font-mono text-xs">{formatPrice(trade.entryPrice, trade.symbol)}</span>
+            <div className="bg-[#1a1a2e] rounded-lg p-1.5">
+              <span className="text-gray-500 text-[10px] block mb-0.5">Entry</span>
+              <span className="text-white font-mono text-[10px]">{formatPrice(trade.entryPrice, trade.symbol)}</span>
             </div>
-            <div className="bg-[#1a1a2e] rounded-lg p-3">
-              <span className="text-gray-500 text-xs block mb-1">Exit</span>
-              <span className="text-white font-mono text-xs">{trade.exitPrice ? formatPrice(trade.exitPrice, trade.symbol) : '-'}</span>
+            <div className="bg-[#1a1a2e] rounded-lg p-1.5">
+              <span className="text-gray-500 text-[10px] block mb-0.5">Exit</span>
+              <span className="text-white font-mono text-[10px]">{trade.exitPrice ? formatPrice(trade.exitPrice, trade.symbol) : '-'}</span>
             </div>
-            <div className="bg-[#1a1a2e] rounded-lg p-3 col-span-2">
-              <span className="text-gray-500 text-xs block mb-1">Pips</span>
-              <span className={cn('font-mono font-semibold', pipsInFavor >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+            <div className="bg-[#1a1a2e] rounded-lg p-1.5 col-span-2">
+              <span className="text-gray-500 text-[10px] block mb-0.5">Pips</span>
+              <span className={cn('font-mono font-semibold text-xs', pipsInFavor >= 0 ? 'text-emerald-400' : 'text-red-400')}>
                 {pipsInFavor >= 0 ? '+' : ''}{pips.toFixed(1)} pips
               </span>
             </div>
@@ -362,7 +422,7 @@ function MobileClosedTradeCard({ trade }: { trade: Trade }) {
         )}
 
         <ChevronDown className={cn(
-          'h-4 w-4 text-gray-500 mx-auto mt-2 transition-transform',
+          'h-3 w-3 text-gray-500 mx-auto mt-1 transition-transform',
           isExpanded && 'rotate-180'
         )} />
       </div>

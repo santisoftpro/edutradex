@@ -34,6 +34,7 @@ import { api } from '@/lib/api';
 import type { KYCInfo, DocumentType } from '@/types';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import { StepPill } from './StepPill';
 
 export default function SettingsPage() {
   const { user, refreshProfile } = useAuthStore();
@@ -224,19 +225,22 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-5xl">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="text-slate-400 mt-1">Manage your account and preferences</p>
+      <div className="flex flex-col gap-2">
+        <h1 className="text-xl md:text-2xl font-bold text-white">Settings</h1>
+        <p className="text-slate-400 text-xs md:text-sm">Manage your account, verification, and trading preferences.</p>
       </div>
 
       {/* Email Verification Section */}
-      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-        <div className="flex items-center justify-between mb-6">
+      <div className="bg-slate-800 rounded-xl p-5 md:p-6 border border-slate-700 space-y-4">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Mail className="h-5 w-5 text-emerald-500" />
-            <h2 className="text-lg font-semibold text-white">Email Verification</h2>
+            <div>
+              <h2 className="text-base md:text-lg font-semibold text-white">Email Verification</h2>
+              <p className="text-slate-400 text-xs md:text-sm">Secure your account and unlock all features.</p>
+            </div>
           </div>
           {user?.emailVerified ? (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600 rounded-full text-sm text-white">
@@ -252,25 +256,25 @@ export default function SettingsPage() {
         </div>
 
         {user?.emailVerified ? (
-          <p className="text-slate-400">Your email address has been verified.</p>
+          <p className="text-slate-400 text-xs md:text-sm">Your email address has been verified.</p>
         ) : (
-          <div className="space-y-4">
-            <p className="text-slate-400">Verify your email to unlock all features and secure your account.</p>
+          <div className="space-y-3">
+            <p className="text-slate-400 text-xs md:text-sm">Verify your email to finish securing your account.</p>
             {!codeSent ? (
               <button
                 onClick={handleSendVerificationCode}
                 disabled={isSendingCode}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg transition-colors"
               >
                 {isSendingCode ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Mail className="h-4 w-4" />
                 )}
-                Send Verification Code
+                Send Code
               </button>
             ) : (
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   value={verificationCode}
@@ -279,25 +283,27 @@ export default function SettingsPage() {
                   maxLength={6}
                   className="flex-1 px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 />
-                <button
-                  onClick={handleVerifyEmail}
-                  disabled={isVerifying}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg transition-colors"
-                >
-                  {isVerifying ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Check className="h-4 w-4" />
-                  )}
-                  Verify
-                </button>
-                <button
-                  onClick={handleSendVerificationCode}
-                  disabled={isSendingCode}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg transition-colors"
-                >
-                  Resend
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleVerifyEmail}
+                    disabled={isVerifying}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                  >
+                    {isVerifying ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    )}
+                    Verify
+                  </button>
+                  <button
+                    onClick={handleSendVerificationCode}
+                    disabled={isSendingCode}
+                    className="flex-1 sm:flex-none px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg transition-colors"
+                  >
+                    Resend
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -314,15 +320,15 @@ export default function SettingsPage() {
                 <ShieldCheck className="h-6 w-6 text-emerald-400" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">Identity Verification (KYC)</h2>
-                <p className="text-slate-400 text-sm">Verify your identity to unlock all features</p>
+                <h2 className="text-base md:text-lg font-bold text-white">Identity Verification (KYC)</h2>
+                <p className="text-slate-400 text-xs md:text-sm">Verify your identity to unlock all features</p>
               </div>
             </div>
             {!kycLoading && getKYCStatusBadge()}
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 space-y-6">
           {kycLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
@@ -332,7 +338,7 @@ export default function SettingsPage() {
               <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="h-10 w-10 text-emerald-400" />
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">Verification Complete</h3>
+              <h3 className="text-lg md:text-xl font-bold text-white mb-2">Verification Complete</h3>
               <p className="text-slate-400">Your identity has been verified successfully.</p>
               <p className="text-slate-400 text-sm mt-1">You have full access to all platform features.</p>
             </div>
@@ -341,7 +347,7 @@ export default function SettingsPage() {
               <div className="w-20 h-20 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                 <Clock className="h-10 w-10 text-yellow-400" />
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">Verification in Progress</h3>
+              <h3 className="text-lg md:text-xl font-bold text-white mb-2">Verification in Progress</h3>
               <p className="text-slate-400">Your documents are being reviewed by our team.</p>
               <p className="text-slate-400 text-sm mt-1">This usually takes 24-48 hours.</p>
               <div className="mt-6 p-4 bg-slate-700/50 rounded-xl max-w-md mx-auto">
@@ -357,7 +363,7 @@ export default function SettingsPage() {
                 <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                   <XCircle className="h-10 w-10 text-red-400" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">Verification Rejected</h3>
+                <h3 className="text-lg md:text-xl font-bold text-white mb-2">Verification Rejected</h3>
                 <p className="text-slate-400">Your submission could not be verified.</p>
               </div>
               <div className="bg-red-900/20 border border-red-800/50 rounded-xl p-4">
@@ -374,56 +380,20 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Enhanced Steps Indicator */}
-              <div className="flex items-center justify-center mb-8">
-                <div className="flex items-center">
-                  {/* Step 1 */}
-                  <div className="flex flex-col items-center">
-                    <div className={cn(
-                      'w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold transition-all',
-                      kycStep === 'info'
-                        ? 'bg-emerald-600 text-white ring-4 ring-emerald-600/30'
-                        : kycStep === 'documents'
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-slate-700 text-slate-400'
-                    )}>
-                      {kycStep === 'documents' ? <Check className="h-6 w-6" /> : '1'}
-                    </div>
-                    <span className={cn(
-                      'text-sm font-medium mt-2',
-                      kycStep === 'info' ? 'text-emerald-400' : 'text-slate-400'
-                    )}>Personal Info</span>
-                  </div>
-
-                  {/* Connector */}
-                  <div className={cn(
-                    'w-24 h-1 mx-4 rounded-full transition-all',
-                    kycStep === 'documents' ? 'bg-emerald-600' : 'bg-slate-700'
-                  )} />
-
-                  {/* Step 2 */}
-                  <div className="flex flex-col items-center">
-                    <div className={cn(
-                      'w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold transition-all',
-                      kycStep === 'documents'
-                        ? 'bg-emerald-600 text-white ring-4 ring-emerald-600/30'
-                        : 'bg-slate-700 text-slate-400'
-                    )}>
-                      2
-                    </div>
-                    <span className={cn(
-                      'text-sm font-medium mt-2',
-                      kycStep === 'documents' ? 'text-emerald-400' : 'text-slate-400'
-                    )}>Documents</span>
-                  </div>
+              {/* Steps Indicator */}
+              <div className="flex items-center justify-center">
+                <div className="flex flex-wrap items-center gap-3 justify-center">
+                  <StepPill stepNumber={1} active={kycStep === 'info'} completed={kycStep === 'documents'} label="Personal Info" />
+                  <div className={cn('h-0.5 w-12 rounded-full', kycStep === 'documents' ? 'bg-emerald-600' : 'bg-slate-700')} />
+                  <StepPill stepNumber={2} active={kycStep === 'documents'} completed={false} label="Documents" />
                 </div>
               </div>
 
               {kycStep === 'info' ? (
-                <form onSubmit={handleSubmitPersonalInfo} className="space-y-6">
+                <form onSubmit={handleSubmitPersonalInfo} className="space-y-5">
                   {/* Basic Info Section */}
                   <div className="bg-slate-700/30 rounded-xl p-5 space-y-4">
-                    <div className="flex items-center gap-2 mb-4">
+                    <div className="flex items-center gap-2">
                       <User className="h-5 w-5 text-emerald-400" />
                       <h3 className="text-white font-semibold">Basic Information</h3>
                     </div>
@@ -496,7 +466,7 @@ export default function SettingsPage() {
 
                   {/* Address Section */}
                   <div className="bg-slate-700/30 rounded-xl p-5 space-y-4">
-                    <div className="flex items-center gap-2 mb-4">
+                    <div className="flex items-center gap-2">
                       <MapPin className="h-5 w-5 text-emerald-400" />
                       <h3 className="text-white font-semibold">Address Information</h3>
                     </div>
@@ -563,10 +533,10 @@ export default function SettingsPage() {
                   </button>
                 </form>
               ) : (
-                <form onSubmit={handleSubmitDocuments} className="space-y-6">
+                <form onSubmit={handleSubmitDocuments} className="space-y-5">
                   {/* Document Type Section */}
                   <div className="bg-slate-700/30 rounded-xl p-5 space-y-4">
-                    <div className="flex items-center gap-2 mb-4">
+                    <div className="flex items-center gap-2">
                       <CreditCard className="h-5 w-5 text-emerald-400" />
                       <h3 className="text-white font-semibold">Document Details</h3>
                     </div>
@@ -600,7 +570,7 @@ export default function SettingsPage() {
 
                   {/* Document Upload Section */}
                   <div className="bg-slate-700/30 rounded-xl p-5 space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2">
                       <FileText className="h-5 w-5 text-emerald-400" />
                       <h3 className="text-white font-semibold">Upload Documents</h3>
                     </div>
@@ -679,12 +649,12 @@ export default function SettingsPage() {
       </div>
 
       {/* Profile Section */}
-      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-        <div className="flex items-center gap-3 mb-6">
+      <div className="bg-slate-800 rounded-xl p-5 md:p-6 border border-slate-700 space-y-4">
+        <div className="flex items-center gap-3">
           <User className="h-5 w-5 text-emerald-500" />
-          <h2 className="text-lg font-semibold text-white">Profile</h2>
+          <h2 className="text-base md:text-lg font-semibold text-white">Profile</h2>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-slate-400 text-sm mb-2">Name</label>
             <input
@@ -707,12 +677,12 @@ export default function SettingsPage() {
       </div>
 
       {/* Notifications */}
-      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-        <div className="flex items-center gap-3 mb-6">
+      <div className="bg-slate-800 rounded-xl p-5 md:p-6 border border-slate-700">
+        <div className="flex items-center gap-3 mb-4">
           <Bell className="h-5 w-5 text-emerald-500" />
-          <h2 className="text-lg font-semibold text-white">Notifications</h2>
+          <h2 className="text-base md:text-lg font-semibold text-white">Notifications</h2>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-3">
           <ToggleSetting
             label="Trade Opened"
             description="Get notified when a trade is placed"
@@ -761,12 +731,12 @@ export default function SettingsPage() {
       </div>
 
       {/* Trading Preferences */}
-      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-        <div className="flex items-center gap-3 mb-6">
+      <div className="bg-slate-800 rounded-xl p-5 md:p-6 border border-slate-700">
+        <div className="flex items-center gap-3 mb-4">
           <Shield className="h-5 w-5 text-emerald-500" />
-          <h2 className="text-lg font-semibold text-white">Trading Preferences</h2>
+          <h2 className="text-base md:text-lg font-semibold text-white">Trading Preferences</h2>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-3">
           <ToggleSetting
             label="Confirm Trades"
             description="Show confirmation before placing trades"
@@ -789,7 +759,7 @@ export default function SettingsPage() {
               }))
             }
           />
-          <div className="grid grid-cols-2 gap-4 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             <div>
               <label className="block text-slate-400 text-sm mb-2">Default Amount ($)</label>
               <input
@@ -829,12 +799,12 @@ export default function SettingsPage() {
       </div>
 
       {/* Display */}
-      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-        <div className="flex items-center gap-3 mb-6">
+      <div className="bg-slate-800 rounded-xl p-5 md:p-6 border border-slate-700">
+        <div className="flex items-center gap-3 mb-4">
           <Palette className="h-5 w-5 text-emerald-500" />
-          <h2 className="text-lg font-semibold text-white">Display</h2>
+          <h2 className="text-base md:text-lg font-semibold text-white">Display</h2>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-3">
           <ToggleSetting
             label="Compact Mode"
             description="Use smaller UI elements"
@@ -875,8 +845,8 @@ function ToggleSetting({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between">
-      <div>
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
         <p className="text-white font-medium">{label}</p>
         <p className="text-slate-400 text-sm">{description}</p>
       </div>

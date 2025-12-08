@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowUp, ArrowDown, DollarSign, Zap, Edit3 } from 'lucide-react';
+import { ArrowUp, ArrowDown, DollarSign, Zap, Edit3, Loader2 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 
 interface TradingPanelProps {
@@ -46,6 +46,8 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 85, 
   const [customSeconds, setCustomSeconds] = useState(0);
 
   const potentialProfit = amount * (payoutPercent / 100);
+  const insufficientBalance = amount > balance;
+  const invalidAmount = amount <= 0;
 
   const handleDurationChange = (newDuration: number) => {
     setDuration(newDuration);
@@ -206,6 +208,15 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 85, 
             <span className="text-gray-500 text-[10px]">Balance</span>
             <span className="text-emerald-400 text-xs font-bold">{formatCurrency(balance)}</span>
           </div>
+
+          {/* Balance Warning */}
+          {insufficientBalance && (
+            <div className="mt-2 py-1.5 px-2 bg-red-500/10 border border-red-500/30 rounded-lg">
+              <span className="text-red-400 text-[10px] font-medium">
+                Insufficient balance
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Payout Display */}
@@ -237,8 +248,14 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 85, 
           disabled={isLoading || amount > balance || amount <= 0}
           className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-emerald-900 disabled:to-emerald-900 disabled:cursor-not-allowed rounded-lg font-bold text-white text-sm flex items-center justify-center gap-1.5 transition-all duration-200 shadow-lg shadow-emerald-900/50 hover:shadow-emerald-500/40 active:scale-[0.98] group"
         >
-          <ArrowUp className="h-5 w-5 group-hover:-translate-y-0.5 transition-transform" strokeWidth={3} />
-          BUY
+          {isLoading ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <>
+              <ArrowUp className="h-5 w-5 group-hover:-translate-y-0.5 transition-transform" strokeWidth={3} />
+              BUY
+            </>
+          )}
         </button>
 
         <button
@@ -246,8 +263,14 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 85, 
           disabled={isLoading || amount > balance || amount <= 0}
           className="w-full py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:from-red-900 disabled:to-red-900 disabled:cursor-not-allowed rounded-lg font-bold text-white text-sm flex items-center justify-center gap-1.5 transition-all duration-200 shadow-lg shadow-red-900/50 hover:shadow-red-500/40 active:scale-[0.98] group"
         >
-          <ArrowDown className="h-5 w-5 group-hover:translate-y-0.5 transition-transform" strokeWidth={3} />
-          SELL
+          {isLoading ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <>
+              <ArrowDown className="h-5 w-5 group-hover:translate-y-0.5 transition-transform" strokeWidth={3} />
+              SELL
+            </>
+          )}
         </button>
       </div>
     </div>

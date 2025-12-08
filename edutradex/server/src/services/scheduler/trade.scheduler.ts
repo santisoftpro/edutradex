@@ -1,4 +1,4 @@
-import { prisma } from '../../config/database.js';
+import { queryMany } from '../../config/db.js';
 import { tradeService } from '../trade/trade.service.js';
 import { logger } from '../../utils/logger.js';
 
@@ -6,17 +6,14 @@ class TradeSettlementScheduler {
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
 
-  // Start the scheduler (runs every 5 seconds to catch expired trades)
   start() {
     if (this.intervalId) {
       logger.warn('Trade settlement scheduler is already running');
       return;
     }
 
-    // Run every 5 seconds to catch any expired trades
     const INTERVAL = 5 * 1000;
 
-    // Run immediately on start to settle any trades that expired during downtime
     this.settleExpiredTrades();
 
     this.intervalId = setInterval(() => {
@@ -26,7 +23,6 @@ class TradeSettlementScheduler {
     logger.info('Trade settlement scheduler started - checking every 5 seconds');
   }
 
-  // Stop the scheduler
   stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
@@ -35,7 +31,6 @@ class TradeSettlementScheduler {
     }
   }
 
-  // Find and settle all expired trades
   private async settleExpiredTrades() {
     if (this.isRunning) {
       return;
@@ -44,23 +39,14 @@ class TradeSettlementScheduler {
     this.isRunning = true;
 
     try {
-      // Find all trades that are OPEN and have expired
-      const expiredTrades = await prisma.trade.findMany({
-        where: {
-          status: 'OPEN',
-          expiresAt: {
-            lte: new Date(),
-          },
-        },
-        select: {
-          id: true,
-        },
-      });
+      const expiredTrades = await queryMany<{ id: string }>(
+        `SELECT id FROM "Trade" WHERE status = 'OPEN' AND "expiresAt" <= $1`,
+        [new Date()]
+      );
 
       if (expiredTrades.length > 0) {
         logger.info(`Found ${expiredTrades.length} expired trades to settle`);
 
-        // Settle each expired trade
         for (const trade of expiredTrades) {
           try {
             await tradeService.settleTrade(trade.id);
@@ -76,7 +62,6 @@ class TradeSettlementScheduler {
     }
   }
 
-  // Manually trigger settlement check (for admin/testing use)
   async triggerManually() {
     logger.info('Manual trade settlement check triggered');
     return this.settleExpiredTrades();

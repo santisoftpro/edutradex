@@ -148,8 +148,8 @@ function FollowingCard({
       follow.isActive ? 'border-slate-700' : 'border-yellow-600/30 bg-yellow-900/10'
     )}>
       {/* Main Content */}
-      <div className="p-4">
-        <div className="flex items-start justify-between">
+      <div className="p-4 space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
               {follow.leader.displayName.charAt(0).toUpperCase()}
@@ -168,7 +168,7 @@ function FollowingCard({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={onToggleActive}
               className={cn(
@@ -199,7 +199,7 @@ function FollowingCard({
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-3 mt-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
           <div className="bg-slate-700/50 rounded-lg p-3 text-center">
             <p className="text-slate-400 text-xs">Mode</p>
             <div className="flex items-center justify-center gap-1 mt-1">
@@ -221,7 +221,7 @@ function FollowingCard({
             <p className="text-slate-400 text-xs">Copied</p>
             <p className="text-white font-medium mt-1">{follow.totalCopied}</p>
           </div>
-          <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+          <div className="bg-slate-700/50 rounded-lg p-3 text-center sm:col-span-1 col-span-2">
             <p className="text-slate-400 text-xs">Profit</p>
             <p className={cn(
               'font-medium mt-1',
@@ -235,7 +235,7 @@ function FollowingCard({
 
       {/* Edit Panel */}
       {isEditing && (
-        <div className="p-4 border-t border-slate-700 space-y-4">
+        <div className="p-4 border-t border-slate-700 space-y-4 bg-slate-900/40">
           <h4 className="text-sm font-medium text-slate-300">Edit Settings</h4>
 
           {/* Copy Mode */}
@@ -285,7 +285,7 @@ function FollowingCard({
           </div>
 
           {/* Amount & Max Trades */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-slate-400 mb-1">Amount per trade</label>
               <div className="relative">
@@ -313,16 +313,19 @@ function FollowingCard({
             </div>
           </div>
 
-          <div className="flex justify-end gap-2">
+          <p className="text-slate-400 text-xs sm:text-sm">
+            Auto mirrors trades instantly; Manual lets you confirm each trade. Limits apply per leader.
+          </p>
+          <div className="flex flex-col sm:flex-row sm:justify-end gap-2">
             <button
               onClick={onEdit}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition-colors"
+              className="w-full sm:w-auto px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg transition-colors"
+              className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg transition-colors"
             >
               Save Changes
             </button>

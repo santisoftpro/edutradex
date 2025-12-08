@@ -1,5 +1,6 @@
-import { prisma } from '../../config/database.js';
+import { query, queryOne, queryMany, transaction } from '../../config/db.js';
 import { logger } from '../../utils/logger.js';
+import { randomUUID } from 'crypto';
 
 interface BecomeLeaderInput {
   displayName: string;
@@ -77,7 +78,39 @@ interface FollowingInfo {
   totalCopied: number;
   totalProfit: number;
   createdAt: Date;
-  leader: LeaderProfile;
+  leader?: LeaderProfile;
+}
+
+interface LeaderRow {
+  id: string;
+  userId: string;
+  displayName: string;
+  description: string | null;
+  avatarUrl: string | null;
+  status: string;
+  totalTrades: number;
+  winningTrades: number;
+  totalProfit: number;
+  winRate: number;
+  maxFollowers: number;
+  isPublic: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface FollowerRow {
+  id: string;
+  followerId: string;
+  leaderId: string;
+  copyMode: string;
+  fixedAmount: number;
+  maxDailyTrades: number;
+  isActive: boolean;
+  totalCopied: number;
+  totalProfit: number;
+  tradesToday: number;
+  lastTradeDate: Date | null;
+  createdAt: Date;
 }
 
 class CopyTradingServiceError extends Error {
@@ -92,9 +125,10 @@ class CopyTradingServiceError extends Error {
 
 export class CopyTradingService {
   async becomeLeader(userId: string, data: BecomeLeaderInput): Promise<LeaderProfile> {
-    const existingProfile = await prisma.copyTradingLeader.findUnique({
-      where: { userId },
-    });
+    const existingProfile = await queryOne<LeaderRow>(
+      `SELECT * FROM "CopyTradingLeader" WHERE "userId" = $1`,
+      [userId]
+    );
 
     if (existingProfile) {
       throw new CopyTradingServiceError(
@@ -103,50 +137,65 @@ export class CopyTradingService {
       );
     }
 
-    const leader = await prisma.copyTradingLeader.create({
-      data: {
-        userId,
-        displayName: data.displayName,
-        description: data.description,
-        status: 'PENDING',
-      },
-      include: {
-        user: { select: { name: true } },
-        _count: { select: { followers: true } },
-      },
-    });
+    const id = randomUUID();
+    const now = new Date();
 
-    logger.info('New leader application submitted', { userId, leaderId: leader.id });
+    const leader = await queryOne<LeaderRow>(
+      `INSERT INTO "CopyTradingLeader" (
+        id, "userId", "displayName", description, status, "createdAt", "updatedAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *`,
+      [id, userId, data.displayName, data.description || null, 'PENDING', now, now]
+    );
+
+    const user = await queryOne<{ name: string }>(
+      `SELECT name FROM "User" WHERE id = $1`,
+      [userId]
+    );
+
+    const followerCount = await queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM "CopyTradingFollower" WHERE "leaderId" = $1`,
+      [id]
+    );
+
+    logger.info('New leader application submitted', { userId, leaderId: id });
 
     return {
-      id: leader.id,
-      userId: leader.userId,
-      displayName: leader.displayName,
-      description: leader.description,
-      avatarUrl: leader.avatarUrl,
-      status: leader.status,
-      totalTrades: leader.totalTrades,
-      winningTrades: leader.winningTrades,
-      totalProfit: leader.totalProfit,
-      winRate: leader.winRate,
-      maxFollowers: leader.maxFollowers,
-      isPublic: leader.isPublic,
-      followerCount: leader._count.followers,
-      createdAt: leader.createdAt,
-      user: leader.user,
+      id: leader!.id,
+      userId: leader!.userId,
+      displayName: leader!.displayName,
+      description: leader!.description,
+      avatarUrl: leader!.avatarUrl,
+      status: leader!.status,
+      totalTrades: leader!.totalTrades,
+      winningTrades: leader!.winningTrades,
+      totalProfit: Number(leader!.totalProfit),
+      winRate: Number(leader!.winRate),
+      maxFollowers: leader!.maxFollowers,
+      isPublic: leader!.isPublic,
+      followerCount: parseInt(followerCount?.count || '0', 10),
+      createdAt: leader!.createdAt,
+      user: user || undefined,
     };
   }
 
   async getMyLeaderProfile(userId: string): Promise<LeaderProfile | null> {
-    const leader = await prisma.copyTradingLeader.findUnique({
-      where: { userId },
-      include: {
-        user: { select: { name: true } },
-        _count: { select: { followers: true } },
-      },
-    });
+    const leader = await queryOne<LeaderRow>(
+      `SELECT * FROM "CopyTradingLeader" WHERE "userId" = $1`,
+      [userId]
+    );
 
     if (!leader) return null;
+
+    const user = await queryOne<{ name: string }>(
+      `SELECT name FROM "User" WHERE id = $1`,
+      [userId]
+    );
+
+    const followerCount = await queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM "CopyTradingFollower" WHERE "leaderId" = $1`,
+      [leader.id]
+    );
 
     return {
       id: leader.id,
@@ -157,13 +206,13 @@ export class CopyTradingService {
       status: leader.status,
       totalTrades: leader.totalTrades,
       winningTrades: leader.winningTrades,
-      totalProfit: leader.totalProfit,
-      winRate: leader.winRate,
+      totalProfit: Number(leader.totalProfit),
+      winRate: Number(leader.winRate),
       maxFollowers: leader.maxFollowers,
       isPublic: leader.isPublic,
-      followerCount: leader._count.followers,
+      followerCount: parseInt(followerCount?.count || '0', 10),
       createdAt: leader.createdAt,
-      user: leader.user,
+      user: user || undefined,
     };
   }
 
@@ -171,60 +220,91 @@ export class CopyTradingService {
     userId: string,
     data: { displayName?: string; description?: string; isPublic?: boolean }
   ): Promise<LeaderProfile> {
-    const leader = await prisma.copyTradingLeader.findUnique({
-      where: { userId },
-    });
+    const leader = await queryOne<LeaderRow>(
+      `SELECT * FROM "CopyTradingLeader" WHERE "userId" = $1`,
+      [userId]
+    );
 
     if (!leader) {
       throw new CopyTradingServiceError('Leader profile not found', 404);
     }
 
-    const updated = await prisma.copyTradingLeader.update({
-      where: { userId },
-      data: {
-        displayName: data.displayName,
-        description: data.description,
-        isPublic: data.isPublic,
-      },
-      include: {
-        user: { select: { name: true } },
-        _count: { select: { followers: true } },
-      },
-    });
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (data.displayName !== undefined) {
+      updates.push(`"displayName" = $${paramIndex++}`);
+      params.push(data.displayName);
+    }
+    if (data.description !== undefined) {
+      updates.push(`description = $${paramIndex++}`);
+      params.push(data.description);
+    }
+    if (data.isPublic !== undefined) {
+      updates.push(`"isPublic" = $${paramIndex++}`);
+      params.push(data.isPublic);
+    }
+
+    updates.push(`"updatedAt" = $${paramIndex++}`);
+    params.push(new Date());
+    params.push(userId);
+
+    const updated = await queryOne<LeaderRow>(
+      `UPDATE "CopyTradingLeader" SET ${updates.join(', ')} WHERE "userId" = $${paramIndex} RETURNING *`,
+      params
+    );
+
+    const user = await queryOne<{ name: string }>(
+      `SELECT name FROM "User" WHERE id = $1`,
+      [userId]
+    );
+
+    const followerCount = await queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM "CopyTradingFollower" WHERE "leaderId" = $1`,
+      [updated!.id]
+    );
 
     return {
-      id: updated.id,
-      userId: updated.userId,
-      displayName: updated.displayName,
-      description: updated.description,
-      avatarUrl: updated.avatarUrl,
-      status: updated.status,
-      totalTrades: updated.totalTrades,
-      winningTrades: updated.winningTrades,
-      totalProfit: updated.totalProfit,
-      winRate: updated.winRate,
-      maxFollowers: updated.maxFollowers,
-      isPublic: updated.isPublic,
-      followerCount: updated._count.followers,
-      createdAt: updated.createdAt,
-      user: updated.user,
+      id: updated!.id,
+      userId: updated!.userId,
+      displayName: updated!.displayName,
+      description: updated!.description,
+      avatarUrl: updated!.avatarUrl,
+      status: updated!.status,
+      totalTrades: updated!.totalTrades,
+      winningTrades: updated!.winningTrades,
+      totalProfit: Number(updated!.totalProfit),
+      winRate: Number(updated!.winRate),
+      maxFollowers: updated!.maxFollowers,
+      isPublic: updated!.isPublic,
+      followerCount: parseInt(followerCount?.count || '0', 10),
+      createdAt: updated!.createdAt,
+      user: user || undefined,
     };
   }
 
   async getLeaderProfile(leaderId: string): Promise<LeaderProfile | null> {
-    const leader = await prisma.copyTradingLeader.findUnique({
-      where: { id: leaderId },
-      include: {
-        user: { select: { name: true } },
-        _count: { select: { followers: true } },
-      },
-    });
+    const leader = await queryOne<LeaderRow>(
+      `SELECT * FROM "CopyTradingLeader" WHERE id = $1`,
+      [leaderId]
+    );
 
     if (!leader) return null;
 
     if (leader.status !== 'APPROVED' && !leader.isPublic) {
       return null;
     }
+
+    const user = await queryOne<{ name: string }>(
+      `SELECT name FROM "User" WHERE id = $1`,
+      [leader.userId]
+    );
+
+    const followerCount = await queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM "CopyTradingFollower" WHERE "leaderId" = $1`,
+      [leaderId]
+    );
 
     return {
       id: leader.id,
@@ -235,13 +315,13 @@ export class CopyTradingService {
       status: leader.status,
       totalTrades: leader.totalTrades,
       winningTrades: leader.winningTrades,
-      totalProfit: leader.totalProfit,
-      winRate: leader.winRate,
+      totalProfit: Number(leader.totalProfit),
+      winRate: Number(leader.winRate),
       maxFollowers: leader.maxFollowers,
       isPublic: leader.isPublic,
-      followerCount: leader._count.followers,
+      followerCount: parseInt(followerCount?.count || '0', 10),
       createdAt: leader.createdAt,
-      user: leader.user,
+      user: user || undefined,
     };
   }
 
@@ -258,54 +338,58 @@ export class CopyTradingService {
       userId,
     } = options;
 
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
 
-    const where: {
-      status: string;
-      isPublic: boolean;
-      winRate?: { gte: number };
-      totalTrades?: { gte: number };
-    } = {
-      status: 'APPROVED',
-      isPublic: true,
-    };
+    let whereClause = `status = 'APPROVED' AND "isPublic" = true`;
+    const params: any[] = [];
+    let paramIndex = 1;
 
     if (minWinRate !== undefined) {
-      where.winRate = { gte: minWinRate };
+      whereClause += ` AND "winRate" >= $${paramIndex++}`;
+      params.push(minWinRate);
     }
 
     if (minTrades !== undefined) {
-      where.totalTrades = { gte: minTrades };
+      whereClause += ` AND "totalTrades" >= $${paramIndex++}`;
+      params.push(minTrades);
     }
 
-    const orderBy: Record<string, 'asc' | 'desc'> = {};
-    if (sortBy === 'followers') {
-      // Will be sorted after fetching
-    } else {
-      orderBy[sortBy] = sortOrder;
+    const countParams = [...params];
+
+    let orderByClause = '';
+    if (sortBy !== 'followers') {
+      const sortColumn = sortBy === 'winRate' ? '"winRate"' :
+                        sortBy === 'totalTrades' ? '"totalTrades"' : '"totalProfit"';
+      orderByClause = `ORDER BY ${sortColumn} ${sortOrder.toUpperCase()}`;
     }
 
-    const [leaders, total] = await Promise.all([
-      prisma.copyTradingLeader.findMany({
-        where,
-        orderBy: sortBy !== 'followers' ? orderBy : undefined,
-        skip,
-        take: limit,
-        include: {
-          user: { select: { name: true } },
-          _count: { select: { followers: true } },
-        },
-      }),
-      prisma.copyTradingLeader.count({ where }),
+    params.push(limit, offset);
+
+    const [leaders, countResult] = await Promise.all([
+      queryMany<LeaderRow & { userName: string; followerCount: string }>(
+        `SELECT l.*, u.name as "userName",
+         (SELECT COUNT(*) FROM "CopyTradingFollower" WHERE "leaderId" = l.id) as "followerCount"
+         FROM "CopyTradingLeader" l
+         JOIN "User" u ON u.id = l."userId"
+         WHERE ${whereClause}
+         ${orderByClause}
+         LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+        params
+      ),
+      queryOne<{ count: string }>(
+        `SELECT COUNT(*) as count FROM "CopyTradingLeader" WHERE ${whereClause}`,
+        countParams
+      ),
     ]);
 
-    // Get user's following list if userId is provided
+    const total = parseInt(countResult?.count || '0', 10);
+
     let followingLeaderIds: Set<string> = new Set();
     if (userId) {
-      const userFollowing = await prisma.copyTradingFollower.findMany({
-        where: { followerId: userId },
-        select: { leaderId: true },
-      });
+      const userFollowing = await queryMany<{ leaderId: string }>(
+        `SELECT "leaderId" FROM "CopyTradingFollower" WHERE "followerId" = $1`,
+        [userId]
+      );
       followingLeaderIds = new Set(userFollowing.map((f) => f.leaderId));
     }
 
@@ -318,13 +402,13 @@ export class CopyTradingService {
       status: leader.status,
       totalTrades: leader.totalTrades,
       winningTrades: leader.winningTrades,
-      totalProfit: leader.totalProfit,
-      winRate: leader.winRate,
+      totalProfit: Number(leader.totalProfit),
+      winRate: Number(leader.winRate),
       maxFollowers: leader.maxFollowers,
       isPublic: leader.isPublic,
-      followerCount: leader._count.followers,
+      followerCount: parseInt(leader.followerCount || '0', 10),
       createdAt: leader.createdAt,
-      user: leader.user,
+      user: { name: leader.userName },
       isFollowing: followingLeaderIds.has(leader.id),
     }));
 
@@ -344,13 +428,10 @@ export class CopyTradingService {
     leaderId: string,
     settings: FollowLeaderInput
   ): Promise<FollowingInfo> {
-    const leader = await prisma.copyTradingLeader.findUnique({
-      where: { id: leaderId },
-      include: {
-        user: { select: { name: true } },
-        _count: { select: { followers: true } },
-      },
-    });
+    const leader = await queryOne<LeaderRow>(
+      `SELECT * FROM "CopyTradingLeader" WHERE id = $1`,
+      [leaderId]
+    );
 
     if (!leader) {
       throw new CopyTradingServiceError('Leader not found', 404);
@@ -364,106 +445,107 @@ export class CopyTradingService {
       throw new CopyTradingServiceError('You cannot follow yourself', 400);
     }
 
-    if (leader._count.followers >= leader.maxFollowers) {
+    const followerCount = await queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM "CopyTradingFollower" WHERE "leaderId" = $1`,
+      [leaderId]
+    );
+
+    if (parseInt(followerCount?.count || '0', 10) >= leader.maxFollowers) {
       throw new CopyTradingServiceError('This leader has reached maximum followers', 400);
     }
 
-    const existingFollow = await prisma.copyTradingFollower.findUnique({
-      where: {
-        followerId_leaderId: {
-          followerId,
-          leaderId,
-        },
-      },
-    });
+    const existingFollow = await queryOne<FollowerRow>(
+      `SELECT * FROM "CopyTradingFollower" WHERE "followerId" = $1 AND "leaderId" = $2`,
+      [followerId, leaderId]
+    );
 
     if (existingFollow) {
       throw new CopyTradingServiceError('You are already following this leader', 409);
     }
 
-    const follower = await prisma.user.findUnique({
-      where: { id: followerId },
-      select: { demoBalance: true },
-    });
+    const followerUser = await queryOne<{ demoBalance: number }>(
+      `SELECT "demoBalance" FROM "User" WHERE id = $1`,
+      [followerId]
+    );
 
-    if (!follower) {
+    if (!followerUser) {
       throw new CopyTradingServiceError('User not found', 404);
     }
 
-    if (settings.fixedAmount > follower.demoBalance) {
+    if (settings.fixedAmount > followerUser.demoBalance) {
       throw new CopyTradingServiceError(
         'Fixed amount cannot be greater than your current balance',
         400
       );
     }
 
-    const follow = await prisma.copyTradingFollower.create({
-      data: {
-        followerId,
-        leaderId,
-        copyMode: settings.copyMode,
-        fixedAmount: settings.fixedAmount,
-        maxDailyTrades: settings.maxDailyTrades ?? 50,
-      },
-      include: {
-        leader: {
-          include: {
-            user: { select: { name: true } },
-            _count: { select: { followers: true } },
-          },
-        },
-      },
-    });
+    const id = randomUUID();
+    const now = new Date();
+
+    const follow = await queryOne<FollowerRow>(
+      `INSERT INTO "CopyTradingFollower" (
+        id, "followerId", "leaderId", "copyMode", "fixedAmount", "maxDailyTrades", "createdAt", "updatedAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *`,
+      [id, followerId, leaderId, settings.copyMode, settings.fixedAmount, settings.maxDailyTrades ?? 50, now, now]
+    );
+
+    const leaderUser = await queryOne<{ name: string }>(
+      `SELECT name FROM "User" WHERE id = $1`,
+      [leader.userId]
+    );
+
+    const newFollowerCount = await queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM "CopyTradingFollower" WHERE "leaderId" = $1`,
+      [leaderId]
+    );
 
     logger.info('User followed leader', { followerId, leaderId });
 
     return {
-      id: follow.id,
-      leaderId: follow.leaderId,
-      copyMode: follow.copyMode,
-      fixedAmount: follow.fixedAmount,
-      maxDailyTrades: follow.maxDailyTrades,
-      isActive: follow.isActive,
-      totalCopied: follow.totalCopied,
-      totalProfit: follow.totalProfit,
-      createdAt: follow.createdAt,
+      id: follow!.id,
+      leaderId: follow!.leaderId,
+      copyMode: follow!.copyMode,
+      fixedAmount: Number(follow!.fixedAmount),
+      maxDailyTrades: follow!.maxDailyTrades,
+      isActive: follow!.isActive,
+      totalCopied: follow!.totalCopied,
+      totalProfit: Number(follow!.totalProfit),
+      createdAt: follow!.createdAt,
       leader: {
-        id: follow.leader.id,
-        userId: follow.leader.userId,
-        displayName: follow.leader.displayName,
-        description: follow.leader.description,
-        avatarUrl: follow.leader.avatarUrl,
-        status: follow.leader.status,
-        totalTrades: follow.leader.totalTrades,
-        winningTrades: follow.leader.winningTrades,
-        totalProfit: follow.leader.totalProfit,
-        winRate: follow.leader.winRate,
-        maxFollowers: follow.leader.maxFollowers,
-        isPublic: follow.leader.isPublic,
-        followerCount: follow.leader._count.followers,
-        createdAt: follow.leader.createdAt,
-        user: follow.leader.user,
+        id: leader.id,
+        userId: leader.userId,
+        displayName: leader.displayName,
+        description: leader.description,
+        avatarUrl: leader.avatarUrl,
+        status: leader.status,
+        totalTrades: leader.totalTrades,
+        winningTrades: leader.winningTrades,
+        totalProfit: Number(leader.totalProfit),
+        winRate: Number(leader.winRate),
+        maxFollowers: leader.maxFollowers,
+        isPublic: leader.isPublic,
+        followerCount: parseInt(newFollowerCount?.count || '0', 10),
+        createdAt: leader.createdAt,
+        user: leaderUser || undefined,
       },
     };
   }
 
   async unfollowLeader(followerId: string, leaderId: string): Promise<void> {
-    const follow = await prisma.copyTradingFollower.findUnique({
-      where: {
-        followerId_leaderId: {
-          followerId,
-          leaderId,
-        },
-      },
-    });
+    const follow = await queryOne<FollowerRow>(
+      `SELECT * FROM "CopyTradingFollower" WHERE "followerId" = $1 AND "leaderId" = $2`,
+      [followerId, leaderId]
+    );
 
     if (!follow) {
       throw new CopyTradingServiceError('You are not following this leader', 404);
     }
 
-    await prisma.copyTradingFollower.delete({
-      where: { id: follow.id },
-    });
+    await query(
+      `DELETE FROM "CopyTradingFollower" WHERE id = $1`,
+      [follow.id]
+    );
 
     logger.info('User unfollowed leader', { followerId, leaderId });
   }
@@ -473,24 +555,20 @@ export class CopyTradingService {
     leaderId: string,
     settings: UpdateFollowSettingsInput
   ): Promise<FollowingInfo> {
-    const follow = await prisma.copyTradingFollower.findUnique({
-      where: {
-        followerId_leaderId: {
-          followerId,
-          leaderId,
-        },
-      },
-    });
+    const follow = await queryOne<FollowerRow>(
+      `SELECT * FROM "CopyTradingFollower" WHERE "followerId" = $1 AND "leaderId" = $2`,
+      [followerId, leaderId]
+    );
 
     if (!follow) {
       throw new CopyTradingServiceError('You are not following this leader', 404);
     }
 
     if (settings.fixedAmount !== undefined) {
-      const user = await prisma.user.findUnique({
-        where: { id: followerId },
-        select: { demoBalance: true },
-      });
+      const user = await queryOne<{ demoBalance: number }>(
+        `SELECT "demoBalance" FROM "User" WHERE id = $1`,
+        [followerId]
+      );
 
       if (user && settings.fixedAmount > user.demoBalance) {
         throw new CopyTradingServiceError(
@@ -500,50 +578,79 @@ export class CopyTradingService {
       }
     }
 
-    const updated = await prisma.copyTradingFollower.update({
-      where: { id: follow.id },
-      data: {
-        copyMode: settings.copyMode,
-        fixedAmount: settings.fixedAmount,
-        maxDailyTrades: settings.maxDailyTrades,
-        isActive: settings.isActive,
-      },
-      include: {
-        leader: {
-          include: {
-            user: { select: { name: true } },
-            _count: { select: { followers: true } },
-          },
-        },
-      },
-    });
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (settings.copyMode !== undefined) {
+      updates.push(`"copyMode" = $${paramIndex++}`);
+      params.push(settings.copyMode);
+    }
+    if (settings.fixedAmount !== undefined) {
+      updates.push(`"fixedAmount" = $${paramIndex++}`);
+      params.push(settings.fixedAmount);
+    }
+    if (settings.maxDailyTrades !== undefined) {
+      updates.push(`"maxDailyTrades" = $${paramIndex++}`);
+      params.push(settings.maxDailyTrades);
+    }
+    if (settings.isActive !== undefined) {
+      updates.push(`"isActive" = $${paramIndex++}`);
+      params.push(settings.isActive);
+    }
+
+    // Always update the updatedAt timestamp
+    updates.push(`"updatedAt" = $${paramIndex++}`);
+    params.push(new Date());
+
+    params.push(follow.id);
+
+    const updated = await queryOne<FollowerRow>(
+      `UPDATE "CopyTradingFollower" SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      params
+    );
+
+    const leader = await queryOne<LeaderRow>(
+      `SELECT * FROM "CopyTradingLeader" WHERE id = $1`,
+      [leaderId]
+    );
+
+    const leaderUser = await queryOne<{ name: string }>(
+      `SELECT name FROM "User" WHERE id = $1`,
+      [leader!.userId]
+    );
+
+    const followerCount = await queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM "CopyTradingFollower" WHERE "leaderId" = $1`,
+      [leaderId]
+    );
 
     return {
-      id: updated.id,
-      leaderId: updated.leaderId,
-      copyMode: updated.copyMode,
-      fixedAmount: updated.fixedAmount,
-      maxDailyTrades: updated.maxDailyTrades,
-      isActive: updated.isActive,
-      totalCopied: updated.totalCopied,
-      totalProfit: updated.totalProfit,
-      createdAt: updated.createdAt,
+      id: updated!.id,
+      leaderId: updated!.leaderId,
+      copyMode: updated!.copyMode,
+      fixedAmount: Number(updated!.fixedAmount),
+      maxDailyTrades: updated!.maxDailyTrades,
+      isActive: updated!.isActive,
+      totalCopied: updated!.totalCopied,
+      totalProfit: Number(updated!.totalProfit),
+      createdAt: updated!.createdAt,
       leader: {
-        id: updated.leader.id,
-        userId: updated.leader.userId,
-        displayName: updated.leader.displayName,
-        description: updated.leader.description,
-        avatarUrl: updated.leader.avatarUrl,
-        status: updated.leader.status,
-        totalTrades: updated.leader.totalTrades,
-        winningTrades: updated.leader.winningTrades,
-        totalProfit: updated.leader.totalProfit,
-        winRate: updated.leader.winRate,
-        maxFollowers: updated.leader.maxFollowers,
-        isPublic: updated.leader.isPublic,
-        followerCount: updated.leader._count.followers,
-        createdAt: updated.leader.createdAt,
-        user: updated.leader.user,
+        id: leader!.id,
+        userId: leader!.userId,
+        displayName: leader!.displayName,
+        description: leader!.description,
+        avatarUrl: leader!.avatarUrl,
+        status: leader!.status,
+        totalTrades: leader!.totalTrades,
+        winningTrades: leader!.winningTrades,
+        totalProfit: Number(leader!.totalProfit),
+        winRate: Number(leader!.winRate),
+        maxFollowers: leader!.maxFollowers,
+        isPublic: leader!.isPublic,
+        followerCount: parseInt(followerCount?.count || '0', 10),
+        createdAt: leader!.createdAt,
+        user: leaderUser || undefined,
       },
     };
   }
@@ -551,116 +658,142 @@ export class CopyTradingService {
   async getMyFollowing(
     followerId: string
   ): Promise<{ following: FollowingInfo[]; total: number }> {
-    const [following, total] = await Promise.all([
-      prisma.copyTradingFollower.findMany({
-        where: { followerId },
-        include: {
-          leader: {
-            include: {
-              user: { select: { name: true } },
-              _count: { select: { followers: true } },
-            },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.copyTradingFollower.count({ where: { followerId } }),
+    const [following, countResult] = await Promise.all([
+      queryMany<FollowerRow>(
+        `SELECT * FROM "CopyTradingFollower" WHERE "followerId" = $1 ORDER BY "createdAt" DESC`,
+        [followerId]
+      ),
+      queryOne<{ count: string }>(
+        `SELECT COUNT(*) as count FROM "CopyTradingFollower" WHERE "followerId" = $1`,
+        [followerId]
+      ),
     ]);
 
-    return {
-      following: following.map((f) => ({
+    const total = parseInt(countResult?.count || '0', 10);
+    if (following.length === 0) {
+      return { following: [], total };
+    }
+
+    const leaderIds = following.map(f => f.leaderId);
+
+    // Fetch leader info in bulk
+    const leaders = await queryMany<LeaderRow & { userName: string }>(
+      `SELECT l.*, u.name as "userName"
+       FROM "CopyTradingLeader" l
+       JOIN "User" u ON u.id = l."userId"
+       WHERE l.id = ANY($1)`,
+      [leaderIds]
+    );
+    const leaderMap = new Map(leaders.map(l => [l.id, l]));
+
+    // Fetch follower counts in bulk
+    const followerCounts = await queryMany<{ leaderId: string; count: string }>(
+      `SELECT "leaderId", COUNT(*)::text as count FROM "CopyTradingFollower"
+       WHERE "leaderId" = ANY($1)
+       GROUP BY "leaderId"`,
+      [leaderIds]
+    );
+    const followerCountMap = new Map(followerCounts.map(c => [c.leaderId, c.count]));
+
+    const result: FollowingInfo[] = following.map((f) => {
+      const leader = leaderMap.get(f.leaderId);
+      return {
         id: f.id,
         leaderId: f.leaderId,
         copyMode: f.copyMode,
-        fixedAmount: f.fixedAmount,
+        fixedAmount: Number(f.fixedAmount),
         maxDailyTrades: f.maxDailyTrades,
         isActive: f.isActive,
         totalCopied: f.totalCopied,
-        totalProfit: f.totalProfit,
+        totalProfit: Number(f.totalProfit),
         createdAt: f.createdAt,
-        leader: {
-          id: f.leader.id,
-          userId: f.leader.userId,
-          displayName: f.leader.displayName,
-          description: f.leader.description,
-          avatarUrl: f.leader.avatarUrl,
-          status: f.leader.status,
-          totalTrades: f.leader.totalTrades,
-          winningTrades: f.leader.winningTrades,
-          totalProfit: f.leader.totalProfit,
-          winRate: f.leader.winRate,
-          maxFollowers: f.leader.maxFollowers,
-          isPublic: f.leader.isPublic,
-          followerCount: f.leader._count.followers,
-          createdAt: f.leader.createdAt,
-          user: f.leader.user,
-        },
-      })),
-      total,
-    };
+        leader: leader
+          ? {
+              id: leader.id,
+              userId: leader.userId,
+              displayName: leader.displayName,
+              description: leader.description,
+              avatarUrl: leader.avatarUrl,
+              status: leader.status,
+              totalTrades: leader.totalTrades,
+              winningTrades: leader.winningTrades,
+              totalProfit: Number(leader.totalProfit),
+              winRate: Number(leader.winRate),
+              maxFollowers: leader.maxFollowers,
+              isPublic: leader.isPublic,
+              followerCount: parseInt(followerCountMap.get(leader.id) || '0', 10),
+              createdAt: leader.createdAt,
+              user: { name: leader.userName },
+            }
+          : undefined,
+      };
+    });
+
+    return { following: result, total };
   }
 
   async getMyFollowers(userId: string): Promise<{ followers: FollowerInfo[]; total: number }> {
-    const leader = await prisma.copyTradingLeader.findUnique({
-      where: { userId },
-    });
+    const leader = await queryOne<LeaderRow>(
+      `SELECT * FROM "CopyTradingLeader" WHERE "userId" = $1`,
+      [userId]
+    );
 
     if (!leader) {
       throw new CopyTradingServiceError('You are not a leader', 404);
     }
 
-    const [followers, total] = await Promise.all([
-      prisma.copyTradingFollower.findMany({
-        where: { leaderId: leader.id },
-        include: {
-          follower: {
-            select: { id: true, name: true, email: true },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.copyTradingFollower.count({ where: { leaderId: leader.id } }),
+    const [followers, countResult] = await Promise.all([
+      queryMany<FollowerRow & { followerName: string; followerEmail: string }>(
+        `SELECT f.*, u.name as "followerName", u.email as "followerEmail"
+         FROM "CopyTradingFollower" f
+         JOIN "User" u ON u.id = f."followerId"
+         WHERE f."leaderId" = $1
+         ORDER BY f."createdAt" DESC`,
+        [leader.id]
+      ),
+      queryOne<{ count: string }>(
+        `SELECT COUNT(*) as count FROM "CopyTradingFollower" WHERE "leaderId" = $1`,
+        [leader.id]
+      ),
     ]);
+
+    const total = parseInt(countResult?.count || '0', 10);
 
     return {
       followers: followers.map((f) => ({
         id: f.id,
         followerId: f.followerId,
         copyMode: f.copyMode,
-        fixedAmount: f.fixedAmount,
+        fixedAmount: Number(f.fixedAmount),
         maxDailyTrades: f.maxDailyTrades,
         isActive: f.isActive,
         totalCopied: f.totalCopied,
-        totalProfit: f.totalProfit,
+        totalProfit: Number(f.totalProfit),
         createdAt: f.createdAt,
-        follower: f.follower,
+        follower: {
+          id: f.followerId,
+          name: f.followerName,
+          email: f.followerEmail,
+        },
       })),
       total,
     };
   }
 
   async isFollowing(followerId: string, leaderId: string): Promise<boolean> {
-    const follow = await prisma.copyTradingFollower.findUnique({
-      where: {
-        followerId_leaderId: {
-          followerId,
-          leaderId,
-        },
-      },
-    });
+    const follow = await queryOne<FollowerRow>(
+      `SELECT * FROM "CopyTradingFollower" WHERE "followerId" = $1 AND "leaderId" = $2`,
+      [followerId, leaderId]
+    );
 
     return !!follow;
   }
 
   async getFollowRelation(followerId: string, leaderId: string) {
-    return prisma.copyTradingFollower.findUnique({
-      where: {
-        followerId_leaderId: {
-          followerId,
-          leaderId,
-        },
-      },
-    });
+    return queryOne<FollowerRow>(
+      `SELECT * FROM "CopyTradingFollower" WHERE "followerId" = $1 AND "leaderId" = $2`,
+      [followerId, leaderId]
+    );
   }
 }
 

@@ -9,6 +9,15 @@ interface FinnhubTick {
   volume: number;
 }
 
+interface FinnhubCandle {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+}
+
 type PriceUpdateCallback = (tick: FinnhubTick) => void;
 
 // US Stocks supported
@@ -25,6 +34,47 @@ const INDEX_SYMBOLS: Record<string, string> = {
   'US500': 'SPY',    // S&P 500 ETF
   'US100': 'QQQ',    // NASDAQ 100 ETF
   'US30': 'DIA',     // Dow Jones ETF
+};
+
+// Forex symbol mapping: Our symbols -> Finnhub/OANDA symbols
+const FOREX_SYMBOL_MAP: Record<string, string> = {
+  // Major pairs
+  'EUR/USD': 'OANDA:EUR_USD',
+  'GBP/USD': 'OANDA:GBP_USD',
+  'USD/JPY': 'OANDA:USD_JPY',
+  'AUD/USD': 'OANDA:AUD_USD',
+  'USD/CAD': 'OANDA:USD_CAD',
+  'NZD/USD': 'OANDA:NZD_USD',
+  'USD/CHF': 'OANDA:USD_CHF',
+
+  // EUR crosses
+  'EUR/GBP': 'OANDA:EUR_GBP',
+  'EUR/JPY': 'OANDA:EUR_JPY',
+  'EUR/AUD': 'OANDA:EUR_AUD',
+  'EUR/CAD': 'OANDA:EUR_CAD',
+  'EUR/CHF': 'OANDA:EUR_CHF',
+  'EUR/NZD': 'OANDA:EUR_NZD',
+
+  // GBP crosses
+  'GBP/JPY': 'OANDA:GBP_JPY',
+  'GBP/AUD': 'OANDA:GBP_AUD',
+  'GBP/CAD': 'OANDA:GBP_CAD',
+  'GBP/CHF': 'OANDA:GBP_CHF',
+  'GBP/NZD': 'OANDA:GBP_NZD',
+
+  // JPY crosses
+  'AUD/JPY': 'OANDA:AUD_JPY',
+  'CAD/JPY': 'OANDA:CAD_JPY',
+  'CHF/JPY': 'OANDA:CHF_JPY',
+  'NZD/JPY': 'OANDA:NZD_JPY',
+
+  // Other crosses
+  'AUD/CAD': 'OANDA:AUD_CAD',
+  'AUD/CHF': 'OANDA:AUD_CHF',
+  'AUD/NZD': 'OANDA:AUD_NZD',
+  'CAD/CHF': 'OANDA:CAD_CHF',
+  'NZD/CAD': 'OANDA:NZD_CAD',
+  'NZD/CHF': 'OANDA:NZD_CHF',
 };
 
 class FinnhubService {
@@ -234,6 +284,133 @@ class FinnhubService {
     this.callbacks.clear();
     this.isAvailable = false;
   }
+
+  /**
+   * Get forex symbol in Finnhub/OANDA format
+   */
+  public getForexSymbol(ourSymbol: string): string | null {
+    return FOREX_SYMBOL_MAP[ourSymbol] || null;
+  }
+
+  /**
+   * Check if a symbol is a supported forex pair
+   */
+  public isForexSymbol(symbol: string): boolean {
+    return symbol in FOREX_SYMBOL_MAP;
+  }
+
+  /**
+   * Convert resolution in seconds to Finnhub resolution string
+   */
+  public static resolutionToInterval(resolutionSeconds: number): string {
+    if (resolutionSeconds <= 60) return '1';
+    if (resolutionSeconds <= 300) return '5';
+    if (resolutionSeconds <= 900) return '15';
+    if (resolutionSeconds <= 1800) return '30';
+    if (resolutionSeconds <= 3600) return '60';
+    if (resolutionSeconds <= 86400) return 'D';
+    if (resolutionSeconds <= 604800) return 'W';
+    return 'M';
+  }
+
+  /**
+   * Fetch historical forex candles from Finnhub REST API
+   * @param symbol Our symbol format (e.g., 'EUR/USD')
+   * @param resolution Resolution string (1, 5, 15, 30, 60, D, W, M)
+   * @param count Number of candles to fetch
+   */
+  public async getForexCandles(
+    symbol: string,
+    resolution: string = '60',
+    count: number = 500
+  ): Promise<FinnhubCandle[]> {
+    if (!this.apiKey) {
+      logger.warn('[Finnhub] No API key - cannot fetch forex candles');
+      return [];
+    }
+
+    const finnhubSymbol = FOREX_SYMBOL_MAP[symbol];
+    if (!finnhubSymbol) {
+      logger.warn(`[Finnhub] Symbol ${symbol} not found in forex map`);
+      return [];
+    }
+
+    // Calculate time range
+    const now = Math.floor(Date.now() / 1000);
+    const resolutionSeconds = this.getResolutionSeconds(resolution);
+    // Add extra buffer for weekends and holidays
+    const bufferMultiplier = resolution === 'D' ? 2 : resolution === 'W' ? 3 : 1.5;
+    const from = now - Math.floor(count * resolutionSeconds * bufferMultiplier);
+
+    const url = `https://finnhub.io/api/v1/forex/candle?symbol=${encodeURIComponent(finnhubSymbol)}&resolution=${resolution}&from=${from}&to=${now}&token=${this.apiKey}`;
+
+    try {
+      logger.info(`[Finnhub] Fetching forex candles for ${symbol} (${finnhubSymbol}), resolution=${resolution}, count=${count}`);
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        logger.error(`[Finnhub] API error: ${response.status} ${response.statusText}`);
+        return [];
+      }
+
+      const data = await response.json() as {
+        s: string;
+        t?: number[];
+        o?: number[];
+        h?: number[];
+        l?: number[];
+        c?: number[];
+        v?: number[];
+      };
+
+      if (data.s !== 'ok' || !data.t || !Array.isArray(data.t)) {
+        logger.warn(`[Finnhub] No data for ${symbol}: status=${data.s}`);
+        return [];
+      }
+
+      // Convert Finnhub response to our candle format
+      const candles: FinnhubCandle[] = [];
+      for (let i = 0; i < data.t.length; i++) {
+        candles.push({
+          time: data.t[i],
+          open: data.o?.[i] ?? 0,
+          high: data.h?.[i] ?? 0,
+          low: data.l?.[i] ?? 0,
+          close: data.c?.[i] ?? 0,
+          volume: data.v?.[i],
+        });
+      }
+
+      // Sort by time and limit to requested count
+      candles.sort((a, b) => a.time - b.time);
+      const result = candles.length > count ? candles.slice(-count) : candles;
+
+      logger.info(`[Finnhub] Fetched ${result.length} forex candles for ${symbol}`);
+      return result;
+    } catch (error) {
+      logger.error(`[Finnhub] Failed to fetch forex candles for ${symbol}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Convert resolution string to seconds
+   */
+  private getResolutionSeconds(resolution: string): number {
+    switch (resolution) {
+      case '1': return 60;
+      case '5': return 300;
+      case '15': return 900;
+      case '30': return 1800;
+      case '60': return 3600;
+      case 'D': return 86400;
+      case 'W': return 604800;
+      case 'M': return 2592000;
+      default: return 3600;
+    }
+  }
 }
 
 export const finnhubService = new FinnhubService();
+export { FinnhubService, FinnhubCandle };

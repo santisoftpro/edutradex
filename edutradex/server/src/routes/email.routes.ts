@@ -1,13 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { emailService } from '../services/email/email.service.js';
-import { prisma } from '../config/database.js';
+import { queryOne, queryMany } from '../config/db.js';
 import { authMiddleware, adminMiddleware } from '../middleware/auth.middleware.js';
 import { logger } from '../utils/logger.js';
 
 const router = Router();
 
-// Validation schemas
 const sendMessageSchema = z.object({
   userId: z.string().uuid().optional(),
   subject: z.string().min(1).max(200),
@@ -20,7 +19,17 @@ const verifyCodeSchema = z.object({
   code: z.string().length(6),
 });
 
-// Admin: Send message to specific user
+interface AdminMessageRow {
+  id: string;
+  senderId: string;
+  recipientId: string | null;
+  subject: string;
+  content: string;
+  type: string;
+  sentViaEmail: boolean;
+  createdAt: Date;
+}
+
 router.post(
   '/admin/send-message',
   authMiddleware,
@@ -31,7 +40,6 @@ router.post(
       const adminId = (req as any).user.id;
 
       if (body.sendToAll) {
-        // Send to all users
         const result = await emailService.sendBulkAdminMessage(
           body.subject,
           body.content,
@@ -55,11 +63,10 @@ router.post(
         });
       }
 
-      // Send to specific user
-      const user = await prisma.user.findUnique({
-        where: { id: body.userId },
-        select: { id: true, email: true, name: true },
-      });
+      const user = await queryOne<{ id: string; email: string; name: string }>(
+        `SELECT id, email, name FROM "User" WHERE id = $1`,
+        [body.userId]
+      );
 
       if (!user) {
         res.status(404).json({
@@ -90,7 +97,6 @@ router.post(
   }
 );
 
-// Admin: Get sent messages history
 router.get(
   '/admin/messages',
   authMiddleware,
@@ -99,23 +105,28 @@ router.get(
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
-      const skip = (page - 1) * limit;
+      const offset = (page - 1) * limit;
 
-      const [messages, total] = await Promise.all([
-        prisma.adminMessage.findMany({
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit,
-        }),
-        prisma.adminMessage.count(),
+      const [messages, countResult] = await Promise.all([
+        queryMany<AdminMessageRow>(
+          `SELECT * FROM "AdminMessage" ORDER BY "createdAt" DESC LIMIT $1 OFFSET $2`,
+          [limit, offset]
+        ),
+        queryOne<{ count: string }>(
+          `SELECT COUNT(*) as count FROM "AdminMessage"`
+        ),
       ]);
 
-      // Get recipient info for messages
+      const total = parseInt(countResult?.count || '0', 10);
+
       const userIds = messages.map(m => m.recipientId).filter(Boolean) as string[];
-      const users = await prisma.user.findMany({
-        where: { id: { in: userIds } },
-        select: { id: true, name: true, email: true },
-      });
+      let users: { id: string; name: string; email: string }[] = [];
+      if (userIds.length > 0) {
+        users = await queryMany<{ id: string; name: string; email: string }>(
+          `SELECT id, name, email FROM "User" WHERE id = ANY($1)`,
+          [userIds]
+        );
+      }
 
       const usersMap = new Map(users.map(u => [u.id, u]));
 

@@ -2,9 +2,9 @@ import { logger } from '../../utils/logger.js';
 import { wsManager } from '../websocket/websocket.manager.js';
 import { derivService, DerivService, DerivCandle } from '../deriv/deriv.service.js';
 import { binanceService, BinanceService, BinanceKline } from '../binance/binance.service.js';
-import { finnhubService } from '../finnhub/finnhub.service.js';
+import { finnhubService, FinnhubService, FinnhubCandle } from '../finnhub/finnhub.service.js';
 import { config } from '../../config/env.js';
-import { prisma } from '../../config/database.js';
+import { queryMany } from '../../config/db.js';
 
 interface PriceTick {
   symbol: string;
@@ -225,9 +225,9 @@ class MarketService {
 
   private async loadSpreadConfigs(): Promise<void> {
     try {
-      const configs = await prisma.spreadConfig.findMany({
-        where: { isActive: true },
-      });
+      const configs = await queryMany<{ symbol: string; markupPips: number; isActive: boolean }>(
+        `SELECT symbol, "markupPips", "isActive" FROM "SpreadConfig" WHERE "isActive" = true`
+      );
 
       configs.forEach((configItem) => {
         this.spreadConfigs.set(configItem.symbol, {
@@ -243,7 +243,7 @@ class MarketService {
   }
 
   private initializeDerivIntegration(): void {
-    this.useDerivApi = config.deriv.useDerivApi && derivService.isServiceAvailable();
+    this.useDerivApi = config.deriv.useDerivApi;
 
     if (config.deriv.useDerivApi) {
       this.derivUnsubscribe = derivService.onPriceUpdate((tick) => {
@@ -676,7 +676,8 @@ class MarketService {
     resolution: number = 60,
     limit: number = 500
   ): Promise<OHLCBar[]> {
-    const cacheKey = `${symbol}-${resolution}-${limit}`;
+    const effectiveResolution = Math.max(resolution, 60); // Deriv minimum is 60s
+    const cacheKey = `${symbol}-${effectiveResolution}-${limit}`;
     const cached = this.historicalBarsCache.get(cacheKey);
 
     // Return cached data if still valid
@@ -689,7 +690,7 @@ class MarketService {
 
     // Fetch from Binance for crypto assets
     if (asset?.marketType === 'crypto') {
-      const interval = BinanceService.resolutionToInterval(resolution);
+      const interval = BinanceService.resolutionToInterval(effectiveResolution);
       const klines = await binanceService.getHistoricalKlines(symbol, interval, limit);
 
       if (klines.length > 0) {
@@ -704,30 +705,65 @@ class MarketService {
       }
     }
 
-    // Fetch from Deriv for forex assets
+    // Fetch from Finnhub first for forex assets (more reliable), then fall back to Deriv
     if (bars.length === 0 && asset?.marketType === 'forex') {
-      const granularity = DerivService.resolutionToGranularity(resolution);
-      const candles = await derivService.getHistoricalCandles(symbol, granularity, limit);
+      // Try Finnhub first (REST API - more reliable for historical data)
+      if (finnhubService.isForexSymbol(symbol)) {
+        const finnhubResolution = FinnhubService.resolutionToInterval(effectiveResolution);
+        logger.info(`[Market] Fetching forex candles from Finnhub for ${symbol}, resolution=${finnhubResolution}, requested=${limit}`);
 
-      if (candles.length > 0) {
-        bars = candles.map((candle) => ({
-          time: candle.time,
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
-        }));
+        const finnhubCandles = await finnhubService.getForexCandles(symbol, finnhubResolution, limit);
+
+        if (finnhubCandles.length > 0) {
+          bars = finnhubCandles.map((candle) => ({
+            time: candle.time,
+            open: candle.open,
+            high: candle.high,
+            low: candle.low,
+            close: candle.close,
+            volume: candle.volume,
+          }));
+          logger.info(`[Market] Received ${bars.length} candles from Finnhub for ${symbol}`);
+        } else {
+          logger.warn(`[Market] No candles from Finnhub for ${symbol}, trying Deriv...`);
+        }
+      }
+
+      // Fall back to Deriv if Finnhub didn't return data
+      if (bars.length === 0) {
+        const granularity = DerivService.resolutionToGranularity(effectiveResolution);
+        logger.info(`[Market] Fetching forex candles from Deriv for ${symbol}, granularity=${granularity}s, requested=${limit}`);
+
+        const derivCandles = await derivService.getHistoricalCandles(symbol, granularity, limit);
+
+        if (derivCandles.length > 0) {
+          bars = derivCandles.map((candle) => ({
+            time: candle.time,
+            open: candle.open,
+            high: candle.high,
+            low: candle.low,
+            close: candle.close,
+          }));
+          logger.info(`[Market] Received ${bars.length} candles from Deriv for ${symbol}`);
+        } else {
+          logger.warn(`[Market] No candles received from Deriv for ${symbol}`);
+        }
       }
     }
 
     // Fallback to in-memory history for other assets or if API fails
     if (bars.length === 0) {
-      bars = this.getHistoricalBars(symbol, resolution, limit);
+      bars = this.getHistoricalBars(symbol, effectiveResolution, limit);
     }
 
-    // Cache the result
-    if (bars.length > 0) {
+    // Cache the result - only cache if we got a reasonable amount of data
+    // Don't cache small results as they might be incomplete due to API issues
+    const minBarsForCache = Math.min(10, limit / 2);
+    if (bars.length >= minBarsForCache) {
       this.historicalBarsCache.set(cacheKey, { bars, timestamp: Date.now() });
+      logger.debug(`[Market] Cached ${bars.length} bars for ${symbol}_${resolution}`);
+    } else if (bars.length > 0) {
+      logger.warn(`[Market] Not caching ${bars.length} bars for ${symbol}_${resolution} (too few, min: ${minBarsForCache})`);
     }
 
     return bars;
@@ -801,6 +837,25 @@ class MarketService {
       }));
     }
     return [];
+  }
+
+  /**
+   * Clear the historical bars cache for a specific symbol or all symbols
+   */
+  clearHistoricalCache(symbol?: string): void {
+    if (symbol) {
+      // Clear cache for specific symbol (all resolutions)
+      for (const key of this.historicalBarsCache.keys()) {
+        if (key.startsWith(`${symbol}_`)) {
+          this.historicalBarsCache.delete(key);
+        }
+      }
+      logger.info(`[Market] Cleared historical cache for ${symbol}`);
+    } else {
+      // Clear entire cache
+      this.historicalBarsCache.clear();
+      logger.info('[Market] Cleared all historical bars cache');
+    }
   }
 }
 

@@ -52,106 +52,79 @@ export default function CopyTradingPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 md:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
           <h1 className="text-2xl font-bold text-white">Copy Trading</h1>
-          <p className="text-slate-400 mt-1">
+          <p className="text-slate-400">
             Follow successful traders and copy their trades automatically
           </p>
         </div>
         <button
           onClick={loadStats}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+          className={cn(
+            'inline-flex items-center gap-2 self-start sm:self-auto px-3 py-2 rounded-lg transition-colors text-sm font-medium',
+            'bg-slate-800 text-slate-200 hover:bg-slate-700'
+          )}
         >
           <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
-          Refresh
+          <span className="hidden sm:inline">Refresh</span>
         </button>
       </div>
 
       {/* Stats Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-600/20 rounded-lg">
-              <Users className="h-5 w-5 text-blue-400" />
-            </div>
-            <div>
-              <p className="text-slate-400 text-sm">Following</p>
-              <p className="text-xl font-bold text-white">
-                {stats?.leadersFollowing || 0}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-600/20 rounded-lg">
-              <TrendingUp className="h-5 w-5 text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-slate-400 text-sm">Trades Copied</p>
-              <p className="text-xl font-bold text-white">
-                {stats?.totalCopied || 0}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-600/20 rounded-lg">
-              <Trophy className="h-5 w-5 text-purple-400" />
-            </div>
-            <div>
-              <p className="text-slate-400 text-sm">Win Rate</p>
-              <p className="text-xl font-bold text-white">
-                {stats?.winRate?.toFixed(1) || 0}%
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className={cn(
-              'p-2 rounded-lg',
-              (stats?.totalProfit || 0) >= 0 ? 'bg-emerald-600/20' : 'bg-red-600/20'
-            )}>
-              <TrendingUp className={cn(
-                'h-5 w-5',
-                (stats?.totalProfit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
-              )} />
-            </div>
-            <div>
-              <p className="text-slate-400 text-sm">Total Profit</p>
-              <p className={cn(
-                'text-xl font-bold',
-                (stats?.totalProfit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
-              )}>
-                {(stats?.totalProfit || 0) >= 0 ? '+' : ''}${(stats?.totalProfit || 0).toFixed(2)}
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+        <StatCard
+          icon={Users}
+          iconColor="text-blue-400"
+          iconBg="bg-blue-600/20"
+          label="Following"
+          value={stats?.leadersFollowing || 0}
+        />
+        <StatCard
+          icon={TrendingUp}
+          iconColor="text-emerald-400"
+          iconBg="bg-emerald-600/20"
+          label="Trades Copied"
+          value={stats?.totalCopied || 0}
+        />
+        <StatCard
+          icon={Trophy}
+          iconColor="text-purple-400"
+          iconBg="bg-purple-600/20"
+          label="Win Rate"
+          value={`${stats?.winRate?.toFixed(1) || 0}%`}
+        />
+        <StatCard
+          icon={TrendingUp}
+          iconColor={(stats?.totalProfit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}
+          iconBg={(stats?.totalProfit || 0) >= 0 ? 'bg-emerald-600/20' : 'bg-red-600/20'}
+          label="Total Profit"
+          value={`${(stats?.totalProfit || 0) >= 0 ? '+' : ''}$${(stats?.totalProfit || 0).toFixed(2)}`}
+          valueClass={(stats?.totalProfit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}
+        />
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-700 pb-4">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-              activeTab === tab.id
-                ? 'bg-emerald-600 text-white'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-            )}
-          >
-            <tab.icon className="h-4 w-4" />
-            {tab.label}
-          </button>
-        ))}
+      <div className="border-b border-slate-700 pb-3">
+        <div className="flex gap-2 overflow-x-auto whitespace-nowrap no-scrollbar pb-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                activeTab === tab.id
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              )}
+            >
+              <tab.icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tab Content */}
@@ -160,6 +133,36 @@ export default function CopyTradingPage() {
         {activeTab === 'following' && <MyFollowing onRefreshStats={loadStats} />}
         {activeTab === 'leader' && <MyLeaderProfile />}
         {activeTab === 'pending' && <PendingTrades onRefreshStats={loadStats} />}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({
+  icon: Icon,
+  iconColor,
+  iconBg,
+  label,
+  value,
+  valueClass,
+}: {
+  icon: typeof Users;
+  iconColor: string;
+  iconBg: string;
+  label: string;
+  value: string | number;
+  valueClass?: string;
+}) {
+  return (
+    <div className="bg-slate-800 rounded-xl p-3 md:p-4 border border-slate-700">
+      <div className="flex items-center gap-3">
+        <div className={cn('p-2 rounded-lg', iconBg)}>
+          <Icon className={cn('h-5 w-5', iconColor)} />
+        </div>
+        <div>
+          <p className="text-slate-400 text-xs md:text-sm">{label}</p>
+          <p className={cn('text-lg md:text-xl font-bold text-white', valueClass)}>{value}</p>
+        </div>
       </div>
     </div>
   );

@@ -27,7 +27,7 @@ export function LoginForm() {
     try {
       await login(formData.email, formData.password);
       toast.success('Welcome back!');
-      router.push('/dashboard');
+      router.push('/dashboard/trade');
     } catch (error) {
       toast.error(getErrorMessage(error));
     }

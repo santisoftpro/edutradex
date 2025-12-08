@@ -32,7 +32,25 @@ interface NotificationState {
   markAllAsRead: () => void;
   removeNotification: (id: string) => void;
   clearAll: () => void;
+  resetStore: () => void;
   setHydrated: () => void;
+}
+
+// Helper to get user-specific storage key
+function getUserStorageKey(): string {
+  try {
+    const authData = localStorage.getItem('auth-storage');
+    if (authData) {
+      const parsed = JSON.parse(authData);
+      const userId = parsed?.state?.user?.id;
+      if (userId) {
+        return `notifications-storage-${userId}`;
+      }
+    }
+  } catch {
+    // Fallback to default key if parsing fails
+  }
+  return 'notifications-storage';
 }
 
 export const useNotificationStore = create<NotificationState>()(
@@ -95,9 +113,29 @@ export const useNotificationStore = create<NotificationState>()(
       clearAll: () => {
         set({ notifications: [], unreadCount: 0 });
       },
+
+      resetStore: () => {
+        // Clear all notification data (called on logout)
+        set({
+          notifications: [],
+          unreadCount: 0,
+          isHydrated: false,
+        });
+        // Clear localStorage for ALL possible user keys
+        try {
+          const keys = Object.keys(localStorage);
+          keys.forEach(key => {
+            if (key.startsWith('notifications-storage')) {
+              localStorage.removeItem(key);
+            }
+          });
+        } catch (error) {
+          console.error('Failed to clear notification storage:', error);
+        }
+      },
     }),
     {
-      name: 'notifications-storage',
+      name: getUserStorageKey(), // User-specific storage key
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         notifications: state.notifications.slice(0, 20),

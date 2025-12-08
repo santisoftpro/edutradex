@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { ArrowUp, ArrowDown, Clock, DollarSign } from 'lucide-react';
+import { useState, useEffect, memo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { ArrowUp, ArrowDown, Clock, DollarSign, Loader2, LineChart, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface MobileTradingPanelProps {
@@ -11,6 +12,9 @@ interface MobileTradingPanelProps {
   payoutPercent?: number;
   onDurationChange?: (duration: number) => void;
   initialDuration?: number;
+  onOpenTrades?: () => void;
+  onOpenCopyTrading?: () => void;
+  activeTradesCount?: number;
 }
 
 const DURATIONS = [
@@ -28,16 +32,22 @@ const DURATIONS = [
 
 const QUICK_AMOUNTS = [10, 25, 50, 100, 250, 500, 1000, 5000];
 
-export function MobileTradingPanel({
+function MobileTradingPanelComponent({
   balance,
   onTrade,
   isLoading,
-  payoutPercent = 79,
+  payoutPercent = 85,
   onDurationChange,
   initialDuration,
+  onOpenTrades,
+  onOpenCopyTrading,
+  activeTradesCount = 0,
 }: MobileTradingPanelProps) {
+  const router = useRouter();
   const [amount, setAmount] = useState(50);
   const [duration, setDuration] = useState(300);
+  const [showTimeSheet, setShowTimeSheet] = useState(false);
+  const [showAmountSheet, setShowAmountSheet] = useState(false);
 
   // Sync duration from parent after hydration to avoid SSR mismatch
   useEffect(() => {
@@ -45,32 +55,47 @@ export function MobileTradingPanel({
       setDuration(initialDuration);
     }
   }, [initialDuration]);
-  const [showTimeSheet, setShowTimeSheet] = useState(false);
-  const [showAmountSheet, setShowAmountSheet] = useState(false);
 
   const potentialProfit = amount * (payoutPercent / 100);
-  const payout = amount + potentialProfit;
+  const insufficientBalance = amount > balance;
+  const invalidAmount = amount <= 0;
 
-  const handleTrade = (direction: 'UP' | 'DOWN') => {
-    if (amount > 0 && amount <= balance && !isLoading) {
+  const handleTrade = useCallback((direction: 'UP' | 'DOWN') => {
+    if (!invalidAmount && !insufficientBalance && !isLoading) {
       onTrade(direction, amount, duration);
     }
-  };
+  }, [invalidAmount, insufficientBalance, isLoading, onTrade, amount, duration]);
+
+  const goToCopy = useCallback(() => {
+    if (onOpenCopyTrading) {
+      onOpenCopyTrading();
+    } else {
+      router.push('/dashboard/copy-trading');
+    }
+  }, [onOpenCopyTrading, router]);
 
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+    // Compact format: show only relevant units
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
+    }
+    if (mins > 0) {
+      return secs > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${mins}m`;
+    }
+    return `${secs}s`;
   };
 
-  const handleDurationSelect = (value: number) => {
+  const handleDurationSelect = useCallback((value: number) => {
     setDuration(value);
     setShowTimeSheet(false);
     if (onDurationChange) {
       onDurationChange(value);
     }
-  };
+  }, [onDurationChange]);
 
   return (
     <>
@@ -81,17 +106,17 @@ export function MobileTradingPanel({
             className="fixed inset-0 bg-black/60 z-[60]"
             onClick={() => setShowTimeSheet(false)}
           />
-          <div className="fixed bottom-0 left-0 right-0 bg-[#1a1a2e] rounded-t-3xl z-[60] animate-in slide-in-from-bottom">
-            <div className="w-12 h-1.5 bg-gray-600 rounded-full mx-auto mt-3" />
-            <div className="p-4 pb-8">
-              <h3 className="text-white font-semibold text-lg text-center mb-4">Select Time</h3>
-              <div className="grid grid-cols-5 gap-2">
+          <div className="fixed bottom-0 left-0 right-0 bg-[#1a1a2e] rounded-t-2xl z-[60] animate-in slide-in-from-bottom">
+            <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mt-1.5" />
+            <div className="p-3 pb-6">
+              <h3 className="text-white font-semibold text-sm text-center mb-3">Select Time</h3>
+              <div className="grid grid-cols-5 gap-1.5">
                 {DURATIONS.map((d) => (
                   <button
                     key={d.value}
                     onClick={() => handleDurationSelect(d.value)}
                     className={cn(
-                      'py-3 rounded-xl font-semibold text-sm transition-all',
+                      'py-3 rounded-lg font-semibold text-xs transition-all min-h-[40px]',
                       duration === d.value
                         ? 'bg-blue-600 text-white'
                         : 'bg-[#252542] text-gray-400 active:bg-[#2d2d52]'
@@ -113,12 +138,12 @@ export function MobileTradingPanel({
             className="fixed inset-0 bg-black/60 z-[60]"
             onClick={() => setShowAmountSheet(false)}
           />
-          <div className="fixed bottom-0 left-0 right-0 bg-[#1a1a2e] rounded-t-3xl z-[60] animate-in slide-in-from-bottom">
-            <div className="w-12 h-1.5 bg-gray-600 rounded-full mx-auto mt-3" />
-            <div className="p-4 pb-8">
-              <h3 className="text-white font-semibold text-lg text-center mb-1">Select Amount</h3>
-              <p className="text-gray-500 text-xs text-center mb-4">Balance: ${balance.toFixed(2)}</p>
-              <div className="grid grid-cols-4 gap-2 mb-4">
+          <div className="fixed bottom-0 left-0 right-0 bg-[#1a1a2e] rounded-t-2xl z-[60] animate-in slide-in-from-bottom">
+            <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mt-1.5" />
+            <div className="p-3 pb-6">
+              <h3 className="text-white font-semibold text-sm text-center mb-0.5">Select Amount</h3>
+              <p className="text-gray-500 text-[10px] text-center mb-3">Balance: ${balance.toFixed(2)}</p>
+              <div className="grid grid-cols-4 gap-1.5 mb-3">
                 {QUICK_AMOUNTS.map((quickAmount) => (
                   <button
                     key={quickAmount}
@@ -127,7 +152,7 @@ export function MobileTradingPanel({
                       setShowAmountSheet(false);
                     }}
                     className={cn(
-                      'py-3 rounded-xl font-semibold text-sm transition-all',
+                      'py-3 rounded-lg font-semibold text-xs transition-all min-h-[40px]',
                       amount === quickAmount
                         ? 'bg-emerald-600 text-white'
                         : 'bg-[#252542] text-gray-400 active:bg-[#2d2d52]'
@@ -139,18 +164,18 @@ export function MobileTradingPanel({
               </div>
               {/* Custom Amount */}
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">$</span>
                 <input
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))}
-                  className="w-full pl-10 pr-4 py-4 bg-[#252542] border border-[#3d3d5c] rounded-xl text-white text-xl font-bold text-center focus:outline-none focus:border-emerald-500"
+                  className="w-full pl-8 pr-3 py-3 bg-[#252542] border border-[#3d3d5c] rounded-lg text-white text-lg font-bold text-center focus:outline-none focus:border-emerald-500"
                   placeholder="Enter amount"
                 />
               </div>
               <button
                 onClick={() => setShowAmountSheet(false)}
-                className="w-full mt-4 py-3 bg-emerald-600 text-white font-semibold rounded-xl"
+                className="w-full mt-3 py-2.5 bg-emerald-600 text-white font-semibold text-sm rounded-lg"
               >
                 Confirm
               </button>
@@ -159,68 +184,108 @@ export function MobileTradingPanel({
         </>
       )}
 
-      {/* Main Trading Panel - Fixed above bottom nav (68px for nav height) */}
-      <div className="md:hidden fixed bottom-[68px] left-0 right-0 z-40 bg-[#0d0d1a]">
-        {/* Time and Amount Labels */}
-        <div className="flex px-4 pt-3 border-t border-[#1a1a2e]">
-          <span className="flex-1 text-gray-500 text-xs">Time</span>
-          <span className="flex-1 text-gray-500 text-xs pl-3">Amount</span>
-        </div>
-
-        {/* Time and Amount Inputs Row */}
-        <div className="flex gap-3 px-4 py-2">
+      {/* Main Trading Panel - Fixed at bottom with integrated nav */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0d0d1a] safe-area-bottom">
+        {/* Time, Amount, Profit Row */}
+        <div className="flex gap-2 px-3 pt-2 border-t border-[#1a1a2e]">
           {/* Time Input */}
           <button
             onClick={() => setShowTimeSheet(true)}
-            className="flex-1 flex items-center justify-between bg-[#1a1a2e] border border-[#2d2d44] rounded-xl px-4 py-3"
+            className="flex-1 flex items-center justify-between bg-[#1a1a2e] border border-[#2d2d44] rounded-lg px-2.5 py-1.5 active:bg-[#252542]"
           >
-            <span className="text-white font-bold text-lg font-mono">{formatDuration(duration)}</span>
-            <Clock className="h-5 w-5 text-gray-500" />
+            <div className="flex flex-col items-start">
+              <span className="text-gray-400 text-[10px] font-medium">Time</span>
+              <span className="text-white font-bold text-xs">{formatDuration(duration)}</span>
+            </div>
+            <Clock className="h-3.5 w-3.5 text-gray-400" />
           </button>
 
           {/* Amount Input */}
           <button
             onClick={() => setShowAmountSheet(true)}
-            className="flex-1 flex items-center justify-between bg-[#1a1a2e] border border-[#2d2d44] rounded-xl px-4 py-3"
+            className="flex-1 flex items-center justify-between bg-[#1a1a2e] border border-[#2d2d44] rounded-lg px-2.5 py-1.5 active:bg-[#252542]"
           >
-            <span className="text-white font-bold text-lg">{amount}</span>
-            <DollarSign className="h-5 w-5 text-gray-500" />
+            <div className="flex flex-col items-start">
+              <span className="text-gray-400 text-[10px] font-medium">Amount</span>
+              <span className="text-white font-bold text-xs">${amount}</span>
+            </div>
+            <DollarSign className="h-3.5 w-3.5 text-gray-400" />
           </button>
-        </div>
 
-        {/* Payout Info Row */}
-        <div className="flex items-center justify-between px-4 py-2">
-          <div className="flex items-center gap-1">
-            <span className="text-gray-500 text-xs">Payout</span>
-            <span className="text-white text-sm font-medium">${payout.toFixed(2)}</span>
-          </div>
-          <span className="text-emerald-400 font-bold text-xl">+{payoutPercent}%</span>
-          <div className="flex items-center gap-1">
-            <span className="text-gray-500 text-xs">Profit</span>
-            <span className="text-emerald-400 text-sm font-medium">+${potentialProfit.toFixed(2)}</span>
+          {/* Payout Display */}
+          <div className="flex flex-col items-center justify-center bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-2.5 py-1.5">
+            <span className="text-[10px] text-gray-400 font-medium">Profit</span>
+            <span className="text-emerald-400 font-bold text-xs">+{payoutPercent}%</span>
           </div>
         </div>
 
-        {/* BUY and SELL Buttons */}
-        <div className="flex gap-3 px-4 pb-3">
+        {/* Balance Warning */}
+        {insufficientBalance && (
+          <div className="mx-3 mt-1.5 py-1.5 px-2.5 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <span className="text-red-400 text-[11px] font-medium">
+              Insufficient balance: ${balance.toFixed(2)}
+            </span>
+          </div>
+        )}
+
+        {/* BUY and SELL Buttons - Compact */}
+        <div className="flex gap-2 px-3 py-2">
           <button
             onClick={() => handleTrade('UP')}
-            disabled={isLoading || amount > balance || amount <= 0}
-            className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-900/50 disabled:cursor-not-allowed rounded-xl font-bold text-white text-lg flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
+            disabled={isLoading || insufficientBalance || invalidAmount}
+            className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-900/50 disabled:cursor-not-allowed rounded-lg font-bold text-white text-sm flex items-center justify-center gap-1 transition-colors active:scale-[0.98]"
           >
-            <ArrowUp className="h-6 w-6" strokeWidth={2.5} />
-            BUY
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
+                BUY
+              </>
+            )}
           </button>
           <button
             onClick={() => handleTrade('DOWN')}
-            disabled={isLoading || amount > balance || amount <= 0}
-            className="flex-1 py-4 bg-red-500 hover:bg-red-400 disabled:bg-red-900/50 disabled:cursor-not-allowed rounded-xl font-bold text-white text-lg flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
+            disabled={isLoading || insufficientBalance || invalidAmount}
+            className="flex-1 py-2.5 bg-red-500 hover:bg-red-400 disabled:bg-red-900/50 disabled:cursor-not-allowed rounded-lg font-bold text-white text-sm flex items-center justify-center gap-1 transition-colors active:scale-[0.98]"
           >
-            <ArrowDown className="h-6 w-6" strokeWidth={2.5} />
-            SELL
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <ArrowDown className="h-4 w-4" strokeWidth={2.5} />
+                SELL
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Inline Navigation - Trade & Copy */}
+        <div className="flex items-center justify-center gap-4 px-3 pb-2 pt-1 border-t border-[#1a1a2e]/50">
+          <button
+            onClick={onOpenTrades}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-500/10 text-blue-400 text-xs font-medium active:bg-blue-500/20 transition-colors"
+          >
+            <LineChart className="h-3.5 w-3.5" />
+            My Trades
+            {activeTradesCount > 0 && (
+              <span className="ml-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-blue-500 text-white text-[10px] font-bold rounded-full px-1">
+                {activeTradesCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={goToCopy}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#1a1a2e] text-gray-400 text-xs font-medium active:bg-[#252542] transition-colors"
+          >
+            <Users className="h-3.5 w-3.5" />
+            Copy Trading
           </button>
         </div>
       </div>
     </>
   );
 }
+
+// Memoize to prevent unnecessary re-renders when parent updates
+export const MobileTradingPanel = memo(MobileTradingPanelComponent);

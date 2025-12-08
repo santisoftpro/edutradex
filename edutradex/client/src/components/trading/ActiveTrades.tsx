@@ -3,20 +3,34 @@
 import { useEffect, useState } from 'react';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { useTradeStore, Trade } from '@/store/trade.store';
+import { PriceTick } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-export function ActiveTrades() {
-  const { activeTrades } = useTradeStore();
+interface ActiveTradesProps {
+  latestPrices: Map<string, PriceTick>;
+}
 
-  if (activeTrades.length === 0) {
+export function ActiveTrades({ latestPrices }: ActiveTradesProps) {
+  const { activeTrades } = useTradeStore();
+  const [isClient, setIsClient] = useState(false);
+
+  // Prevent hydration mismatch - only render on client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient || activeTrades.length === 0) {
     return null;
   }
 
   return (
     <div className="absolute bottom-2 md:bottom-3 left-2 md:left-3 right-2 md:right-auto z-10 flex flex-wrap gap-1.5 md:gap-2 max-w-full md:max-w-[calc(100%-24px)] mb-[80px] md:mb-0">
-      {activeTrades.slice(0, 4).map((trade) => (
-        <ActiveTradePill key={trade.id} trade={trade} />
-      ))}
+      {activeTrades.slice(0, 4).map((trade) => {
+        const priceData = latestPrices.get(trade.symbol);
+        return (
+          <ActiveTradePill key={trade.id} trade={trade} currentPrice={priceData?.price} />
+        );
+      })}
       {activeTrades.length > 4 && (
         <div className="flex items-center px-2 md:px-3 py-1 md:py-1.5 bg-slate-800/90 rounded-full text-[10px] md:text-xs text-slate-400">
           +{activeTrades.length - 4} more
@@ -26,7 +40,7 @@ export function ActiveTrades() {
   );
 }
 
-function ActiveTradePill({ trade }: { trade: Trade }) {
+function ActiveTradePill({ trade, currentPrice }: { trade: Trade; currentPrice?: number }) {
   const [timeLeft, setTimeLeft] = useState(0);
   const [progress, setProgress] = useState(0);
 
@@ -65,12 +79,35 @@ function ActiveTradePill({ trade }: { trade: Trade }) {
 
   const isUp = trade.direction === 'UP';
 
+  // Calculate real-time P/L
+  const calculatePL = () => {
+    if (!currentPrice) return null;
+
+    const isInProfit = isUp
+      ? currentPrice > trade.entryPrice  // UP trade wins if price goes up
+      : currentPrice < trade.entryPrice; // DOWN trade wins if price goes down
+
+    const plAmount = isInProfit
+      ? trade.amount * (trade.payout / 100) // Potential profit
+      : -trade.amount;                       // Full loss
+
+    return { isInProfit, plAmount };
+  };
+
+  const pl = calculatePL();
+
+  // Determine colors based on P/L status (if available) or fallback to direction
+  const isWinning = pl ? pl.isInProfit : isUp;
+  const borderColor = isWinning ? 'border-emerald-500/50' : 'border-red-500/50';
+  const progressColor = isWinning ? 'text-emerald-500' : 'text-red-500';
+  const iconColor = isWinning ? 'text-emerald-400' : 'text-red-400';
+
   return (
     <div
       className={cn(
         'relative flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full overflow-hidden',
-        'bg-slate-800/90 backdrop-blur-sm border',
-        isUp ? 'border-emerald-500/50' : 'border-red-500/50'
+        'bg-slate-800/90 backdrop-blur-sm border transition-colors duration-300',
+        borderColor
       )}
     >
       {/* Circular progress indicator */}
@@ -98,17 +135,17 @@ function ActiveTradePill({ trade }: { trade: Trade }) {
             strokeDasharray={69.115}
             strokeDashoffset={69.115 - (69.115 * progress) / 100}
             className={cn(
-              'transition-all duration-100',
-              isUp ? 'text-emerald-500' : 'text-red-500'
+              'transition-all duration-300',
+              progressColor
             )}
           />
         </svg>
         {/* Direction icon in center */}
         <div className="absolute inset-0 flex items-center justify-center">
           {isUp ? (
-            <ArrowUp className="h-3 w-3 text-emerald-400" strokeWidth={3} />
+            <ArrowUp className={cn('h-3 w-3 transition-colors duration-300', iconColor)} strokeWidth={3} />
           ) : (
-            <ArrowDown className="h-3 w-3 text-red-400" strokeWidth={3} />
+            <ArrowDown className={cn('h-3 w-3 transition-colors duration-300', iconColor)} strokeWidth={3} />
           )}
         </div>
       </div>
@@ -123,12 +160,24 @@ function ActiveTradePill({ trade }: { trade: Trade }) {
           <span className="text-slate-300 text-[10px] font-mono">@{formatPrice(trade.entryPrice)}</span>
           <span className="text-slate-500 text-[10px]">•</span>
           <span className="text-white text-[10px] font-mono font-bold">{formatTime(timeLeft)}</span>
-          <span className={cn(
-            'text-[10px] font-medium',
-            isUp ? 'text-emerald-400' : 'text-red-400'
-          )}>
-            +{trade.payout}%
-          </span>
+          {pl ? (
+            <>
+              <span className="text-slate-500 text-[10px]">•</span>
+              <span className={cn(
+                'text-[10px] font-bold',
+                pl.isInProfit ? 'text-emerald-400' : 'text-red-400'
+              )}>
+                {pl.isInProfit ? '+' : '-'}${Math.abs(pl.plAmount).toFixed(2)}
+              </span>
+            </>
+          ) : (
+            <span className={cn(
+              'text-[10px] font-medium ml-1',
+              isUp ? 'text-emerald-400' : 'text-red-400'
+            )}>
+              +{trade.payout}%
+            </span>
+          )}
         </div>
       </div>
     </div>

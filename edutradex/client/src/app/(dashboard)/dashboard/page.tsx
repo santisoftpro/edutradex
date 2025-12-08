@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   TrendingUp,
@@ -11,6 +11,8 @@ import {
   ArrowUp,
   ArrowDown,
   Clock,
+  AlertTriangle,
+  TrendingUp as SparkUp,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuthStore } from '@/store/auth.store';
@@ -112,50 +114,97 @@ function RecentTradeRow({ trade }: { trade: Trade }) {
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const { trades, stats, fetchStats } = useTradeStore();
+  const [timeframe, setTimeframe] = useState<'all' | '7d' | '30d'>('all');
 
-  // Calculate stats on mount
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
 
-  // Get recent trades (last 5)
-  const recentTrades = trades.slice(0, 5);
+  const filteredTrades = useMemo(() => {
+    if (timeframe === 'all') return trades;
+    const days = timeframe === '7d' ? 7 : 30;
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    return trades.filter(t => new Date(t.createdAt).getTime() >= cutoff);
+  }, [timeframe, trades]);
 
-  // Calculate profit trend
-  const profitTrend = stats.totalProfit >= 0 ? 'up' : 'down';
+  const filteredStats = useMemo(() => {
+    if (timeframe === 'all') return stats;
+    const totalTrades = filteredTrades.length;
+    const wonTrades = filteredTrades.filter(t => t.status === 'won').length;
+    const lostTrades = filteredTrades.filter(t => t.status === 'lost').length;
+    const totalProfit = filteredTrades.reduce((sum, t) => sum + (t.profit || 0), 0);
+    const winRate = totalTrades > 0 ? (wonTrades / totalTrades) * 100 : 0;
+    return { ...stats, totalTrades, wonTrades, lostTrades, winRate, totalProfit };
+  }, [filteredTrades, stats, timeframe]);
+
+  const openTrades = useMemo(() => trades.filter(t => t.status === 'OPEN'), [trades]);
+
+  const recentTrades = filteredTrades.slice(0, 5);
+
+  const profitTrend = filteredStats.totalProfit >= 0 ? 'up' : 'down';
   const currentBalance = user?.demoBalance || 0;
-  const baseBalance = currentBalance - stats.totalProfit;
+  const baseBalance = currentBalance - filteredStats.totalProfit;
   const profitPercent =
-    stats.totalTrades > 0 && baseBalance > 0
-      ? `${stats.totalProfit >= 0 ? '+' : ''}${((stats.totalProfit / baseBalance) * 100).toFixed(1)}%`
+    filteredStats.totalTrades > 0 && baseBalance > 0
+      ? `${filteredStats.totalProfit >= 0 ? '+' : ''}${((filteredStats.totalProfit / baseBalance) * 100).toFixed(1)}%`
       : '0%';
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">
-          Welcome back, {user?.name?.split(' ')[0]}!
-        </h1>
-        <p className="text-slate-400 mt-1">
-          Here&apos;s an overview of your trading activity
-        </p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">
+            Welcome back, {user?.name?.split(' ')[0]}!
+          </h1>
+          <p className="text-slate-400 mt-1">
+            Here&apos;s an overview of your trading activity
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 items-start sm:flex-row sm:items-center sm:gap-3 text-sm text-slate-300">
+          <div className="px-3 py-2 bg-slate-800 rounded-lg border border-slate-700">
+            Balance: <span className="font-semibold text-white">{formatCurrency(currentBalance)}</span>
+          </div>
+          <div className="px-3 py-2 bg-slate-800 rounded-lg border border-slate-700">
+            Win rate: <span className="font-semibold text-emerald-400">{filteredStats.winRate.toFixed(1)}%</span>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <span>Showing:</span>
+          <div className="flex gap-1 bg-slate-800 rounded-lg border border-slate-700 p-1">
+            {(['all', '7d', '30d'] as const).map(tf => (
+              <button
+                key={tf}
+                onClick={() => setTimeframe(tf)}
+                className={cn(
+                  'px-2.5 py-1 rounded-md font-medium transition-colors',
+                  timeframe === tf ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:bg-slate-700'
+                )}
+              >
+                {tf === 'all' ? 'All time' : tf.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <StatCard
           title="Account Balance"
           value={formatCurrency(user?.demoBalance || 0)}
           icon={DollarSign}
         />
-        <StatCard title="Total Trades" value={stats.totalTrades.toString()} icon={BarChart2} />
+        <StatCard title="Total Trades" value={filteredStats.totalTrades.toString()} icon={BarChart2} />
         <StatCard
           title="Win Rate"
-          value={`${stats.winRate.toFixed(1)}%`}
+          value={`${filteredStats.winRate.toFixed(1)}%`}
           icon={Activity}
         />
         <StatCard
           title="Total Profit"
-          value={`${stats.totalProfit >= 0 ? '+' : ''}$${stats.totalProfit.toFixed(2)}`}
+          value={`${filteredStats.totalProfit >= 0 ? '+' : ''}$${filteredStats.totalProfit.toFixed(2)}`}
           icon={TrendingUp}
           trend={profitTrend}
           trendValue={profitPercent}
@@ -165,25 +214,15 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
           <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <Link
-              href="/dashboard/trade"
-              className="p-4 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-center transition-colors"
-            >
-              <TrendingUp className="h-8 w-8 text-white mx-auto" />
-              <p className="text-white font-medium mt-2">Start Trading</p>
-            </Link>
-            <Link
-              href="/dashboard/history"
-              className="p-4 bg-slate-700 hover:bg-slate-600 rounded-lg text-center transition-colors"
-            >
-              <BarChart2 className="h-8 w-8 text-slate-300 mx-auto" />
-              <p className="text-slate-300 font-medium mt-2">View History</p>
-            </Link>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <ActionCard href="/dashboard/trade" icon={TrendingUp} label="Start Trading" highlight />
+            <ActionCard href="/dashboard/deposit" icon={DollarSign} label="Deposit" />
+            <ActionCard href="/dashboard/withdraw" icon={TrendingDown} label="Withdraw" />
+            <ActionCard href="/dashboard/history" icon={BarChart2} label="History" />
           </div>
         </div>
 
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-white">Recent Trades</h2>
             {trades.length > 0 && (
@@ -213,36 +252,112 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Open Trades</h2>
+              <p className="text-slate-400 text-sm">Live positions with quick status</p>
+            </div>
+            <Link href="/dashboard/trade" className="text-emerald-500 text-sm hover:text-emerald-400">
+              Go to Trading
+            </Link>
+          </div>
+          {openTrades.length === 0 ? (
+            <div className="text-center py-6">
+              <Clock className="h-10 w-10 text-slate-600 mx-auto" />
+              <p className="text-slate-400 mt-2 text-sm">No open trades</p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-72 overflow-y-auto custom-scrollbar">
+              {openTrades.slice(0, 5).map((trade) => (
+                <div key={trade.id} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-700/70">
+                  <div>
+                    <p className="text-white font-medium text-sm">{trade.symbol}</p>
+                    <p className="text-slate-400 text-xs">Amount: {formatCurrency(trade.amount)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-400">Opened: {format(new Date(trade.createdAt), 'HH:mm')}</p>
+                    <span className={cn(
+                      'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold mt-1',
+                      trade.direction === 'UP' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                    )}>
+                      {trade.direction}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-4 lg:col-span-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Funding & Health</h2>
+              <p className="text-slate-400 text-sm">Keep your balance and goals on track</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-lg bg-slate-900/60 border border-slate-700 space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+                <p className="text-white font-semibold text-sm">Balance snapshot</p>
+              </div>
+              <p className="text-2xl font-bold text-white">{formatCurrency(currentBalance)}</p>
+              <p className="text-slate-400 text-xs">
+                {currentBalance < 20
+                  ? 'Low balance detected. Consider a quick top-up before trading.'
+                  : 'Balance is healthy. Stay within your risk limits.'}
+              </p>
+              <div className="flex gap-2">
+                <Link
+                  href="/dashboard/deposit"
+                  className="flex-1 text-center px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  Deposit
+                </Link>
+                <Link
+                  href="/dashboard/withdraw"
+                  className="flex-1 text-center px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Withdraw
+                </Link>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-slate-900/60 border border-slate-700 space-y-2">
+              <div className="flex items-center gap-2">
+                <SparkUp className="h-4 w-4 text-emerald-400" />
+                <p className="text-white font-semibold text-sm">Recent performance</p>
+              </div>
+              <p className="text-slate-300 text-sm">
+                {filteredStats.totalTrades > 0
+                  ? `Win rate ${filteredStats.winRate.toFixed(1)}% • Profit ${filteredStats.totalProfit >= 0 ? '+' : ''}$${filteredStats.totalProfit.toFixed(2)}`
+                  : 'Not enough data yet. Place trades to see insights.'}
+              </p>
+              <p className="text-slate-400 text-xs">
+                Timeframe: {timeframe === 'all' ? 'All time' : timeframe.toUpperCase()}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Performance Summary */}
-      {stats.totalTrades > 0 && (
+      {filteredStats.totalTrades > 0 && (
         <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
           <h2 className="text-lg font-semibold text-white mb-4">Performance Summary</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-slate-700/50 rounded-lg">
-              <p className="text-emerald-400 text-2xl font-bold">{stats.wonTrades}</p>
-              <p className="text-slate-400 text-sm">Profitable Trades</p>
-            </div>
-            <div className="text-center p-4 bg-slate-700/50 rounded-lg">
-              <p className="text-red-400 text-2xl font-bold">{stats.lostTrades}</p>
-              <p className="text-slate-400 text-sm">Loss Trades</p>
-            </div>
-            <div className="text-center p-4 bg-slate-700/50 rounded-lg">
-              <p className="text-white text-2xl font-bold">{stats.winRate.toFixed(0)}%</p>
-              <p className="text-slate-400 text-sm">Profit Rate</p>
-            </div>
-            <div className="text-center p-4 bg-slate-700/50 rounded-lg">
-              <p
-                className={cn(
-                  'text-2xl font-bold',
-                  stats.totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'
-                )}
-              >
-                ${Math.abs(stats.totalProfit).toFixed(2)}
-              </p>
-              <p className="text-slate-400 text-sm">
-                {stats.totalProfit >= 0 ? 'Total Profit' : 'Total Loss'}
-              </p>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <SummaryCard label="Profitable Trades" value={filteredStats.wonTrades} valueClass="text-emerald-400" />
+            <SummaryCard label="Loss Trades" value={filteredStats.lostTrades} valueClass="text-red-400" />
+            <SummaryCard label="Profit Rate" value={`${filteredStats.winRate.toFixed(0)}%`} />
+            <SummaryCard
+              label={filteredStats.totalProfit >= 0 ? 'Total Profit' : 'Total Loss'}
+              value={`$${Math.abs(filteredStats.totalProfit).toFixed(2)}`}
+              valueClass={filteredStats.totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}
+            />
           </div>
         </div>
       )}
@@ -264,7 +379,7 @@ export default function DashboardPage() {
               )}
             </p>
             <Link
-              href={(user?.demoBalance || 0) > 0 ? '/dashboard/trade' : '/dashboard/deposits'}
+              href={(user?.demoBalance || 0) > 0 ? '/dashboard/trade' : '/dashboard/deposit'}
               className="inline-block mt-4 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
             >
               {(user?.demoBalance || 0) > 0 ? 'Go to Trading' : 'Make a Deposit'}
@@ -272,6 +387,50 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ActionCard({
+  href,
+  icon: Icon,
+  label,
+  highlight = false,
+}: {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  highlight?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'p-4 rounded-lg text-center transition-colors border',
+        highlight
+          ? 'bg-emerald-600 hover:bg-emerald-700 border-emerald-700 text-white'
+          : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+      )}
+    >
+      <Icon className="h-6 w-6 mx-auto" />
+      <p className="font-medium mt-2 text-sm">{label}</p>
+    </Link>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  valueClass,
+}: {
+  label: string;
+  value: string | number;
+  valueClass?: string;
+}) {
+  return (
+    <div className="text-center p-4 bg-slate-700/50 rounded-lg border border-slate-600/60">
+      <p className={cn('text-xl font-bold text-white', valueClass)}>{value}</p>
+      <p className="text-slate-400 text-sm mt-1">{label}</p>
     </div>
   );
 }

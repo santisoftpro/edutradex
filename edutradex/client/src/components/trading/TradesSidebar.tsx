@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowUp, ArrowDown, Clock, CheckCircle, XCircle, ListOrdered, History, ChevronRight, ChevronDown } from 'lucide-react';
 import { useTradeStore, Trade } from '@/store/trade.store';
+import { PriceTick } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 type TabType = 'opened' | 'closed';
@@ -10,6 +11,7 @@ type TabType = 'opened' | 'closed';
 interface TradesSidebarProps {
   isCollapsed?: boolean;
   onToggle?: () => void;
+  latestPrices: Map<string, PriceTick>;
 }
 
 // Calculate pips difference between two prices
@@ -28,14 +30,24 @@ function formatPrice(price: number, symbol: string): string {
   return price.toFixed(isJPYPair ? 3 : 5);
 }
 
-export function TradesSidebar({ onToggle }: TradesSidebarProps) {
+export function TradesSidebar({ onToggle, latestPrices }: TradesSidebarProps) {
   const [activeTab, setActiveTab] = useState<TabType>('opened');
+  const [isClient, setIsClient] = useState(false);
   const { activeTrades, trades } = useTradeStore();
+
+  // Prevent hydration mismatch - only render on client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Get recent closed trades (last 10) - trades with status 'won' or 'lost'
   const closedTrades = trades
     .filter(t => t.status === 'won' || t.status === 'lost')
     .slice(0, 10);
+
+  if (!isClient) {
+    return null;
+  }
 
   return (
     <div className="hidden lg:flex w-56 bg-[#1a1a2e] border-l border-[#2d2d44] flex-col h-full relative animate-in slide-in-from-right duration-200 mr-[68px]">
@@ -90,7 +102,7 @@ export function TradesSidebar({ onToggle }: TradesSidebarProps) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {activeTab === 'opened' ? (
-          <OpenedTrades trades={activeTrades} />
+          <OpenedTrades trades={activeTrades} latestPrices={latestPrices} />
         ) : (
           <ClosedTrades trades={closedTrades} />
         )}
@@ -99,7 +111,7 @@ export function TradesSidebar({ onToggle }: TradesSidebarProps) {
   );
 }
 
-function OpenedTrades({ trades }: { trades: Trade[] }) {
+function OpenedTrades({ trades, latestPrices }: { trades: Trade[]; latestPrices: Map<string, any> }) {
   if (trades.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-gray-500 p-4">
@@ -115,13 +127,13 @@ function OpenedTrades({ trades }: { trades: Trade[] }) {
   return (
     <div className="p-2 space-y-2">
       {trades.map((trade) => (
-        <OpenedTradeCard key={trade.id} trade={trade} />
+        <OpenedTradeCard key={trade.id} trade={trade} currentPrice={latestPrices.get(trade.symbol)?.price} />
       ))}
     </div>
   );
 }
 
-function OpenedTradeCard({ trade }: { trade: Trade }) {
+function OpenedTradeCard({ trade, currentPrice }: { trade: Trade; currentPrice?: number }) {
   const [timeLeft, setTimeLeft] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -156,12 +168,36 @@ function OpenedTradeCard({ trade }: { trade: Trade }) {
   const isUp = trade.direction === 'UP';
   const potentialProfit = trade.amount * (trade.payout / 100);
 
+  // Calculate real-time P/L
+  const calculatePL = () => {
+    if (!currentPrice) return null;
+
+    const isInProfit = isUp
+      ? currentPrice > trade.entryPrice  // UP trade wins if price goes up
+      : currentPrice < trade.entryPrice; // DOWN trade wins if price goes down
+
+    const plAmount = isInProfit
+      ? trade.amount * (trade.payout / 100) // Potential profit
+      : -trade.amount;                       // Full loss
+
+    return { isInProfit, plAmount };
+  };
+
+  const pl = calculatePL();
+
+  // Determine colors based on P/L status (if available) or fallback to direction
+  const isWinning = pl ? pl.isInProfit : isUp;
+  const borderColor = isWinning ? 'border-l-emerald-500' : 'border-l-red-500';
+  const progressColor = isWinning ? 'bg-emerald-500/50' : 'bg-red-500/50';
+  const iconBgColor = isWinning ? 'bg-emerald-500/20' : 'bg-red-500/20';
+  const iconColor = isWinning ? 'text-emerald-400' : 'text-red-400';
+
   return (
     <div
       className={cn(
-        'bg-[#252542] rounded-lg relative overflow-hidden cursor-pointer transition-all',
+        'bg-[#252542] rounded-lg relative overflow-hidden cursor-pointer transition-all duration-300',
         'border-l-3',
-        isUp ? 'border-l-emerald-500' : 'border-l-red-500'
+        borderColor
       )}
       style={{ borderLeftWidth: '3px' }}
       onClick={() => setIsExpanded(!isExpanded)}
@@ -169,8 +205,8 @@ function OpenedTradeCard({ trade }: { trade: Trade }) {
       {/* Progress bar at bottom */}
       <div
         className={cn(
-          'absolute bottom-0 left-0 h-1 transition-all duration-100',
-          isUp ? 'bg-emerald-500/50' : 'bg-red-500/50'
+          'absolute bottom-0 left-0 h-1 transition-all duration-300',
+          progressColor
         )}
         style={{ width: `${progress}%` }}
       />
@@ -180,21 +216,22 @@ function OpenedTradeCard({ trade }: { trade: Trade }) {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <div className={cn(
-              'w-6 h-6 rounded-full flex items-center justify-center',
-              isUp ? 'bg-emerald-500/20' : 'bg-red-500/20'
+              'w-6 h-6 rounded-full flex items-center justify-center transition-colors duration-300',
+              iconBgColor
             )}>
               {isUp ? (
-                <ArrowUp className="h-3.5 w-3.5 text-emerald-400" />
+                <ArrowUp className={cn('h-3.5 w-3.5 transition-colors duration-300', iconColor)} />
               ) : (
-                <ArrowDown className="h-3.5 w-3.5 text-red-400" />
+                <ArrowDown className={cn('h-3.5 w-3.5 transition-colors duration-300', iconColor)} />
               )}
             </div>
             <span className="text-white text-sm font-semibold">{trade.symbol}</span>
           </div>
           <div className="flex items-center gap-1">
             <div className={cn(
-              'px-2 py-1 rounded-full text-[10px] font-bold',
-              isUp ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+              'px-2 py-1 rounded-full text-[10px] font-bold transition-colors duration-300',
+              iconBgColor,
+              iconColor
             )}>
               {isUp ? 'BUY' : 'SELL'}
             </div>
@@ -212,7 +249,16 @@ function OpenedTradeCard({ trade }: { trade: Trade }) {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-gray-400">${trade.amount.toFixed(0)}</span>
-            <span className="text-emerald-400 font-semibold">+{trade.payout}%</span>
+            {pl ? (
+              <span className={cn(
+                'font-bold text-sm',
+                pl.isInProfit ? 'text-emerald-400' : 'text-red-400'
+              )}>
+                {pl.isInProfit ? '+' : '-'}${Math.abs(pl.plAmount).toFixed(2)}
+              </span>
+            ) : (
+              <span className="text-emerald-400 font-semibold">+{trade.payout}%</span>
+            )}
           </div>
         </div>
       </div>
@@ -238,14 +284,32 @@ function OpenedTradeCard({ trade }: { trade: Trade }) {
               <span className="text-gray-500 block">Investment</span>
               <span className="text-white font-bold">${trade.amount.toFixed(2)}</span>
             </div>
-            <div className="bg-[#1a1a2e] rounded-md p-2">
-              <span className="text-gray-500 block">Potential Profit</span>
-              <span className="text-emerald-400 font-bold">+${potentialProfit.toFixed(2)}</span>
+            <div className={cn(
+              'rounded-md p-2',
+              pl ? (pl.isInProfit ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-red-500/10 border border-red-500/30') : 'bg-[#1a1a2e]'
+            )}>
+              <span className="text-gray-500 block">Real-time P/L</span>
+              {pl ? (
+                <span className={cn(
+                  'font-bold',
+                  pl.isInProfit ? 'text-emerald-400' : 'text-red-400'
+                )}>
+                  {pl.isInProfit ? '+' : '-'}${Math.abs(pl.plAmount).toFixed(2)}
+                </span>
+              ) : (
+                <span className="text-emerald-400 font-bold">+${potentialProfit.toFixed(2)}</span>
+              )}
             </div>
             <div className="bg-[#1a1a2e] rounded-md p-2 col-span-2">
               <span className="text-gray-500 block">Entry Price</span>
               <span className="text-white font-bold font-mono">{formatPrice(trade.entryPrice, trade.symbol)}</span>
             </div>
+            {currentPrice && (
+              <div className="bg-[#1a1a2e] rounded-md p-2 col-span-2">
+                <span className="text-gray-500 block">Current Price</span>
+                <span className="text-blue-400 font-bold font-mono">{formatPrice(currentPrice, trade.symbol)}</span>
+              </div>
+            )}
           </div>
         </div>
       )}

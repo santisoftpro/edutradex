@@ -30,12 +30,26 @@ export function formatDate(date: string | Date | null | undefined): string {
 }
 
 export function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
   if (typeof error === 'object' && error !== null) {
-    const err = error as { response?: { data?: { error?: string; message?: string } } };
-    return err.response?.data?.error || err.response?.data?.message || 'An error occurred';
+    // Check for Axios error response first (has response.data with error message)
+    const axiosErr = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
+    if (axiosErr.response?.data?.error) {
+      return axiosErr.response.data.error;
+    }
+    if (axiosErr.response?.data?.message) {
+      return axiosErr.response.data.message;
+    }
+    // Fallback to error.message for regular Error objects
+    if (axiosErr.message && !axiosErr.message.startsWith('Request failed with status code')) {
+      return axiosErr.message;
+    }
+  }
+  if (error instanceof Error) {
+    // Don't show generic axios messages
+    if (error.message.startsWith('Request failed with status code')) {
+      return 'An error occurred. Please try again.';
+    }
+    return error.message;
   }
   return 'An unexpected error occurred';
 }

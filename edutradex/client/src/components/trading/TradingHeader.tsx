@@ -174,7 +174,10 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, live
                   Dashboard
                 </button>
                 <button
-                  onClick={() => setShowMenu(false)}
+                  onClick={() => {
+                    router.push('/dashboard/settings');
+                    setShowMenu(false);
+                  }}
                   className="w-full flex items-center gap-3 px-4 py-2 text-gray-400 hover:bg-[#252542] hover:text-white transition-colors"
                 >
                   <Settings className="h-4 w-4" />

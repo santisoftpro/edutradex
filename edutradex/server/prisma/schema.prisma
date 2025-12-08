@@ -11,7 +11,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -56,6 +56,8 @@ model User {
   @@index([referralCode])
   @@index([referredBy])
   @@index([emailVerified])
+  @@index([role, isActive])
+  @@index([isActive])
 }
 
 model Trade {
@@ -88,6 +90,11 @@ model Trade {
   @@index([symbol])
   @@index([openedAt])
   @@index([accountType])
+  @@index([userId, status])
+  @@index([userId, status, result])
+  @@index([userId, openedAt])
+  @@index([status, result])
+  @@index([closedAt])
 }
 
 model Session {
@@ -155,6 +162,8 @@ model Deposit {
   @@index([status])
   @@index([method])
   @@index([createdAt])
+  @@index([status, method])
+  @@index([userId, status])
 }
 
 model SpreadConfig {
@@ -195,6 +204,8 @@ model Withdrawal {
   @@index([status])
   @@index([method])
   @@index([createdAt])
+  @@index([status, method])
+  @@index([userId, status])
 }
 
 model PaymentMethod {
@@ -294,6 +305,7 @@ model CopyTradingFollower {
   @@index([followerId])
   @@index([leaderId])
   @@index([isActive])
+  @@index([leaderId, isActive])
 }
 
 model CopiedTrade {
@@ -372,6 +384,9 @@ model ReferralCommission {
   @@index([type])
   @@index([status])
   @@index([createdAt])
+  @@index([earnerId, status])
+  @@index([earnerId, generatorId, status])
+  @@index([generatorId, earnerId])
 }
 
 model ReferralSettings {
@@ -482,7 +497,7 @@ model SupportTicket {
 
   @@index([userId])
   @@index([status])
-  @@index([priority])
+  @@index([priority, status])
   @@index([ticketNumber])
   @@index([createdAt])
 }

@@ -1,12 +1,13 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { StringValue } from 'ms';
-import { prisma } from '../../config/database.js';
+import { query, queryOne } from '../../config/db.js';
 import { config } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import type { RegisterInput, LoginInput } from '../../validators/auth.validators.js';
 import { referralService } from '../referral/referral.service.js';
 import { emailService } from '../email/email.service.js';
+import { randomUUID } from 'crypto';
 
 interface JwtPayload {
   userId: string;
@@ -30,6 +31,20 @@ interface AuthResult {
   token: string;
 }
 
+interface UserRow {
+  id: string;
+  email: string;
+  password: string;
+  name: string;
+  role: string;
+  liveBalance: number;
+  demoBalance: number;
+  activeAccountType: string;
+  isActive: boolean;
+  emailVerified: boolean;
+  emailVerifiedAt: Date | null;
+}
+
 class AuthServiceError extends Error {
   constructor(
     message: string,
@@ -41,45 +56,56 @@ class AuthServiceError extends Error {
 }
 
 export class AuthService {
-  private readonly SALT_ROUNDS = 12;
+  // 10 rounds is a good balance between security and performance (~100ms vs ~300ms for 12)
+  // OWASP recommends minimum 10 rounds for bcrypt
+  private readonly SALT_ROUNDS = 10;
 
   async register(data: RegisterInput): Promise<AuthResult> {
-    const existingUser = await prisma.user.findUnique({
-      where: { email: data.email },
-    });
+    // Check if email exists
+    const existingUser = await queryOne<{ id: string }>(
+      'SELECT id FROM "User" WHERE email = $1',
+      [data.email]
+    );
 
     if (existingUser) {
       throw new AuthServiceError('Email already registered', 409);
     }
 
     const hashedPassword = await bcrypt.hash(data.password, this.SALT_ROUNDS);
-
-    // Generate unique referral code for this user
+    const userId = randomUUID();
     const referralCode = referralService.generateReferralCode('temp', data.name);
+    const now = new Date();
 
-    const user = await prisma.user.create({
-      data: {
-        email: data.email,
-        password: hashedPassword,
-        name: data.name,
-        liveBalance: 0,
-        demoBalance: config.trading.defaultDemoBalance,
-        activeAccountType: 'LIVE', // Live is the main account
+    // Insert new user
+    const user = await queryOne<UserRow>(
+      `INSERT INTO "User" (
+        id, email, password, name, role, "liveBalance", "demoBalance",
+        "activeAccountType", "isActive", "emailVerified", "referralCode",
+        "createdAt", "updatedAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING id, email, name, role, "liveBalance", "demoBalance", "activeAccountType", "emailVerified"`,
+      [
+        userId,
+        data.email,
+        hashedPassword,
+        data.name,
+        'USER',
+        0,
+        config.trading.defaultDemoBalance,
+        'LIVE',
+        true,
+        false,
         referralCode,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        liveBalance: true,
-        demoBalance: true,
-        activeAccountType: true,
-        emailVerified: true,
-      },
-    });
+        now,
+        now
+      ]
+    );
 
-    // Process referral if a referral code was provided (just links the accounts, no instant bonus)
+    if (!user) {
+      throw new AuthServiceError('Failed to create user', 500);
+    }
+
+    // Process referral if provided
     if (data.referralCode) {
       try {
         await referralService.linkReferral(user.id, data.referralCode);
@@ -103,7 +129,10 @@ export class AuthService {
 
     return {
       user: {
-        ...user,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
         liveBalance: Number(user.liveBalance),
         demoBalance: Number(user.demoBalance),
         activeAccountType: user.activeAccountType as 'LIVE' | 'DEMO',
@@ -114,9 +143,12 @@ export class AuthService {
   }
 
   async login(data: LoginInput): Promise<AuthResult> {
-    const user = await prisma.user.findUnique({
-      where: { email: data.email },
-    });
+    const user = await queryOne<UserRow>(
+      `SELECT id, email, password, name, role, "liveBalance", "demoBalance",
+              "activeAccountType", "isActive", "emailVerified"
+       FROM "User" WHERE email = $1`,
+      [data.email]
+    );
 
     if (!user) {
       throw new AuthServiceError('Invalid email or password', 401);
@@ -156,20 +188,12 @@ export class AuthService {
   }
 
   async getUserById(userId: string): Promise<UserPublic | null> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        liveBalance: true,
-        demoBalance: true,
-        activeAccountType: true,
-        isActive: true,
-        emailVerified: true,
-      },
-    });
+    const user = await queryOne<UserRow>(
+      `SELECT id, email, name, role, "liveBalance", "demoBalance",
+              "activeAccountType", "isActive", "emailVerified"
+       FROM "User" WHERE id = $1`,
+      [userId]
+    );
 
     if (!user || !user.isActive) {
       return null;
@@ -190,32 +214,36 @@ export class AuthService {
   async resetBalance(userId: string, newBalance?: number): Promise<{ demoBalance: number }> {
     const balance = newBalance ?? config.trading.defaultDemoBalance;
 
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { demoBalance: balance },
-      select: { demoBalance: true },
-    });
+    const result = await queryOne<{ demoBalance: number }>(
+      `UPDATE "User" SET "demoBalance" = $1, "updatedAt" = $2
+       WHERE id = $3 RETURNING "demoBalance"`,
+      [balance, new Date(), userId]
+    );
+
+    if (!result) {
+      throw new AuthServiceError('User not found', 404);
+    }
 
     logger.info('User balance reset', { userId, newBalance: balance });
 
     return {
-      demoBalance: Number(user.demoBalance),
+      demoBalance: Number(result.demoBalance),
     };
   }
 
   async updateBalance(userId: string, amount: number): Promise<{ demoBalance: number }> {
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        demoBalance: {
-          increment: amount,
-        },
-      },
-      select: { demoBalance: true },
-    });
+    const result = await queryOne<{ demoBalance: number }>(
+      `UPDATE "User" SET "demoBalance" = "demoBalance" + $1, "updatedAt" = $2
+       WHERE id = $3 RETURNING "demoBalance"`,
+      [amount, new Date(), userId]
+    );
+
+    if (!result) {
+      throw new AuthServiceError('User not found', 404);
+    }
 
     return {
-      demoBalance: Number(user.demoBalance),
+      demoBalance: Number(result.demoBalance),
     };
   }
 
@@ -224,20 +252,20 @@ export class AuthService {
       throw new AuthServiceError('Invalid top-up amount. Must be between 1 and 100,000', 400);
     }
 
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        demoBalance: {
-          increment: amount,
-        },
-      },
-      select: { demoBalance: true },
-    });
+    const result = await queryOne<{ demoBalance: number }>(
+      `UPDATE "User" SET "demoBalance" = "demoBalance" + $1, "updatedAt" = $2
+       WHERE id = $3 RETURNING "demoBalance"`,
+      [amount, new Date(), userId]
+    );
 
-    logger.info('Demo balance topped up', { userId, amount, newBalance: Number(user.demoBalance) });
+    if (!result) {
+      throw new AuthServiceError('User not found', 404);
+    }
+
+    logger.info('Demo balance topped up', { userId, amount, newBalance: Number(result.demoBalance) });
 
     return {
-      demoBalance: Number(user.demoBalance),
+      demoBalance: Number(result.demoBalance),
     };
   }
 
@@ -257,10 +285,10 @@ export class AuthService {
   }
 
   async sendVerificationCode(userId: string): Promise<boolean> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, name: true, emailVerified: true },
-    });
+    const user = await queryOne<{ email: string; name: string; emailVerified: boolean }>(
+      `SELECT email, name, "emailVerified" FROM "User" WHERE id = $1`,
+      [userId]
+    );
 
     if (!user) {
       throw new AuthServiceError('User not found', 404);
@@ -275,10 +303,10 @@ export class AuthService {
   }
 
   async verifyEmail(userId: string, code: string): Promise<boolean> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, name: true, emailVerified: true },
-    });
+    const user = await queryOne<{ email: string; name: string; emailVerified: boolean }>(
+      `SELECT email, name, "emailVerified" FROM "User" WHERE id = $1`,
+      [userId]
+    );
 
     if (!user) {
       throw new AuthServiceError('User not found', 404);
@@ -293,13 +321,11 @@ export class AuthService {
       throw new AuthServiceError('Invalid or expired verification code', 400);
     }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        emailVerified: true,
-        emailVerifiedAt: new Date(),
-      },
-    });
+    await query(
+      `UPDATE "User" SET "emailVerified" = true, "emailVerifiedAt" = $1, "updatedAt" = $1
+       WHERE id = $2`,
+      [new Date(), userId]
+    );
 
     // Send confirmation email
     emailService.sendEmailVerified(user.email, user.name)
@@ -310,20 +336,16 @@ export class AuthService {
   }
 
   async switchAccountType(userId: string, accountType: 'LIVE' | 'DEMO'): Promise<UserPublic> {
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { activeAccountType: accountType },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        liveBalance: true,
-        demoBalance: true,
-        activeAccountType: true,
-        emailVerified: true,
-      },
-    });
+    const user = await queryOne<UserRow>(
+      `UPDATE "User" SET "activeAccountType" = $1, "updatedAt" = $2
+       WHERE id = $3
+       RETURNING id, email, name, role, "liveBalance", "demoBalance", "activeAccountType", "emailVerified"`,
+      [accountType, new Date(), userId]
+    );
+
+    if (!user) {
+      throw new AuthServiceError('User not found', 404);
+    }
 
     logger.info('User switched account type', { userId, accountType });
 
@@ -340,14 +362,10 @@ export class AuthService {
   }
 
   async getActiveBalance(userId: string): Promise<{ balance: number; accountType: 'LIVE' | 'DEMO' }> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        liveBalance: true,
-        demoBalance: true,
-        activeAccountType: true,
-      },
-    });
+    const user = await queryOne<{ liveBalance: number; demoBalance: number; activeAccountType: string }>(
+      `SELECT "liveBalance", "demoBalance", "activeAccountType" FROM "User" WHERE id = $1`,
+      [userId]
+    );
 
     if (!user) {
       throw new AuthServiceError('User not found', 404);
@@ -364,10 +382,10 @@ export class AuthService {
   }
 
   async updateActiveBalance(userId: string, amount: number): Promise<{ balance: number; accountType: 'LIVE' | 'DEMO' }> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { activeAccountType: true },
-    });
+    const user = await queryOne<{ activeAccountType: string }>(
+      `SELECT "activeAccountType" FROM "User" WHERE id = $1`,
+      [userId]
+    );
 
     if (!user) {
       throw new AuthServiceError('User not found', 404);
@@ -375,19 +393,16 @@ export class AuthService {
 
     const balanceField = user.activeAccountType === 'LIVE' ? 'liveBalance' : 'demoBalance';
 
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        [balanceField]: {
-          increment: amount,
-        },
-      },
-      select: {
-        liveBalance: true,
-        demoBalance: true,
-        activeAccountType: true,
-      },
-    });
+    const updatedUser = await queryOne<{ liveBalance: number; demoBalance: number; activeAccountType: string }>(
+      `UPDATE "User" SET "${balanceField}" = "${balanceField}" + $1, "updatedAt" = $2
+       WHERE id = $3
+       RETURNING "liveBalance", "demoBalance", "activeAccountType"`,
+      [amount, new Date(), userId]
+    );
+
+    if (!updatedUser) {
+      throw new AuthServiceError('Failed to update balance', 500);
+    }
 
     const balance = updatedUser.activeAccountType === 'LIVE'
       ? Number(updatedUser.liveBalance)
@@ -400,10 +415,10 @@ export class AuthService {
   }
 
   async forgotPassword(email: string): Promise<boolean> {
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true, name: true, isActive: true },
-    });
+    const user = await queryOne<{ id: string; name: string; isActive: boolean }>(
+      `SELECT id, name, "isActive" FROM "User" WHERE email = $1`,
+      [email]
+    );
 
     // Always return success to prevent email enumeration
     if (!user || !user.isActive) {
@@ -427,10 +442,10 @@ export class AuthService {
       throw new AuthServiceError('Invalid or expired reset token', 400);
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true, name: true, isActive: true },
-    });
+    const user = await queryOne<{ id: string; name: string; isActive: boolean }>(
+      `SELECT id, name, "isActive" FROM "User" WHERE email = $1`,
+      [email]
+    );
 
     if (!user || !user.isActive) {
       throw new AuthServiceError('User not found or inactive', 404);
@@ -438,10 +453,10 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(newPassword, this.SALT_ROUNDS);
 
-    await prisma.user.update({
-      where: { email },
-      data: { password: hashedPassword },
-    });
+    await query(
+      `UPDATE "User" SET password = $1, "updatedAt" = $2 WHERE email = $3`,
+      [hashedPassword, new Date(), email]
+    );
 
     await emailService.markResetTokenUsed(token);
 

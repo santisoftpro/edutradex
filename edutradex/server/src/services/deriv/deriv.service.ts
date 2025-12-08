@@ -54,6 +54,7 @@ class DerivService {
   private isAvailable = false;
   private activeSymbols: DerivSymbol[] = [];
   private symbolsFetched = false;
+  private requestCounter = 1;
 
   // Symbol mapping: Our symbols -> Deriv symbols
   private symbolMap = new Map<string, string>([
@@ -443,7 +444,7 @@ class DerivService {
   }
 
   /**
-   * Fetch historical candles from Deriv API
+   * Fetch historical candles from Deriv API via WebSocket
    * @param symbol Our symbol format (e.g., 'EUR/USD')
    * @param granularity Candle size in seconds (60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 14400, 28800, 86400)
    * @param count Number of candles to fetch (max 5000)
@@ -453,6 +454,12 @@ class DerivService {
     granularity: number = 60,
     count: number = 500
   ): Promise<DerivCandle[]> {
+    const isConnected = await this.waitForConnection();
+    if (!isConnected) {
+      logger.warn(`[Deriv] WebSocket not connected after wait - cannot fetch candles for ${symbol}`);
+      return [];
+    }
+
     const derivSymbol = this.symbolMap.get(symbol);
     if (!derivSymbol) {
       logger.warn(`[Deriv] Symbol ${symbol} not found in symbol map`);
@@ -465,44 +472,111 @@ class DerivService {
       Math.abs(curr - granularity) < Math.abs(prev - granularity) ? curr : prev
     );
 
-    try {
-      // Use Deriv REST API for historical data (more reliable than WebSocket for one-time requests)
-      const url = `https://api.deriv.com/api/v3/ticks_history?ticks_history=${derivSymbol}&style=candles&granularity=${closestGranularity}&count=${Math.min(count, 5000)}&end=latest`;
+    // Use WebSocket to fetch historical candles (Deriv doesn't have REST API)
+    return this.fetchCandlesViaWebSocket(derivSymbol, closestGranularity, count, symbol);
+  }
 
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  /**
+   * Fetch historical candles via WebSocket request
+   * Uses 'count' parameter instead of 'start'/'end' for more reliable results
+   */
+  private fetchCandlesViaWebSocket(
+    derivSymbol: string,
+    granularity: number,
+    count: number,
+    ourSymbol: string
+  ): Promise<DerivCandle[]> {
+    return new Promise((resolve) => {
+      // If not connected, return empty
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        logger.warn(`[Deriv] WebSocket not connected, cannot fetch candles for ${ourSymbol}`);
+        resolve([]);
+        return;
       }
 
-      const data = await response.json() as {
-        error?: { message?: string };
-        candles?: Array<{ epoch: number; open: number; high: number; low: number; close: number }>;
+      // Deriv API requires req_id to be an integer, not a string!
+      this.requestCounter = (this.requestCounter % 10000) + 1;
+      const requestId = this.requestCounter;
+      let resolved = false;
+
+      // Set up one-time message handler for this request
+      const messageHandler = (data: WebSocket.Data) => {
+        if (resolved) return;
+
+        try {
+          const message = JSON.parse(data.toString());
+
+          // Log candles-related messages for debugging
+          if (message.msg_type === 'candles' || message.msg_type === 'history' || message.candles || message.error) {
+            logger.info(`[Deriv] Candles response for ${ourSymbol}: msg_type=${message.msg_type}, has_candles=${!!message.candles}, candles_count=${message.candles?.length || 0}, error=${message.error?.message || 'none'}, req_id_match=${message.echo_req?.req_id === requestId}`);
+          }
+
+          // Check if this is our candles response
+          const isOurResponse = message.echo_req?.req_id === requestId;
+
+          if (isOurResponse) {
+            resolved = true;
+            // Remove this handler after receiving response
+            this.ws?.removeListener('message', messageHandler);
+
+            if (message.error) {
+              logger.warn(`[Deriv] Candles error for ${ourSymbol}: ${message.error.message} (code: ${message.error.code})`);
+              resolve([]);
+              return;
+            }
+
+            if (message.candles && Array.isArray(message.candles)) {
+              let candles: DerivCandle[] = message.candles.map((c: any) => ({
+                time: c.epoch,
+                open: parseFloat(c.open),
+                high: parseFloat(c.high),
+                low: parseFloat(c.low),
+                close: parseFloat(c.close),
+              }));
+
+              // Sort by time ascending
+              candles.sort((a, b) => a.time - b.time);
+
+              logger.info(`[Deriv] Successfully fetched ${candles.length} candles for ${ourSymbol} (${granularity}s granularity)`);
+              resolve(candles);
+            } else {
+              logger.warn(`[Deriv] No candles array in response for ${ourSymbol}. Response keys: ${Object.keys(message).join(', ')}`);
+              resolve([]);
+            }
+          }
+        } catch (error) {
+          // Ignore parse errors from other messages
+        }
       };
 
-      if (data.error) {
-        throw new Error(data.error.message || 'Deriv API error');
-      }
+      // Add temporary message listener
+      this.ws.on('message', messageHandler);
 
-      if (!data.candles || !Array.isArray(data.candles)) {
-        logger.warn(`[Deriv] No candle data returned for ${symbol}`);
-        return [];
-      }
+      // Send the ticks_history request using 'count' instead of 'start'/'end'
+      // This is more reliable for getting historical data
+      const request = {
+        ticks_history: derivSymbol,
+        style: 'candles',
+        granularity: granularity,
+        count: count,  // Use count for number of candles to fetch
+        end: 'latest', // End at current time
+        adjust_start_time: 1,
+        req_id: requestId,
+      };
 
-      // Convert Deriv candles to our format
-      const candles: DerivCandle[] = data.candles.map((c) => ({
-        time: c.epoch,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      }));
+      logger.info(`[Deriv] Requesting ${count} candles for ${ourSymbol} (${derivSymbol}), granularity=${granularity}s`);
+      this.ws.send(JSON.stringify(request));
 
-      logger.debug(`[Deriv] Fetched ${candles.length} candles for ${symbol} (${closestGranularity}s)`);
-      return candles;
-    } catch (error) {
-      logger.error(`[Deriv] Failed to fetch candles for ${symbol}:`, error);
-      return [];
-    }
+      // Timeout after 15 seconds
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          this.ws?.removeListener('message', messageHandler);
+          logger.warn(`[Deriv] Candles request timeout for ${ourSymbol} after 15s`);
+          resolve([]);
+        }
+      }, 15000);
+    });
   }
 
   /**
@@ -538,6 +612,26 @@ class DerivService {
     this.subscriptions.clear();
     this.callbacks.clear();
     this.isAvailable = false;
+  }
+
+  // Wait briefly for the socket to be ready before performing one-off requests
+  private async waitForConnection(timeoutMs: number = 2000): Promise<boolean> {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      return true;
+    }
+
+    const start = Date.now();
+    return new Promise((resolve) => {
+      const interval = setInterval(() => {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          clearInterval(interval);
+          resolve(true);
+        } else if (Date.now() - start >= timeoutMs) {
+          clearInterval(interval);
+          resolve(false);
+        }
+      }, 100);
+    });
   }
 }
 

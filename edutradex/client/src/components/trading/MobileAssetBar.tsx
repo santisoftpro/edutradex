@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, MoreHorizontal, Trash2, TrendingUp, TrendingDown, Search, Loader2 } from 'lucide-react';
+import { ChevronDown, TrendingUp, TrendingDown, Search, Loader2, Clock, MoreHorizontal, Undo2, Trash2 } from 'lucide-react';
 import { useTradeStore } from '@/store/trade.store';
 import { api, PriceTick, MarketAsset } from '@/lib/api';
 import { cn, isMarketOpen, MarketType } from '@/lib/utils';
@@ -14,6 +14,11 @@ interface MobileAssetBarProps {
   currentPrice: PriceTick | null;
   expirationTime: number;
   livePrices?: Map<string, PriceTick>;
+  onOpenChartSettings?: () => void;
+  // Drawing controls
+  drawnLinesCount?: number;
+  onUndoDrawing?: () => void;
+  onClearDrawings?: () => void;
 }
 
 function getAssetCategory(asset: MarketAsset): AssetCategory {
@@ -40,7 +45,17 @@ const CATEGORY_LABELS: Record<AssetCategory, string> = {
   indices: 'Indices',
 };
 
-export function MobileAssetBar({ selectedAsset, onSelectAsset, currentPrice, expirationTime, livePrices }: MobileAssetBarProps) {
+export function MobileAssetBar({
+  selectedAsset,
+  onSelectAsset,
+  currentPrice,
+  expirationTime,
+  livePrices,
+  onOpenChartSettings,
+  drawnLinesCount = 0,
+  onUndoDrawing,
+  onClearDrawings,
+}: MobileAssetBarProps) {
   const [showAssetMenu, setShowAssetMenu] = useState(false);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<AssetCategory>('all');
@@ -147,17 +162,59 @@ export function MobileAssetBar({ selectedAsset, onSelectAsset, currentPrice, exp
     <div className="md:hidden bg-[#0d0d1a]">
       {/* Asset Row */}
       <div className="flex items-center justify-between px-3 py-2">
-        {/* Left Side - Asset Selector and Buttons */}
+        {/* Left Side - Asset Selector and Active Trades */}
         <div className="flex items-center gap-2">
           {/* Asset Selector */}
-          <div className="relative">
+          <div className="relative flex items-center gap-1.5">
             <button
               onClick={() => setShowAssetMenu(!showAssetMenu)}
-              className="flex items-center gap-2 bg-[#1a1a2e] border border-[#2d2d44] rounded-lg px-3 py-2"
+              className="flex items-center gap-2 bg-[#1a1a2e] border border-[#2d2d44] rounded-lg px-3 py-2 min-h-[40px] active:bg-[#252542]"
             >
               <span className="text-white font-semibold text-sm">{selectedAsset}</span>
               <ChevronDown className="h-4 w-4 text-gray-400" />
             </button>
+
+            {/* Chart Settings Button (3-dot menu) */}
+            {onOpenChartSettings && (
+              <button
+                onClick={onOpenChartSettings}
+                className="flex items-center justify-center w-10 h-10 bg-[#1a1a2e] border border-[#2d2d44] rounded-lg active:bg-[#252542] transition-colors"
+              >
+                <MoreHorizontal className="h-5 w-5 text-gray-400" />
+              </button>
+            )}
+
+            {/* Drawing Controls - Show when there are drawings */}
+            {drawnLinesCount > 0 && (
+              <div className="flex items-center gap-1">
+                {/* Undo Last Drawing */}
+                {onUndoDrawing && (
+                  <button
+                    onClick={onUndoDrawing}
+                    className="flex items-center justify-center w-9 h-9 bg-yellow-500/20 border border-yellow-500/30 rounded-lg active:bg-yellow-500/30 transition-colors"
+                    title="Undo last drawing"
+                  >
+                    <Undo2 className="h-4 w-4 text-yellow-400" />
+                  </button>
+                )}
+
+                {/* Clear All Drawings */}
+                {onClearDrawings && (
+                  <button
+                    onClick={onClearDrawings}
+                    className="flex items-center justify-center w-9 h-9 bg-red-500/20 border border-red-500/30 rounded-lg active:bg-red-500/30 transition-colors"
+                    title="Clear all drawings"
+                  >
+                    <Trash2 className="h-4 w-4 text-red-400" />
+                  </button>
+                )}
+
+                {/* Drawing Count Badge */}
+                <span className="text-[10px] text-orange-400 font-bold bg-orange-500/20 px-1.5 py-0.5 rounded">
+                  {drawnLinesCount}
+                </span>
+              </div>
+            )}
 
             {showAssetMenu && (
               <>
@@ -178,16 +235,16 @@ export function MobileAssetBar({ selectedAsset, onSelectAsset, currentPrice, exp
                   </div>
 
                   {/* Categories */}
-                  <div className="flex flex-wrap gap-1 p-2 border-b border-[#2d2d44]">
+                  <div className="flex flex-wrap gap-2 p-3 border-b border-[#2d2d44]">
                     {visibleCategories.map((cat) => (
                       <button
                         key={cat}
                         onClick={() => setCategory(cat)}
                         className={cn(
-                          'px-2 py-1 rounded text-xs font-medium transition-colors',
+                          'px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px]',
                           category === cat
                             ? 'bg-emerald-600 text-white'
-                            : 'bg-[#252542] text-gray-400 hover:text-white'
+                            : 'bg-[#252542] text-gray-400 active:bg-[#2d2d52]'
                         )}
                       >
                         {CATEGORY_LABELS[cat]}
@@ -278,38 +335,29 @@ export function MobileAssetBar({ selectedAsset, onSelectAsset, currentPrice, exp
             )}
           </div>
 
-          {/* Options Button */}
-          <button className="w-10 h-10 bg-[#1a1a2e] border border-[#2d2d44] rounded-lg flex items-center justify-center">
-            <MoreHorizontal className="h-5 w-5 text-gray-400" />
-          </button>
-
-          {/* Trash with Badge */}
-          <div className="relative">
-            <button className="w-10 h-10 bg-[#1a1a2e] border border-[#2d2d44] rounded-lg flex items-center justify-center">
-              <Trash2 className="h-5 w-5 text-gray-400" />
-            </button>
-            {activeTrades.length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                {activeTrades.length}
-              </span>
-            )}
-          </div>
+          {/* Active Trades Indicator */}
+          {activeTrades.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-blue-600/20 border border-blue-500/30 rounded-lg px-2.5 py-1.5">
+              <Clock className="h-3.5 w-3.5 text-blue-400" />
+              <span className="text-blue-400 text-xs font-bold">{activeTrades.length}</span>
+            </div>
+          )}
         </div>
 
         {/* Right Side - Expiration Time */}
         <div className="flex flex-col items-end">
-          <span className="text-gray-500 text-[10px]">Expiration time</span>
-          <span className="text-white text-sm font-medium">{formatExpirationTime()}</span>
+          <span className="text-gray-400 text-[11px] font-medium">Expiration</span>
+          <span className="text-white text-sm font-semibold">{formatExpirationTime()}</span>
         </div>
       </div>
 
       {/* Price Display Row */}
       {currentPrice && (
         <div className="flex items-center gap-2 px-3 pb-2">
-          <span className="text-gray-400 text-xs font-medium">
+          <span className="text-white text-sm font-medium">
             {currentPrice.price.toFixed(currentPrice.price > 100 ? 2 : 5)}
           </span>
-          <span className="text-gray-600 text-xs">
+          <span className="text-gray-500 text-xs">
             {formatTime(currentPrice.timestamp)} UTC+2
           </span>
         </div>

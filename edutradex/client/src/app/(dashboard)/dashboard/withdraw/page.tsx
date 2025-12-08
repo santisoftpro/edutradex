@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Smartphone,
   Bitcoin,
@@ -21,6 +21,7 @@ import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
+import { useWithdrawalUpdates } from '@/hooks/useWithdrawalUpdates';
 import type { Withdrawal, PaymentMethod as PaymentMethodType } from '@/types';
 
 type Step = 1 | 2 | 3;
@@ -143,7 +144,7 @@ export default function WithdrawPage() {
     return matchesSearch;
   });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [withdrawalsData, methodsData] = await Promise.all([
@@ -157,7 +158,27 @@ export default function WithdrawPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  const refreshWithdrawals = useCallback(async () => {
+    try {
+      const withdrawalsData = await api.getMyWithdrawals({ limit: 5 });
+      setWithdrawals(withdrawalsData);
+    } catch (error) {
+      console.error('Failed to refresh withdrawals:', error);
+    }
+  }, []);
+
+  // Listen for real-time withdrawal updates
+  useWithdrawalUpdates(useCallback((withdrawalId: string, status: 'APPROVED' | 'REJECTED') => {
+    // Update the withdrawal status in local state immediately
+    setWithdrawals(prev => prev.map(w =>
+      w.id === withdrawalId ? { ...w, status } : w
+    ));
+    // Also refresh to ensure we have latest data
+    refreshWithdrawals();
+    refreshProfile();
+  }, [refreshWithdrawals, refreshProfile]));
 
   const handleRefreshBalance = async () => {
     setIsRefreshing(true);
@@ -174,7 +195,7 @@ export default function WithdrawPage() {
   useEffect(() => {
     fetchData();
     refreshProfile();
-  }, [refreshProfile]);
+  }, [fetchData, refreshProfile]);
 
   const handleMethodSelect = (method: PaymentMethodType) => {
     setSelectedMethod(method);
@@ -251,28 +272,28 @@ export default function WithdrawPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0f0f1a] flex items-center justify-center">
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-purple-500 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] p-4 md:p-6">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-slate-900 p-4 md:p-6">
+      <div className="max-w-5xl mx-auto space-y-5">
         {/* Header */}
-        <div className="mb-6">
+        <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-bold text-white">Withdraw Funds</h1>
-          <p className="text-gray-400 text-sm mt-1">Transfer your earnings to your preferred account</p>
+          <p className="text-gray-400 text-sm">Move your balance to your preferred account securely.</p>
         </div>
 
         {/* Step Indicator */}
         <StepIndicator currentStep={step} />
 
         {/* Balance Card */}
-        <div className="bg-gradient-to-r from-purple-600/20 to-purple-500/10 border border-purple-500/30 rounded-xl p-4 mb-6 flex items-center justify-between">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-500/20 rounded-lg">
+            <div className="p-2 bg-purple-600/20 rounded-lg">
               <Wallet className="h-5 w-5 text-purple-400" />
             </div>
             <div>
@@ -321,7 +342,7 @@ export default function WithdrawPage() {
                 </div>
 
                 {/* Categories */}
-                <div className="flex gap-2 overflow-x-auto pb-2">
+                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                   {categories.map((cat) => (
                     <button
                       key={cat.id}
@@ -520,7 +541,7 @@ export default function WithdrawPage() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full py-3 bg-purple-500 hover:bg-purple-400 text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {isSubmitting ? (
                       <>
@@ -550,7 +571,7 @@ export default function WithdrawPage() {
                 </p>
                 <button
                   onClick={handleReset}
-                  className="px-6 py-3 bg-purple-500 hover:bg-purple-400 text-white font-medium rounded-lg transition-all"
+                  className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-lg transition-all"
                 >
                   Make Another Withdrawal
                 </button>

@@ -1,10 +1,10 @@
-import { prisma } from '../../config/database.js';
+import { query, queryOne, queryMany, transaction } from '../../config/db.js';
 import { config } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
-import { authService } from '../auth/auth.service.js';
 import { marketService } from '../market/market.service.js';
 import { copyExecutionService } from '../copy-trading/index.js';
 import { wsManager } from '../websocket/websocket.manager.js';
+import { randomUUID } from 'crypto';
 
 interface PlaceTradeInput {
   symbol: string;
@@ -35,6 +35,27 @@ interface TradeResult {
   expiresAt: Date;
 }
 
+interface TradeRow {
+  id: string;
+  userId: string;
+  symbol: string;
+  direction: string;
+  amount: number;
+  entryPrice: number;
+  exitPrice: number | null;
+  duration: number;
+  payoutPercent: number;
+  status: string;
+  result: string | null;
+  profit: number | null;
+  market: string;
+  accountType: string;
+  openedAt: Date;
+  closedAt: Date | null;
+  expiresAt: Date;
+  isCopyTrade: boolean;
+}
+
 interface TradeStats {
   totalTrades: number;
   wonTrades: number;
@@ -55,10 +76,10 @@ class TradeServiceError extends Error {
 
 export class TradeService {
   async placeTrade(userId: string, data: PlaceTradeInput): Promise<TradeResult> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { demoBalance: true, isActive: true },
-    });
+    const user = await queryOne<{ demoBalance: number; isActive: boolean }>(
+      `SELECT "demoBalance", "isActive" FROM "User" WHERE id = $1`,
+      [userId]
+    );
 
     if (!user || !user.isActive) {
       throw new TradeServiceError('User not found or account deactivated', 404);
@@ -78,12 +99,10 @@ export class TradeService {
       );
     }
 
-    // Quick check for obviously insufficient balance (non-atomic)
     if (data.amount > user.demoBalance) {
       throw new TradeServiceError('Insufficient balance', 400);
     }
 
-    // Allow durations from 5 seconds to 24 hours (86400 seconds)
     if (data.duration < 5 || data.duration > 86400) {
       throw new TradeServiceError('Trade duration must be between 5 seconds and 24 hours', 400);
     }
@@ -91,33 +110,44 @@ export class TradeService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + data.duration * 1000);
     const payoutPercent = config.trading.defaultPayoutPercentage;
+    const tradeId = randomUUID();
 
-    // Create trade and deduct balance atomically
-    const [trade] = await prisma.$transaction([
-      prisma.trade.create({
-        data: {
+    // Create trade and deduct balance atomically using transaction
+    const trade = await transaction(async (client) => {
+      // Insert trade
+      const tradeResult = await client.query<TradeRow>(
+        `INSERT INTO "Trade" (
+          id, "userId", symbol, direction, amount, "entryPrice", duration,
+          "payoutPercent", market, status, "expiresAt", "accountType",
+          "isCopyTrade", "openedAt"
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        RETURNING *`,
+        [
+          tradeId,
           userId,
-          symbol: data.symbol,
-          direction: data.direction,
-          amount: data.amount,
-          entryPrice: data.entryPrice,
-          duration: data.duration,
+          data.symbol,
+          data.direction,
+          data.amount,
+          data.entryPrice,
+          data.duration,
           payoutPercent,
-          market: data.marketType.toUpperCase(),
-          status: 'OPEN',
+          data.marketType.toUpperCase(),
+          'OPEN',
           expiresAt,
-          accountType: 'DEMO',
-        },
-      }),
-      prisma.user.update({
-        where: { id: userId },
-        data: {
-          demoBalance: {
-            decrement: data.amount,
-          },
-        },
-      }),
-    ]);
+          'DEMO',
+          false,
+          now
+        ]
+      );
+
+      // Deduct balance
+      await client.query(
+        `UPDATE "User" SET "demoBalance" = "demoBalance" - $1, "updatedAt" = $2 WHERE id = $3`,
+        [data.amount, now, userId]
+      );
+
+      return tradeResult.rows[0];
+    });
 
     logger.info('Trade placed', {
       tradeId: trade.id,
@@ -167,9 +197,10 @@ export class TradeService {
   }
 
   async settleTrade(tradeId: string): Promise<TradeResult | null> {
-    const trade = await prisma.trade.findUnique({
-      where: { id: tradeId },
-    });
+    const trade = await queryOne<TradeRow>(
+      `SELECT * FROM "Trade" WHERE id = $1`,
+      [tradeId]
+    );
 
     if (!trade) {
       logger.error('Trade not found for settlement', { tradeId });
@@ -190,27 +221,26 @@ export class TradeService {
 
     const profit = won ? trade.amount * (trade.payoutPercent / 100) : 0;
     const returnAmount = won ? trade.amount + profit : 0;
+    const now = new Date();
 
-    const [updatedTrade] = await prisma.$transaction([
-      prisma.trade.update({
-        where: { id: tradeId },
-        data: {
-          exitPrice,
-          status: 'CLOSED',
-          result: won ? 'WON' : 'LOST',
-          profit: won ? profit : -trade.amount,
-          closedAt: new Date(),
-        },
-      }),
-      prisma.user.update({
-        where: { id: trade.userId },
-        data: {
-          demoBalance: {
-            increment: returnAmount,
-          },
-        },
-      }),
-    ]);
+    // Update trade and user balance atomically
+    const updatedTrade = await transaction(async (client) => {
+      // Update trade
+      const tradeResult = await client.query<TradeRow>(
+        `UPDATE "Trade" SET
+          "exitPrice" = $1, status = $2, result = $3, profit = $4, "closedAt" = $5
+        WHERE id = $6 RETURNING *`,
+        [exitPrice, 'CLOSED', won ? 'WON' : 'LOST', won ? profit : -trade.amount, now, tradeId]
+      );
+
+      // Add return amount to user balance
+      await client.query(
+        `UPDATE "User" SET "demoBalance" = "demoBalance" + $1, "updatedAt" = $2 WHERE id = $3`,
+        [returnAmount, now, trade.userId]
+      );
+
+      return tradeResult.rows[0];
+    });
 
     logger.info('Trade settled', {
       tradeId,
@@ -264,19 +294,24 @@ export class TradeService {
   ): Promise<{ trades: TradeResult[]; total: number }> {
     const { status, limit = 50, offset = 0 } = options;
 
-    const where: { userId: string; status?: string } = { userId };
+    let whereClause = `"userId" = $1`;
+    const params: any[] = [userId];
+
     if (status) {
-      where.status = status.toUpperCase();
+      whereClause += ` AND status = $2`;
+      params.push(status.toUpperCase());
     }
 
-    const [trades, total] = await Promise.all([
-      prisma.trade.findMany({
-        where,
-        orderBy: { openedAt: 'desc' },
-        take: limit,
-        skip: offset,
-      }),
-      prisma.trade.count({ where }),
+    const [trades, countResult] = await Promise.all([
+      queryMany<TradeRow>(
+        `SELECT * FROM "Trade" WHERE ${whereClause}
+         ORDER BY "openedAt" DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, limit, offset]
+      ),
+      queryOne<{ count: string }>(
+        `SELECT COUNT(*) as count FROM "Trade" WHERE ${whereClause}`,
+        params
+      ),
     ]);
 
     return {
@@ -299,14 +334,15 @@ export class TradeService {
         closedAt: trade.closedAt,
         expiresAt: trade.expiresAt,
       })),
-      total,
+      total: parseInt(countResult?.count || '0', 10),
     };
   }
 
   async getTradeById(tradeId: string, userId: string): Promise<TradeResult | null> {
-    const trade = await prisma.trade.findFirst({
-      where: { id: tradeId, userId },
-    });
+    const trade = await queryOne<TradeRow>(
+      `SELECT * FROM "Trade" WHERE id = $1 AND "userId" = $2`,
+      [tradeId, userId]
+    );
 
     if (!trade) return null;
 
@@ -332,10 +368,10 @@ export class TradeService {
   }
 
   async getActiveTrades(userId: string): Promise<TradeResult[]> {
-    const trades = await prisma.trade.findMany({
-      where: { userId, status: 'OPEN' },
-      orderBy: { openedAt: 'desc' },
-    });
+    const trades = await queryMany<TradeRow>(
+      `SELECT * FROM "Trade" WHERE "userId" = $1 AND status = 'OPEN' ORDER BY "openedAt" DESC`,
+      [userId]
+    );
 
     return trades.map((trade) => ({
       id: trade.id,
@@ -359,15 +395,25 @@ export class TradeService {
   }
 
   async getUserStats(userId: string): Promise<TradeStats> {
-    const trades = await prisma.trade.findMany({
-      where: { userId, status: 'CLOSED' },
-      select: { result: true, profit: true },
-    });
+    const stats = await queryOne<{
+      total: string;
+      won: string;
+      lost: string;
+      profit: number;
+    }>(
+      `SELECT
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE result = 'WON') as won,
+        COUNT(*) FILTER (WHERE result = 'LOST') as lost,
+        COALESCE(SUM(profit), 0) as profit
+       FROM "Trade" WHERE "userId" = $1 AND status = 'CLOSED'`,
+      [userId]
+    );
 
-    const totalTrades = trades.length;
-    const wonTrades = trades.filter((t) => t.result === 'WON').length;
-    const lostTrades = trades.filter((t) => t.result === 'LOST').length;
-    const totalProfit = trades.reduce((sum, t) => sum + (t.profit || 0), 0);
+    const totalTrades = parseInt(stats?.total || '0', 10);
+    const wonTrades = parseInt(stats?.won || '0', 10);
+    const lostTrades = parseInt(stats?.lost || '0', 10);
+    const totalProfit = Number(stats?.profit || 0);
     const winRate = totalTrades > 0 ? (wonTrades / totalTrades) * 100 : 0;
 
     return {
@@ -380,13 +426,15 @@ export class TradeService {
   }
 
   async clearUserHistory(userId: string): Promise<{ deletedCount: number }> {
-    const result = await prisma.trade.deleteMany({
-      where: { userId, status: 'CLOSED' },
-    });
+    const result = await query(
+      `DELETE FROM "Trade" WHERE "userId" = $1 AND status = 'CLOSED'`,
+      [userId]
+    );
 
-    logger.info('User trade history cleared', { userId, deletedCount: result.count });
+    const deletedCount = result.rowCount || 0;
+    logger.info('User trade history cleared', { userId, deletedCount });
 
-    return { deletedCount: result.count };
+    return { deletedCount };
   }
 
   private async executeCopyTradesForLeader(
@@ -403,10 +451,10 @@ export class TradeService {
       expiresAt: Date;
     }
   ): Promise<void> {
-    const leaderProfile = await prisma.copyTradingLeader.findUnique({
-      where: { userId },
-      select: { id: true, status: true },
-    });
+    const leaderProfile = await queryOne<{ id: string; status: string }>(
+      `SELECT id, status FROM "CopyTradingLeader" WHERE "userId" = $1`,
+      [userId]
+    );
 
     if (!leaderProfile || leaderProfile.status !== 'APPROVED') {
       return;
@@ -426,10 +474,10 @@ export class TradeService {
   }
 
   private async updateLeaderStatsIfApplicable(userId: string): Promise<void> {
-    const leaderProfile = await prisma.copyTradingLeader.findUnique({
-      where: { userId },
-      select: { id: true },
-    });
+    const leaderProfile = await queryOne<{ id: string }>(
+      `SELECT id FROM "CopyTradingLeader" WHERE "userId" = $1`,
+      [userId]
+    );
 
     if (!leaderProfile) {
       return;

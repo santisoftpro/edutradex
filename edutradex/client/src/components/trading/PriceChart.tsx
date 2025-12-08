@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, memo, useCallback, useState } from 'react';
+import { useEffect, useRef, memo, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 import {
   createChart,
   IChartApi,
@@ -25,11 +25,18 @@ import {
   calculateBollingerBands,
   CandleData as IndicatorCandleData,
 } from '@/lib/indicators';
+import { useChartStore } from '@/store/chart.store';
 
 interface PriceChartProps {
   symbol: string;
   currentPrice: PriceTick | null;
   priceHistory: PriceTick[];
+  onDrawingsChange?: (count: number) => void;
+}
+
+export interface PriceChartHandle {
+  undoDrawing: () => void;
+  clearDrawings: () => void;
 }
 
 interface CandleData {
@@ -238,7 +245,8 @@ function convertToHeikinAshi(candles: CandleData[]): CandleData[] {
   return result;
 }
 
-function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
+const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
+  function PriceChartComponent({ symbol, currentPrice, onDrawingsChange }, ref) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const rsiContainerRef = useRef<HTMLDivElement>(null);
   const macdContainerRef = useRef<HTMLDivElement>(null);
@@ -262,18 +270,29 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
   const initializedKeyRef = useRef<string | null>(null);
   const lastPriceRef = useRef<number>(0);
 
-  const [selectedTimeframe, setSelectedTimeframe] = useState<TimeframeOption>(TIMEFRAMES[3]);
-  const [indicators, setIndicators] = useState<IndicatorConfig[]>(DEFAULT_INDICATORS);
+  // Get settings from store (shared with MobileChartSettingsSheet)
+  const {
+    selectedTimeframe,
+    setTimeframe: setSelectedTimeframe,
+    indicators,
+    toggleIndicator,
+    chartType,
+    setChartType,
+    showVolume,
+    toggleVolume,
+    drawingTool,
+    setDrawingTool,
+    drawnLines: storeDrawnLines,
+    addDrawnLine,
+    clearDrawings,
+  } = useChartStore();
+
+  // Local UI state
   const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
   const [showTimeframeMenu, setShowTimeframeMenu] = useState(false);
   const [showMobileIndicatorSheet, setShowMobileIndicatorSheet] = useState(false);
-
-  // New features state
-  const [chartType, setChartType] = useState<ChartType>('candlestick');
   const [showChartTypeMenu, setShowChartTypeMenu] = useState(false);
-  const [showVolume, setShowVolume] = useState(true);
   const [ohlcInfo, setOhlcInfo] = useState<OHLCInfo | null>(null);
-  const [drawingTool, setDrawingTool] = useState<DrawingTool>('none');
   const [drawnLines, setDrawnLines] = useState<DrawnLine[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [showDrawingMenu, setShowDrawingMenu] = useState(false);
@@ -293,6 +312,60 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
   const horizontalLinesRef = useRef<Map<string, { priceLine: any; price: number }>>(new Map());
   const drawingStartRef = useRef<{ time: Time; value: number } | null>(null);
 
+  // Expose undo/clear methods to parent via ref
+  useImperativeHandle(ref, () => ({
+    undoDrawing: () => {
+      if (drawnLines.length === 0) return;
+      const lastLine = drawnLines[drawnLines.length - 1];
+      const chart = chartRef.current;
+
+      // Remove the series from the chart
+      if (chart && lastLine) {
+        if (lastLine.type === 'horizontal') {
+          const lineData = horizontalLinesRef.current.get(lastLine.id);
+          if (lineData && candlestickSeriesRef.current) {
+            candlestickSeriesRef.current.removePriceLine(lineData.priceLine);
+          }
+          horizontalLinesRef.current.delete(lastLine.id);
+        } else {
+          const series = drawnSeriesRef.current.get(lastLine.id);
+          if (series) {
+            series.forEach(s => chart.removeSeries(s));
+          }
+          drawnSeriesRef.current.delete(lastLine.id);
+        }
+      }
+
+      setDrawnLines(prev => prev.slice(0, -1));
+    },
+    clearDrawings: () => {
+      const chart = chartRef.current;
+      if (chart) {
+        // Remove all line series
+        drawnSeriesRef.current.forEach((series) => {
+          series.forEach(s => chart.removeSeries(s));
+        });
+        drawnSeriesRef.current.clear();
+
+        // Remove all horizontal price lines
+        horizontalLinesRef.current.forEach((lineData) => {
+          if (candlestickSeriesRef.current) {
+            candlestickSeriesRef.current.removePriceLine(lineData.priceLine);
+          }
+        });
+        horizontalLinesRef.current.clear();
+      }
+
+      setDrawnLines([]);
+      setDrawingTool('none');
+    },
+  }), [drawnLines, setDrawingTool]);
+
+  // Notify parent of drawings count changes
+  useEffect(() => {
+    onDrawingsChange?.(drawnLines.length);
+  }, [drawnLines.length, onDrawingsChange]);
+
   const candleInterval = selectedTimeframe.seconds;
 
   const hasRSI = indicators.find((i) => i.id === 'rsi')?.enabled;
@@ -307,11 +380,7 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
     [candleInterval]
   );
 
-  const toggleIndicator = (id: string) => {
-    setIndicators((prev) =>
-      prev.map((ind) => (ind.id === id ? { ...ind, enabled: !ind.enabled } : ind))
-    );
-  };
+  // toggleIndicator is now provided by useChartStore
 
   // Convert CandleData to IndicatorCandleData format
   const toIndicatorFormat = (candles: CandleData[]): IndicatorCandleData[] => {
@@ -425,6 +494,9 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
         mode: CrosshairMode.Normal,
         vertLine: { width: 1, color: '#4b5563', style: 2, labelBackgroundColor: '#374151' },
         horzLine: { width: 1, color: '#4b5563', style: 2, labelBackgroundColor: '#374151' },
+      },
+      watermark: {
+        visible: false,
       },
       rightPriceScale: {
         borderColor: '#2d2d44',
@@ -627,6 +699,9 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
         horzLines: { color: '#1e1e2e', style: 1 },
       },
       crosshair: { mode: CrosshairMode.Normal },
+      watermark: {
+        visible: false,
+      },
       rightPriceScale: {
         borderColor: '#2d2d44',
         scaleMargins: { top: 0.1, bottom: 0.1 },
@@ -719,6 +794,9 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
         horzLines: { color: '#1e1e2e', style: 1 },
       },
       crosshair: { mode: CrosshairMode.Normal },
+      watermark: {
+        visible: false,
+      },
       rightPriceScale: {
         borderColor: '#2d2d44',
         scaleMargins: { top: 0.2, bottom: 0.2 },
@@ -972,6 +1050,17 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
           drawingStartRef.current = clickPoint;
           setIsDrawing(true);
         } else {
+          // Ensure times are different to avoid chart assertion error
+          const startTime = drawingStartRef.current.time as number;
+          const endTime = clickPoint.time as number;
+
+          if (startTime === endTime) {
+            // Can't draw on same candle - reset and ignore
+            drawingStartRef.current = null;
+            setIsDrawing(false);
+            return;
+          }
+
           const lineId = `trendline-${Date.now()}`;
           const lineSeries = chart.addSeries(LineSeries, {
             color: '#8b5cf6',
@@ -981,10 +1070,13 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
             crosshairMarkerVisible: false,
           });
 
-          lineSeries.setData([
+          // Ensure data is sorted by time ascending
+          const sortedData = [
             { time: drawingStartRef.current.time, value: drawingStartRef.current.value },
             { time: clickPoint.time, value: clickPoint.value },
-          ]);
+          ].sort((a, b) => (a.time as number) - (b.time as number));
+
+          lineSeries.setData(sortedData);
 
           drawnSeriesRef.current.set(lineId, [lineSeries]);
           setDrawnLines(prev => [...prev, { id: lineId, type: 'trendline', points: [drawingStartRef.current!, clickPoint] }]);
@@ -1016,29 +1108,34 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
             const startTime = candlesRef.current[startIdx]?.time;
             const endTime = candlesRef.current[endIdx]?.time;
 
-            fibLevels.forEach((level, idx) => {
-              const levelValue = highValue - (range * level);
-              const series = chart.addSeries(LineSeries, {
-                color: fibColors[idx],
-                lineWidth: 1,
-                lineStyle: 2,
-                priceLineVisible: false,
-                lastValueVisible: false,
-                crosshairMarkerVisible: false,
+            // Ensure times are different to avoid chart assertion error
+            if (startTime && endTime && startTime !== endTime) {
+              // Sort times to ensure ascending order
+              const sortedTimes = [startTime, endTime].sort((a, b) => (a as number) - (b as number));
+
+              fibLevels.forEach((level, idx) => {
+                const levelValue = highValue - (range * level);
+                const series = chart.addSeries(LineSeries, {
+                  color: fibColors[idx],
+                  lineWidth: 1,
+                  lineStyle: 2,
+                  priceLineVisible: false,
+                  lastValueVisible: false,
+                  crosshairMarkerVisible: false,
+                });
+
+                series.setData([
+                  { time: sortedTimes[0], value: levelValue },
+                  { time: sortedTimes[1], value: levelValue },
+                ]);
+                fibSeries.push(series);
               });
 
-              if (startTime && endTime) {
-                series.setData([
-                  { time: startTime, value: levelValue },
-                  { time: endTime, value: levelValue },
-                ]);
-              }
-              fibSeries.push(series);
-            });
+              drawnSeriesRef.current.set(lineId, fibSeries);
+              setDrawnLines(prev => [...prev, { id: lineId, type: 'fibonacci', points: [drawingStartRef.current!, clickPoint] }]);
+            }
           }
 
-          drawnSeriesRef.current.set(lineId, fibSeries);
-          setDrawnLines(prev => [...prev, { id: lineId, type: 'fibonacci', points: [drawingStartRef.current!, clickPoint] }]);
           drawingStartRef.current = null;
           setIsDrawing(false);
           setDrawingTool('none');
@@ -1355,8 +1452,8 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
         </div>
       )}
 
-      {/* Mobile Controls - Top Left */}
-      <div className="md:hidden absolute top-2 left-2 z-10 flex items-center gap-2">
+      {/* Mobile Controls - Top Left - Hidden since settings accessed via 3-dot menu */}
+      <div className="hidden absolute top-2 left-2 z-10 flex items-center gap-2">
         {/* Timeframe Dropdown */}
         <div className="relative">
           <button
@@ -1478,7 +1575,7 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
 
         {/* Volume Toggle (Mobile) */}
         <button
-          onClick={() => setShowVolume(!showVolume)}
+          onClick={toggleVolume}
           className={`flex items-center justify-center w-10 h-10 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border rounded-xl shadow-lg transition-all ${
             showVolume ? 'border-cyan-500/50 text-cyan-400' : 'border-[#3d3d5c] text-gray-400'
           }`}
@@ -1487,8 +1584,8 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
         </button>
       </div>
 
-      {/* Mobile Drawing Tools - Bottom */}
-      <div className="md:hidden absolute bottom-10 left-2 z-10">
+      {/* Mobile Drawing Tools - Bottom - Hidden since settings accessed via 3-dot menu */}
+      <div className="hidden absolute bottom-10 left-2 z-10">
         <div className="relative">
           <button
             onClick={() => setShowDrawingMenu(!showDrawingMenu)}
@@ -1838,11 +1935,12 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
           <button
             onClick={() => setShowIndicatorMenu(!showIndicatorMenu)}
             className="flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:border-blue-500/50 transition-all shadow-lg backdrop-blur-sm"
+            title="Indicators"
           >
             <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            Indicators
+            <span className="md:hidden">Indicators</span>
             {indicators.filter((i) => i.enabled).length > 0 && (
               <span className="px-1.5 py-0.5 bg-gradient-to-r from-emerald-500 to-emerald-400 text-white rounded-md text-[10px] font-bold shadow-lg shadow-emerald-500/30">
                 {indicators.filter((i) => i.enabled).length}
@@ -1913,9 +2011,10 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
           <button
             onClick={() => setShowChartTypeMenu(!showChartTypeMenu)}
             className="flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:border-purple-500/50 transition-all shadow-lg backdrop-blur-sm"
+            title="Chart Type"
           >
             {getChartTypeIcon(chartType)}
-            <span className="hidden lg:inline">{CHART_TYPES.find(ct => ct.id === chartType)?.name}</span>
+            <span className="md:hidden">{CHART_TYPES.find(ct => ct.id === chartType)?.name}</span>
             <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${showChartTypeMenu ? 'rotate-180' : ''}`} />
           </button>
 
@@ -1948,7 +2047,7 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
 
         {/* Volume Toggle */}
         <button
-          onClick={() => setShowVolume(!showVolume)}
+          onClick={toggleVolume}
           className={`flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border rounded-xl text-sm font-semibold transition-all shadow-lg backdrop-blur-sm ${
             showVolume
               ? 'border-cyan-500/50 text-cyan-400'
@@ -1957,7 +2056,7 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
           title="Toggle Volume"
         >
           <BarChart3 className="w-4 h-4" />
-          <span className="hidden lg:inline">Vol</span>
+          <span className="md:hidden">Vol</span>
         </button>
 
         {/* Drawing Tools Dropdown */}
@@ -1969,9 +2068,10 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
                 ? 'bg-orange-500/30 text-orange-400 border border-orange-500/50'
                 : 'bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] text-gray-400 hover:text-white'
             }`}
+            title="Drawing Tools"
           >
             <PenTool className="w-4 h-4" />
-            <span className="hidden sm:inline">
+            <span className="md:hidden">
               {drawingTool === 'none' ? 'Draw' :
                drawingTool === 'trendline' ? 'Trend Line' :
                drawingTool === 'horizontal' ? 'H-Line' : 'Fibonacci'}
@@ -2003,12 +2103,14 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
                         ? 'bg-orange-500/20 text-orange-400'
                         : 'text-gray-300 hover:bg-[#252542] hover:text-white'
                     }`}
+                    title="Trend Line - Click 2 points"
                   >
                     <TrendingUp className="w-4 h-4" />
-                    <div className="flex-1 text-left">
+                    <div className="flex-1 text-left md:hidden">
                       <div className="text-sm font-medium">Trend Line</div>
                       <div className="text-[10px] text-gray-500">Click 2 points</div>
                     </div>
+                    <span className="hidden md:inline text-sm font-medium">Trend Line</span>
                     {drawingTool === 'trendline' && <Check className="w-4 h-4 text-orange-400" />}
                   </button>
 
@@ -2022,12 +2124,14 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
                         ? 'bg-orange-500/20 text-orange-400'
                         : 'text-gray-300 hover:bg-[#252542] hover:text-white'
                     }`}
+                    title="Horizontal Line - Click to place"
                   >
                     <Minus className="w-4 h-4" />
-                    <div className="flex-1 text-left">
+                    <div className="flex-1 text-left md:hidden">
                       <div className="text-sm font-medium">Horizontal Line</div>
                       <div className="text-[10px] text-gray-500">Click to place</div>
                     </div>
+                    <span className="hidden md:inline text-sm font-medium">Horizontal Line</span>
                     {drawingTool === 'horizontal' && <Check className="w-4 h-4 text-orange-400" />}
                   </button>
 
@@ -2041,12 +2145,14 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
                         ? 'bg-orange-500/20 text-orange-400'
                         : 'text-gray-300 hover:bg-[#252542] hover:text-white'
                     }`}
+                    title="Fibonacci - Click high & low"
                   >
                     <GitBranch className="w-4 h-4" />
-                    <div className="flex-1 text-left">
+                    <div className="flex-1 text-left md:hidden">
                       <div className="text-sm font-medium">Fibonacci</div>
                       <div className="text-[10px] text-gray-500">Click high & low</div>
                     </div>
+                    <span className="hidden md:inline text-sm font-medium">Fibonacci</span>
                     {drawingTool === 'fibonacci' && <Check className="w-4 h-4 text-orange-400" />}
                   </button>
                 </div>
@@ -2153,17 +2259,34 @@ function PriceChartComponent({ symbol, currentPrice }: PriceChartProps) {
         </div>
       )}
 
-      {/* Loading State */}
+      {/* Loading State - Animated Candlesticks */}
       {!currentPrice && (
         <div className="absolute inset-0 flex items-center justify-center bg-[#0f0f1a]">
           <div className="text-center">
-            <div className="h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="mt-2 text-gray-400 text-sm">Connecting to {symbol}...</p>
+            {/* Animated Candlestick Chart Loader */}
+            <div className="flex items-end justify-center gap-2 h-16 mb-4">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="w-3 bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-sm animate-pulse"
+                  style={{
+                    height: `${30 + (i % 3) * 15}px`,
+                    animationDelay: `${i * 0.15}s`,
+                    animationDuration: '1.2s',
+                  }}
+                >
+                  <div className="w-0.5 h-2 bg-emerald-300 mx-auto -mt-2" />
+                  <div className="w-0.5 h-2 bg-emerald-700 mx-auto mt-auto" />
+                </div>
+              ))}
+            </div>
+            <p className="text-gray-400 text-sm">Loading {symbol} chart...</p>
+            <p className="text-gray-500 text-xs mt-1">Fetching market data</p>
           </div>
         </div>
       )}
     </div>
   );
-}
+});
 
 export const PriceChart = memo(PriceChartComponent);

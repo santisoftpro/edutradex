@@ -99,6 +99,23 @@ export const useAuthStore = create<AuthStore>()(
 
       logout: () => {
         api.setToken(null);
+
+        // Clear trade store to prevent data leakage between users
+        try {
+          const { useTradeStore } = require('./trade.store');
+          useTradeStore.getState().resetStore();
+        } catch (error) {
+          console.error('Failed to reset trade store:', error);
+        }
+
+        // Clear notification store to prevent data leakage between users
+        try {
+          const { useNotificationStore } = require('./notification.store');
+          useNotificationStore.getState().resetStore();
+        } catch (error) {
+          console.error('Failed to reset notification store:', error);
+        }
+
         set({
           user: null,
           token: null,
@@ -219,11 +236,20 @@ export const useAuthStore = create<AuthStore>()(
                 }
               });
             }
-          } catch (error) {
+          } catch (error: any) {
             console.error('Failed to refresh profile:', error);
-            // If profile fetch fails (e.g., token expired), logout the user
-            const { logout } = get();
-            logout();
+
+            // Only logout on authentication errors (401, 403), not on network/timeout errors
+            const isAuthError = error?.response?.status === 401 || error?.response?.status === 403;
+
+            if (isAuthError) {
+              console.warn('Auth error detected, logging out user');
+              const { logout } = get();
+              logout();
+            } else {
+              // Network error or timeout - keep user logged in, just log the error
+              console.warn('Network error during profile refresh, keeping user logged in');
+            }
           } finally {
             pendingRefresh = null;
           }

@@ -116,21 +116,27 @@ export function useWebSocket(): UseWebSocketReturn {
             case 'price_update':
               if (message.payload) {
                 const priceTick = message.payload as PriceTick;
+                // Batch updates to reduce re-renders
                 setLatestPrices((prev) => {
+                  // Only update if price actually changed
+                  const existing = prev.get(priceTick.symbol);
+                  if (existing?.price === priceTick.price) {
+                    return prev; // No change, don't trigger re-render
+                  }
                   const newMap = new Map(prev);
                   newMap.set(priceTick.symbol, priceTick);
                   return newMap;
                 });
                 // Update price history
                 setPriceHistory((prev) => {
-                  const newMap = new Map(prev);
-                  const history = newMap.get(priceTick.symbol) || [];
-                  const updatedHistory = [...history, priceTick];
-                  // Keep only the last MAX_HISTORY_LENGTH entries
-                  if (updatedHistory.length > MAX_HISTORY_LENGTH) {
-                    updatedHistory.shift();
+                  const history = prev.get(priceTick.symbol) || [];
+                  // Mutate array in place for performance, then create new Map
+                  history.push(priceTick);
+                  if (history.length > MAX_HISTORY_LENGTH) {
+                    history.shift();
                   }
-                  newMap.set(priceTick.symbol, updatedHistory);
+                  const newMap = new Map(prev);
+                  newMap.set(priceTick.symbol, history);
                   return newMap;
                 });
               }

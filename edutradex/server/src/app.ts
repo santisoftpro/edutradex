@@ -10,7 +10,7 @@ import jwt from 'jsonwebtoken';
 // Config must be imported first - it loads dotenv
 import { config } from './config/env.js';
 import { logger } from './utils/logger.js';
-import { connectDatabase, disconnectDatabase } from './config/database.js';
+import { connectDatabase, disconnectDatabase } from './config/db.js';
 import routes from './routes/index.js';
 import { wsManager } from './services/websocket/websocket.manager.js';
 import { emailService } from './services/email/email.service.js';
@@ -174,10 +174,10 @@ wss.on('connection', (ws: WebSocket) => {
           logger.info('WebSocket authentication attempt', { clientId, hasToken: !!message.payload?.token });
           if (message.payload?.token) {
             try {
-              const decoded = jwt.verify(message.payload.token, config.jwt.secret) as { id: string };
-              logger.info('Token verified successfully', { clientId, userId: decoded.id });
-              wsManager.authenticateClient(clientId, decoded.id);
-              logger.info('WebSocket client authenticated', { clientId, userId: decoded.id });
+              const decoded = jwt.verify(message.payload.token, config.jwt.secret) as { userId: string; email: string; role: string };
+              logger.info('Token verified successfully', { clientId, userId: decoded.userId });
+              wsManager.authenticateClient(clientId, decoded.userId);
+              logger.info('WebSocket client authenticated', { clientId, userId: decoded.userId });
             } catch (error) {
               logger.error('Token verification failed', { clientId, error: (error as Error).message });
               ws.send(JSON.stringify({
@@ -300,14 +300,43 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error: Error) => {
-  logger.error('Uncaught exception', { message: error.message, stack: error.stack });
-  process.exit(1);
+  logger.error('CRITICAL: Uncaught exception', {
+    message: error.message,
+    stack: error.stack,
+    type: error.name
+  });
+
+  // Don't exit immediately - log the error and continue
+  // In production with PM2, PM2 will restart if needed
+  if (config.isProduction) {
+    logger.warn('Server continuing despite uncaught exception (PM2 will restart if needed)');
+  } else {
+    // In development, exit to surface the error clearly
+    logger.error('Exiting in development mode to surface the error');
+    process.exit(1);
+  }
 });
 
 // Handle unhandled promise rejections
-process.on('unhandledRejection', (reason: unknown) => {
-  logger.error('Unhandled rejection', { reason });
-  process.exit(1);
+process.on('unhandledRejection', (reason: unknown, promise: Promise<any>) => {
+  logger.error('CRITICAL: Unhandled promise rejection', {
+    reason: reason instanceof Error ? {
+      message: reason.message,
+      stack: reason.stack,
+      name: reason.name
+    } : reason,
+    promise: String(promise)
+  });
+
+  // Don't exit immediately - log the error and continue
+  // Most unhandled rejections are non-fatal (failed API calls, db queries, etc)
+  if (config.isProduction) {
+    logger.warn('Server continuing despite unhandled rejection');
+  } else {
+    // In development, exit after a delay to surface the error
+    logger.error('Exiting in 5 seconds in development mode...');
+    setTimeout(() => process.exit(1), 5000);
+  }
 });
 
 // Start server

@@ -29,12 +29,12 @@ export const followLeaderBodySchema = z.object({
   copyMode: z.enum(['AUTOMATIC', 'MANUAL'], {
     message: 'Copy mode must be AUTOMATIC or MANUAL',
   }),
-  fixedAmount: z
+  fixedAmount: z.coerce
     .number()
     .positive('Fixed amount must be positive')
     .min(1, 'Minimum amount is $1')
     .max(10000, 'Maximum amount is $10,000'),
-  maxDailyTrades: z
+  maxDailyTrades: z.coerce
     .number()
     .int()
     .positive()
@@ -50,13 +50,13 @@ export const updateFollowSettingsBodySchema = z.object({
       message: 'Copy mode must be AUTOMATIC or MANUAL',
     })
     .optional(),
-  fixedAmount: z
+  fixedAmount: z.coerce
     .number()
     .positive('Fixed amount must be positive')
     .min(1, 'Minimum amount is $1')
     .max(10000, 'Maximum amount is $10,000')
     .optional(),
-  maxDailyTrades: z
+  maxDailyTrades: z.coerce
     .number()
     .int()
     .positive()

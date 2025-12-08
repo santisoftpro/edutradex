@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from '../config/database.js';
+import { query, queryOne, queryMany } from '../config/db.js';
 import { marketService } from '../services/market/market.service.js';
 import { logger } from '../utils/logger.js';
 import { authMiddleware, adminMiddleware } from '../middleware/auth.middleware.js';
@@ -9,21 +9,28 @@ import {
   CreateSpreadConfigInput,
   UpdateSpreadConfigInput,
 } from '../validators/spread.validators.js';
+import { randomUUID } from 'crypto';
 
 const router = Router();
 
-// Apply authentication and admin middleware to all routes
+interface SpreadConfigRow {
+  id: string;
+  symbol: string;
+  markupPips: number;
+  description: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 router.use(authMiddleware);
 router.use(adminMiddleware);
 
-// Get all spread configurations
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const spreads = await prisma.spreadConfig.findMany({
-      orderBy: [
-        { symbol: 'asc' },
-      ],
-    });
+    const spreads = await queryMany<SpreadConfigRow>(
+      `SELECT * FROM "SpreadConfig" ORDER BY symbol ASC`
+    );
 
     res.json({
       success: true,
@@ -38,14 +45,14 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// Get specific spread configuration
 router.get('/:symbol', async (req: Request, res: Response) => {
   try {
     const { symbol } = req.params;
 
-    const spread = await prisma.spreadConfig.findUnique({
-      where: { symbol },
-    });
+    const spread = await queryOne<SpreadConfigRow>(
+      `SELECT * FROM "SpreadConfig" WHERE symbol = $1`,
+      [symbol]
+    );
 
     if (!spread) {
       res.status(404).json({
@@ -68,7 +75,6 @@ router.get('/:symbol', async (req: Request, res: Response) => {
   }
 });
 
-// Create new spread configuration
 router.post('/', async (req: Request, res: Response) => {
   try {
     const validationResult = createSpreadConfigSchema.safeParse(req.body);
@@ -84,9 +90,10 @@ router.post('/', async (req: Request, res: Response) => {
 
     const data: CreateSpreadConfigInput = validationResult.data;
 
-    const existing = await prisma.spreadConfig.findUnique({
-      where: { symbol: data.symbol },
-    });
+    const existing = await queryOne<{ symbol: string }>(
+      `SELECT symbol FROM "SpreadConfig" WHERE symbol = $1`,
+      [data.symbol]
+    );
 
     if (existing) {
       res.status(409).json({
@@ -96,18 +103,17 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const spread = await prisma.spreadConfig.create({
-      data: {
-        symbol: data.symbol,
-        markupPips: data.markupPips,
-        description: data.description,
-        isActive: data.isActive,
-      },
-    });
+    const now = new Date();
+    const spread = await queryOne<SpreadConfigRow>(
+      `INSERT INTO "SpreadConfig" (id, symbol, "markupPips", description, "isActive", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [randomUUID(), data.symbol, data.markupPips, data.description || null, data.isActive ?? true, now, now]
+    );
 
     logger.info('Spread configuration created', {
-      symbol: spread.symbol,
-      markupPips: spread.markupPips,
+      symbol: spread!.symbol,
+      markupPips: spread!.markupPips,
     });
 
     res.status(201).json({
@@ -123,7 +129,6 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// Update spread configuration
 router.put('/:symbol', async (req: Request, res: Response) => {
   try {
     const { symbol } = req.params;
@@ -141,9 +146,10 @@ router.put('/:symbol', async (req: Request, res: Response) => {
 
     const data: UpdateSpreadConfigInput = validationResult.data;
 
-    const existing = await prisma.spreadConfig.findUnique({
-      where: { symbol },
-    });
+    const existing = await queryOne<SpreadConfigRow>(
+      `SELECT * FROM "SpreadConfig" WHERE symbol = $1`,
+      [symbol]
+    );
 
     if (!existing) {
       res.status(404).json({
@@ -153,15 +159,22 @@ router.put('/:symbol', async (req: Request, res: Response) => {
       return;
     }
 
-    const spread = await prisma.spreadConfig.update({
-      where: { symbol },
-      data,
-    });
+    const now = new Date();
+    const spread = await queryOne<SpreadConfigRow>(
+      `UPDATE "SpreadConfig" SET
+        "markupPips" = COALESCE($1, "markupPips"),
+        description = COALESCE($2, description),
+        "isActive" = COALESCE($3, "isActive"),
+        "updatedAt" = $4
+       WHERE symbol = $5
+       RETURNING *`,
+      [data.markupPips, data.description, data.isActive, now, symbol]
+    );
 
     logger.info('Spread configuration updated', {
-      symbol: spread.symbol,
-      markupPips: spread.markupPips,
-      isActive: spread.isActive,
+      symbol: spread!.symbol,
+      markupPips: spread!.markupPips,
+      isActive: spread!.isActive,
     });
 
     res.json({
@@ -177,14 +190,14 @@ router.put('/:symbol', async (req: Request, res: Response) => {
   }
 });
 
-// Delete spread configuration
 router.delete('/:symbol', async (req: Request, res: Response) => {
   try {
     const { symbol } = req.params;
 
-    const existing = await prisma.spreadConfig.findUnique({
-      where: { symbol },
-    });
+    const existing = await queryOne<{ symbol: string }>(
+      `SELECT symbol FROM "SpreadConfig" WHERE symbol = $1`,
+      [symbol]
+    );
 
     if (!existing) {
       res.status(404).json({
@@ -194,9 +207,10 @@ router.delete('/:symbol', async (req: Request, res: Response) => {
       return;
     }
 
-    await prisma.spreadConfig.delete({
-      where: { symbol },
-    });
+    await query(
+      `DELETE FROM "SpreadConfig" WHERE symbol = $1`,
+      [symbol]
+    );
 
     logger.info('Spread configuration deleted', { symbol });
 

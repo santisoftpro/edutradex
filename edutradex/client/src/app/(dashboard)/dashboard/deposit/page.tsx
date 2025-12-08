@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Smartphone,
   Bitcoin,
@@ -22,6 +22,7 @@ import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
+import { useDepositUpdates } from '@/hooks/useDepositUpdates';
 import type { Deposit, PaymentMethod as PaymentMethodType } from '@/types';
 
 type Step = 1 | 2 | 3;
@@ -166,7 +167,7 @@ export default function DepositPage() {
     return matchesSearch;
   });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [depositsData, methodsData] = await Promise.all([
@@ -180,12 +181,32 @@ export default function DepositPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  const refreshDeposits = useCallback(async () => {
+    try {
+      const depositsData = await api.getMyDeposits({ limit: 5 });
+      setDeposits(depositsData);
+    } catch (error) {
+      console.error('Failed to refresh deposits:', error);
+    }
+  }, []);
+
+  // Listen for real-time deposit updates
+  useDepositUpdates(useCallback((depositId: string, status: 'APPROVED' | 'REJECTED') => {
+    // Update the deposit status in local state immediately
+    setDeposits(prev => prev.map(d =>
+      d.id === depositId ? { ...d, status } : d
+    ));
+    // Also refresh to ensure we have latest data
+    refreshDeposits();
+    refreshProfile();
+  }, [refreshDeposits, refreshProfile]));
 
   useEffect(() => {
     fetchData();
     refreshProfile();
-  }, [refreshProfile]);
+  }, [fetchData, refreshProfile]);
 
   const handleMethodSelect = (method: PaymentMethodType) => {
     setSelectedMethod(method);
@@ -250,29 +271,31 @@ export default function DepositPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0f0f1a] flex items-center justify-center">
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] p-4 md:p-6">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-slate-900 p-4 md:p-6">
+      <div className="max-w-5xl mx-auto space-y-5">
         {/* Header */}
-        <div className="mb-6">
+        <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-bold text-white">Account Top-up</h1>
-          <p className="text-gray-400 text-sm mt-1">Add funds to your trading account</p>
+          <p className="text-gray-400 text-sm">
+            Choose a payment method, enter the amount, and submit your request.
+          </p>
         </div>
 
         {/* Step Indicator */}
         <StepIndicator currentStep={step} />
 
         {/* Balance Card */}
-        <div className="bg-gradient-to-r from-emerald-600/20 to-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 mb-6 flex items-center justify-between">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-500/20 rounded-lg">
-              <Wallet className="h-5 w-5 text-emerald-400" />
+            <div className="p-2 bg-emerald-600/20 rounded-lg">
+              <Wallet className="h-5 w-5 text-emerald-500" />
             </div>
             <div>
               <p className="text-emerald-300 text-sm">Current Balance</p>
@@ -299,7 +322,7 @@ export default function DepositPage() {
                 </div>
 
                 {/* Categories */}
-                <div className="flex gap-2 overflow-x-auto pb-2">
+                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                   {categories.map((cat) => (
                     <button
                       key={cat.id}
@@ -528,7 +551,7 @@ export default function DepositPage() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {isSubmitting ? (
                       <>
@@ -558,7 +581,7 @@ export default function DepositPage() {
                 </p>
                 <button
                   onClick={handleReset}
-                  className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-medium rounded-lg transition-all"
+                  className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg transition-all"
                 >
                   Make Another Deposit
                 </button>

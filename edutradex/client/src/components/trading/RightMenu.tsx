@@ -1,18 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Clock,
-  BarChart2,
   Maximize2,
   Minimize2,
-  History,
-  TrendingUp,
-  Settings,
+  Users,
   HelpCircle,
-  LayoutDashboard,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useTradeStore } from '@/store/trade.store';
 
@@ -22,9 +18,9 @@ interface RightMenuProps {
 }
 
 export function RightMenu({ isTradesPanelOpen, onToggleTradesPanel }: RightMenuProps) {
-  const router = useRouter();
   const { activeTrades } = useTradeStore();
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const router = useRouter();
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -46,34 +42,20 @@ export function RightMenu({ isTradesPanelOpen, onToggleTradesPanel }: RightMenuP
       onClick: onToggleTradesPanel,
     },
     {
-      id: 'history',
-      icon: History,
-      label: 'History',
-      onClick: () => router.push('/dashboard/history'),
-    },
-    {
-      id: 'analytics',
-      icon: BarChart2,
-      label: 'Analytics',
-      onClick: () => router.push('/dashboard/analytics'),
-    },
-    {
-      id: 'dashboard',
-      icon: LayoutDashboard,
-      label: 'Dashboard',
-      onClick: () => router.push('/dashboard'),
-    },
-    {
-      id: 'settings',
-      icon: Settings,
-      label: 'Settings',
-      onClick: () => router.push('/dashboard/settings'),
+      id: 'copy-trading',
+      icon: Users,
+      label: 'Copy',
+      badge: null,
+      isActive: false,
+      onClick: () => router.push('/dashboard/copy-trading'),
     },
     {
       id: 'help',
       icon: HelpCircle,
       label: 'Help',
-      onClick: () => router.push('/dashboard/help'),
+      badge: null,
+      isActive: false,
+      onClick: () => window.open('https://support.yourdomain.com', '_blank'),
     },
   ];
 
@@ -81,11 +63,10 @@ export function RightMenu({ isTradesPanelOpen, onToggleTradesPanel }: RightMenuP
     <div className="hidden lg:flex fixed right-0 top-16 z-30 flex-col bg-[#1a1a2e]/95 backdrop-blur-sm border border-[#2d2d44] border-r-0 rounded-l-xl shadow-xl w-[68px]">
       {/* Menu Items */}
       <div className="py-2">
-        {menuItems.map((item, index) => {
+        {menuItems.map((item) => {
           const Icon = item.icon;
           return (
             <div key={item.id}>
-              {index === 4 && <div className="my-2 mx-2 border-t border-[#2d2d44]" />}
               <button
                 onClick={item.onClick}
                 className={cn(

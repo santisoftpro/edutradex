@@ -231,7 +231,7 @@ router.post(
       res.json({
         success: true,
         data: paymentMethod,
-        message: `Payment method ${paymentMethod.isActive ? 'activated' : 'deactivated'} successfully`,
+        message: `Payment method ${paymentMethod!.isActive ? 'activated' : 'deactivated'} successfully`,
       });
     } catch (error) {
       if (error instanceof PaymentMethodServiceError) {

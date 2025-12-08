@@ -87,7 +87,7 @@ export function RegisterForm() {
       console.log('Registering with referral code:', referralCode);
       await register(formData.email, formData.password, formData.name, referralCode || undefined);
       toast.success('Account created successfully!');
-      router.push('/dashboard');
+      router.push('/dashboard/trade');
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
