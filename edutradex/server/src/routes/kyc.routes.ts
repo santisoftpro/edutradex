@@ -213,4 +213,57 @@ router.post('/admin/:id/reject', authMiddleware, adminMiddleware, async (req: Re
   }
 });
 
+// Serve KYC document files (authenticated endpoint)
+router.get('/documents/:filename', authMiddleware, adminMiddleware, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { filename } = req.params;
+
+    // Validate filename to prevent directory traversal
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      res.status(400).json({ success: false, error: 'Invalid filename' });
+      return;
+    }
+
+    const filePath = path.join(process.cwd(), 'uploads', 'kyc', filename);
+
+    // Check if file exists
+    const fs = await import('fs/promises');
+    try {
+      await fs.access(filePath);
+    } catch (error) {
+      logger.error('KYC document not found', { filename, filePath, error: (error as Error).message });
+      res.status(404).json({
+        success: false,
+        error: 'Document not found',
+        message: 'The requested document does not exist. This may happen if files were lost during deployment. Please contact support.'
+      });
+      return;
+    }
+
+    // Set proper headers for file type
+    const ext = path.extname(filename).toLowerCase();
+    if (ext === '.pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
+    } else if (['.jpg', '.jpeg'].includes(ext)) {
+      res.setHeader('Content-Type', 'image/jpeg');
+    } else if (ext === '.png') {
+      res.setHeader('Content-Type', 'image/png');
+    }
+
+    // Send file
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        logger.error('Error sending KYC document', { filename, error: err.message });
+        if (!res.headersSent) {
+          res.status(500).json({ success: false, error: 'Failed to send document' });
+        }
+      }
+    });
+  } catch (error) {
+    logger.error('KYC document serve error', { error: (error as Error).message });
+    next(error);
+  }
+});
+
 export default router;

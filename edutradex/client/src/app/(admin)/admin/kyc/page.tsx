@@ -74,21 +74,64 @@ function DocumentViewer({
   const [rotation, setRotation] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
   const isPDF = url.toLowerCase().endsWith('.pdf');
+  const fullUrl = getFileUrl(url);
 
-  // Get the base URL (remove /api if present)
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+  // Load document with authentication
+  useEffect(() => {
+    const loadDocument = async () => {
+      try {
+        const token = localStorage.getItem('token');
 
-  // Clean the path - remove leading slashes
-  let cleanPath = url.replace(/^\/+/, '');
+        const response = await fetch(fullUrl, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
 
-  // If path doesn't start with 'uploads/', add it
-  if (!cleanPath.startsWith('uploads/')) {
-    cleanPath = `uploads/${cleanPath}`;
-  }
+        if (!response.ok) {
+          throw new Error(`Failed to load document: ${response.statusText}`);
+        }
 
-  const fullUrl = `${baseUrl}/${cleanPath}`;
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error loading document:', error);
+        setError(true);
+        setLoading(false);
+      }
+    };
+
+    loadDocument();
+
+    // Cleanup blob URL when component unmounts
+    return () => {
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [url]);
+
+  const handleDownload = async () => {
+    if (!blobUrl) return;
+
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = url.split('/').pop() || 'document';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleOpenNewTab = () => {
+    if (blobUrl) {
+      window.open(blobUrl, '_blank');
+    }
+  };
 
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 3));
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5));
@@ -126,23 +169,22 @@ function DocumentViewer({
               </button>
             </>
           )}
-          <a
-            href={fullUrl}
-            download
-            className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
+          <button
+            onClick={handleDownload}
+            disabled={!blobUrl}
+            className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors disabled:opacity-50"
             title="Download"
           >
             <Download className="h-5 w-5" />
-          </a>
-          <a
-            href={fullUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
+          </button>
+          <button
+            onClick={handleOpenNewTab}
+            disabled={!blobUrl}
+            className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors disabled:opacity-50"
             title="Open in New Tab"
           >
             <ExternalLink className="h-5 w-5" />
-          </a>
+          </button>
           <button
             onClick={onClose}
             className="p-2 bg-white/10 hover:bg-red-500/50 rounded-lg text-white transition-colors ml-2"
@@ -165,67 +207,56 @@ function DocumentViewer({
           <div className="text-center text-white">
             <AlertCircle className="h-16 w-16 mx-auto mb-4 text-red-400" />
             <p className="text-lg font-medium">Failed to load document</p>
-            <p className="text-slate-400 mt-2">The document could not be displayed.</p>
-            <a
-              href={fullUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Open in New Tab
-            </a>
+            <p className="text-slate-400 mt-2">The document could not be found or loaded.</p>
+            <p className="text-slate-500 text-sm mt-1">This may occur if files were lost during deployment.</p>
           </div>
         ) : isPDF ? (
           <div className="w-full h-full max-w-5xl flex flex-col items-center justify-center">
-            <object
-              data={fullUrl}
-              type="application/pdf"
-              className="w-full h-full rounded-lg"
-              onLoad={() => setLoading(false)}
-            >
-              {/* Fallback for browsers that don't support object tag for PDFs */}
-              <div className="flex flex-col items-center justify-center h-full bg-slate-800 rounded-lg p-8">
-                <FileText className="h-20 w-20 text-red-400 mb-4" />
-                <p className="text-white text-lg font-medium mb-2">PDF Document</p>
-                <p className="text-slate-400 text-center mb-6">Your browser cannot display this PDF inline.</p>
-                <div className="flex gap-3">
-                  <a
-                    href={fullUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors text-white"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Open in New Tab
-                  </a>
-                  <a
-                    href={fullUrl}
-                    download
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors text-white"
-                  >
-                    <Download className="h-4 w-4" />
-                    Download
-                  </a>
+            {blobUrl ? (
+              <object
+                data={blobUrl}
+                type="application/pdf"
+                className="w-full h-full rounded-lg"
+              >
+                {/* Fallback for browsers that don't support object tag for PDFs */}
+                <div className="flex flex-col items-center justify-center h-full bg-slate-800 rounded-lg p-8">
+                  <FileText className="h-20 w-20 text-red-400 mb-4" />
+                  <p className="text-white text-lg font-medium mb-2">PDF Document</p>
+                  <p className="text-slate-400 text-center mb-6">Your browser cannot display this PDF inline.</p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleOpenNewTab}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors text-white"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Open in New Tab
+                    </button>
+                    <button
+                      onClick={handleDownload}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors text-white"
+                    >
+                      <Download className="h-4 w-4" />
+                      Download
+                    </button>
+                  </div>
                 </div>
+              </object>
+            ) : (
+              <div className="flex items-center justify-center">
+                <Loader2 className="h-12 w-12 animate-spin text-white" />
               </div>
-            </object>
+            )}
           </div>
-        ) : (
+        ) : blobUrl ? (
           <img
-            src={fullUrl}
+            src={blobUrl}
             alt={title}
             className="max-w-full max-h-full object-contain transition-transform duration-200"
             style={{
               transform: `scale(${zoom}) rotate(${rotation}deg)`,
             }}
-            onLoad={() => setLoading(false)}
-            onError={() => {
-              setLoading(false);
-              setError(true);
-            }}
           />
-        )}
+        ) : null}
       </div>
 
       {/* Click outside to close */}
@@ -237,25 +268,32 @@ function DocumentViewer({
   );
 }
 
-// Helper to construct proper file URL
+// Helper to construct proper file URL using authenticated endpoint
 function getFileUrl(path: string | undefined): string {
   if (!path) return '';
 
-  // Get the base URL (remove /api if present)
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+  // Clean up malformed paths that might have domain names in them
+  let cleanPath = path;
 
-  // Clean the path - remove leading slashes
-  let cleanPath = path.replace(/^\/+/, '');
+  // Remove any domain prefixes (e.g., ".optigobroker.com/api/")
+  cleanPath = cleanPath.replace(/^\.?[^/]*\.com\/api\//, '');
 
-  // If path doesn't start with 'uploads/', add it
-  if (!cleanPath.startsWith('uploads/')) {
-    cleanPath = `uploads/${cleanPath}`;
-  }
+  // Remove any "uploads/" prefix if present
+  cleanPath = cleanPath.replace(/^uploads\//, '');
 
-  return `${baseUrl}/${cleanPath}`;
+  // Remove any "kyc/" prefix if present
+  cleanPath = cleanPath.replace(/^kyc\//, '');
+
+  // Extract just the filename (everything after the last slash)
+  const filename = cleanPath.split('/').pop() || cleanPath;
+
+  // Use the authenticated API endpoint
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+  return `${apiUrl}/kyc/documents/${filename}`;
 }
 
-// Document Preview Card
+// Document Preview Card with authenticated image loading
 function DocumentPreviewCard({
   label,
   url,
@@ -267,11 +305,48 @@ function DocumentPreviewCard({
 }) {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!url || url.toLowerCase().endsWith('.pdf')) return;
+
+    const loadImage = async () => {
+      try {
+        const fullUrl = getFileUrl(url);
+        const token = localStorage.getItem('token');
+
+        const response = await fetch(fullUrl, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to load image: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      } catch (error) {
+        console.error('Error loading image:', error);
+        setImageError(true);
+      }
+    };
+
+    loadImage();
+
+    // Cleanup blob URL when component unmounts
+    return () => {
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [url]);
 
   if (!url) return null;
 
   const isPDF = url.toLowerCase().endsWith('.pdf');
-  const fullUrl = getFileUrl(url);
 
   return (
     <div className="group relative">
@@ -288,7 +363,12 @@ function DocumentPreviewCard({
         ) : imageError ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-700">
             <Image className="h-12 w-12 text-slate-500 mb-2" />
-            <span className="text-slate-400 text-sm">Click to view</span>
+            <span className="text-slate-400 text-sm">Failed to load</span>
+            <span className="text-slate-500 text-xs mt-1">Click to retry</span>
+          </div>
+        ) : !blobUrl ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-700">
+            <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
           </div>
         ) : (
           <>
@@ -298,7 +378,7 @@ function DocumentPreviewCard({
               </div>
             )}
             <img
-              src={fullUrl}
+              src={blobUrl}
               alt={label}
               className={cn(
                 "w-full h-full object-cover transition-opacity",

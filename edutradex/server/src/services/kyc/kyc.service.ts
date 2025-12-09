@@ -99,29 +99,64 @@ export class KYCService {
     const now = new Date();
     const dateOfBirth = new Date(data.dateOfBirth);
 
+    // Validate date of birth
+    if (isNaN(dateOfBirth.getTime())) {
+      throw new KYCServiceError('Invalid date of birth', 400);
+    }
+
+    if (dateOfBirth > now) {
+      throw new KYCServiceError('Date of birth cannot be in the future', 400);
+    }
+
+    // Check minimum age (18 years)
+    const minAge = 18;
+    const minDate = new Date(now.getFullYear() - minAge, now.getMonth(), now.getDate());
+    if (dateOfBirth > minDate) {
+      throw new KYCServiceError(`You must be at least ${minAge} years old`, 400);
+    }
+
+    // Check maximum age (120 years - reasonable limit)
+    const maxAge = 120;
+    const maxDate = new Date(now.getFullYear() - maxAge, now.getMonth(), now.getDate());
+    if (dateOfBirth < maxDate) {
+      throw new KYCServiceError('Invalid date of birth - please check the date', 400);
+    }
+
     let kyc: KYCRow;
 
     if (existing) {
-      kyc = (await queryOne<KYCRow>(
+      const updateResult = await queryOne<KYCRow>(
         `UPDATE "KYC" SET
-          "firstName" = $1, "lastName" = $2, "dateOfBirth" = $3, nationality = $4,
-          address = $5, city = $6, country = $7, "postalCode" = $8, "phoneNumber" = $9,
-          status = 'NOT_SUBMITTED', "updatedAt" = $10
+          "firstName" = $1, "lastName" = $2, "dateOfBirth" = $3, "nationality" = $4,
+          "address" = $5, "city" = $6, "country" = $7, "postalCode" = $8, "phoneNumber" = $9,
+          "status" = 'NOT_SUBMITTED', "updatedAt" = $10
          WHERE "userId" = $11 RETURNING *`,
         [data.firstName, data.lastName, dateOfBirth, data.nationality, data.address,
          data.city, data.country, data.postalCode, data.phoneNumber, now, userId]
-      ))!;
+      );
+
+      if (!updateResult) {
+        throw new KYCServiceError('Failed to update KYC record', 500);
+      }
+
+      kyc = updateResult;
     } else {
       const id = randomUUID();
-      kyc = (await queryOne<KYCRow>(
+      const insertResult = await queryOne<KYCRow>(
         `INSERT INTO "KYC" (
-          id, "userId", "firstName", "lastName", "dateOfBirth", nationality,
-          address, city, country, "postalCode", "phoneNumber", status, "createdAt", "updatedAt"
+          "id", "userId", "firstName", "lastName", "dateOfBirth", "nationality",
+          "address", "city", "country", "postalCode", "phoneNumber", "status", "createdAt", "updatedAt"
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *`,
         [id, userId, data.firstName, data.lastName, dateOfBirth, data.nationality,
          data.address, data.city, data.country, data.postalCode, data.phoneNumber, 'NOT_SUBMITTED', now, now]
-      ))!;
+      );
+
+      if (!insertResult) {
+        throw new KYCServiceError('Failed to create KYC record', 500);
+      }
+
+      kyc = insertResult;
     }
 
     logger.info('KYC personal info submitted', { userId, kycId: kyc.id });
@@ -152,17 +187,21 @@ export class KYCService {
     const kyc = await queryOne<KYCRow>(
       `UPDATE "KYC" SET
         "documentType" = $1, "documentNumber" = $2, "documentFront" = $3,
-        "documentBack" = $4, "selfieWithId" = $5, status = 'PENDING',
+        "documentBack" = $4, "selfieWithId" = $5, "status" = 'PENDING',
         "submittedAt" = $6, "rejectionReason" = NULL, "updatedAt" = $6
        WHERE "userId" = $7 RETURNING *`,
       [data.documentType, data.documentNumber, data.documentFront,
        data.documentBack, data.selfieWithId, now, userId]
     );
 
+    if (!kyc) {
+      throw new KYCServiceError('Failed to update KYC documents', 500);
+    }
+
     // Send email notification
     await emailService.sendKYCSubmitted(existing.userEmail, existing.userName);
 
-    logger.info('KYC documents submitted', { userId, kycId: kyc!.id });
+    logger.info('KYC documents submitted', { userId, kycId: kyc.id });
 
     return {
       ...kyc,
@@ -176,15 +215,15 @@ export class KYCService {
     const offset = (page - 1) * limit;
 
     let whereClause = '1=1';
-    const params: any[] = [];
+    const params: (string | number)[] = [];
     let paramIndex = 1;
 
     if (filters.status) {
-      whereClause += ` AND k.status = $${paramIndex++}`;
+      whereClause += ` AND k."status" = $${paramIndex++}`;
       params.push(filters.status);
     }
 
-    const countParams = [...params];
+    const countParams: (string | number)[] = [...params];
     params.push(limit, offset);
 
     const [submissions, countResult] = await Promise.all([
