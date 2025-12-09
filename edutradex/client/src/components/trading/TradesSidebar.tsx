@@ -465,15 +465,7 @@ function ClosedTradeCard({ trade }: { trade: Trade }) {
                 {trade.exitPrice ? formatPrice(trade.exitPrice, trade.symbol) : '-'}
               </span>
             </div>
-            <div className="bg-[#1a1a2e] rounded-md p-2 col-span-2">
-              <span className="text-gray-500 block">Pips Difference</span>
-              <span className={cn(
-                'font-bold font-mono',
-                pipsInFavor >= 0 ? 'text-emerald-400' : 'text-red-400'
-              )}>
-                {pipsInFavor >= 0 ? '+' : ''}{pips.toFixed(1)} pips
-              </span>
-            </div>
+           
           </div>
         </div>
       )}

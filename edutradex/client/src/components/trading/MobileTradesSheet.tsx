@@ -412,12 +412,6 @@ function MobileClosedTradeCard({ trade }: { trade: Trade }) {
               <span className="text-gray-500 text-[10px] block mb-0.5">Exit</span>
               <span className="text-white font-mono text-[10px]">{trade.exitPrice ? formatPrice(trade.exitPrice, trade.symbol) : '-'}</span>
             </div>
-            <div className="bg-[#1a1a2e] rounded-lg p-1.5 col-span-2">
-              <span className="text-gray-500 text-[10px] block mb-0.5">Pips</span>
-              <span className={cn('font-mono font-semibold text-xs', pipsInFavor >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                {pipsInFavor >= 0 ? '+' : ''}{pips.toFixed(1)} pips
-              </span>
-            </div>
           </div>
         )}
 
