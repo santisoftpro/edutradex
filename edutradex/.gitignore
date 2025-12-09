@@ -44,7 +44,7 @@ prisma/migrations/
 
 # Backups and uploads (sensitive data)
 backups/
-uploads/
+
 
 # Misc
 *.tsbuildinfo
