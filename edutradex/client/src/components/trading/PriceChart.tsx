@@ -495,9 +495,6 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
         vertLine: { width: 1, color: '#4b5563', style: 2, labelBackgroundColor: '#374151' },
         horzLine: { width: 1, color: '#4b5563', style: 2, labelBackgroundColor: '#374151' },
       },
-      watermark: {
-        visible: false,
-      },
       rightPriceScale: {
         borderColor: '#2d2d44',
         scaleMargins: { top: 0.15, bottom: 0.15 },
@@ -699,9 +696,6 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
         horzLines: { color: '#1e1e2e', style: 1 },
       },
       crosshair: { mode: CrosshairMode.Normal },
-      watermark: {
-        visible: false,
-      },
       rightPriceScale: {
         borderColor: '#2d2d44',
         scaleMargins: { top: 0.1, bottom: 0.1 },
@@ -794,9 +788,6 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
         horzLines: { color: '#1e1e2e', style: 1 },
       },
       crosshair: { mode: CrosshairMode.Normal },
-      watermark: {
-        visible: false,
-      },
       rightPriceScale: {
         borderColor: '#2d2d44',
         scaleMargins: { top: 0.2, bottom: 0.2 },

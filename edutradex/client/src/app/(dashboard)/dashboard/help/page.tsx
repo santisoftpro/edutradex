@@ -238,12 +238,13 @@ export default function HelpPage() {
 
       {/* Disclaimer */}
       <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-xl p-6">
-        <h3 className="text-yellow-500 font-semibold mb-2">Educational Disclaimer</h3>
+        <h3 className="text-yellow-500 font-semibold mb-2">Risk Disclaimer</h3>
         <p className="text-yellow-200/70 text-sm">
-          OptigoBroker is strictly an educational platform. No real money is involved in any
-          transactions. The trading simulations are for learning purposes only and do not
-          represent actual financial markets. Trading real assets involves significant risk
-          and is not suitable for everyone. This platform does not provide financial advice.
+          OptigoBroker is a trading platform. All trading activities involve substantial risk and may result
+          in the loss of some or all of your capital. You are fully responsible for your trading
+          decisions and any profits or losses incurred. Optigo does not guarantee profits and does not
+          provide financial, investment, or trading advice. By using this platform, you acknowledge
+          that you understand and accept these risks.
         </p>
       </div>
     </div>

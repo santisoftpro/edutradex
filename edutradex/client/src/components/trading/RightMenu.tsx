@@ -55,7 +55,7 @@ export function RightMenu({ isTradesPanelOpen, onToggleTradesPanel }: RightMenuP
       label: 'Help',
       badge: null,
       isActive: false,
-      onClick: () => window.open('https://support.yourdomain.com', '_blank'),
+      onClick: () => window.open('/dashboard/help', '_blank'),
     },
   ];
 

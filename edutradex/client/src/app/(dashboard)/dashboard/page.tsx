@@ -33,30 +33,29 @@ function StatCard({
   trendValue?: string;
 }) {
   return (
-    <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-slate-400 text-sm">{title}</p>
-          <p className="text-2xl font-bold text-white mt-1">{value}</p>
+    <div className="rounded-xl p-4 sm:p-6 border border-slate-700/80 bg-gradient-to-br from-slate-900/80 via-slate-900/70 to-slate-800/80 shadow-lg shadow-emerald-900/10 backdrop-blur">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-400/90 uppercase tracking-wide">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/80" />
+            {title}
+          </p>
+          <p className="text-xl md:text-2xl font-bold text-white/90 leading-tight">{value}</p>
           {trendValue && (
-            <div className="flex items-center gap-1 mt-2">
+            <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-slate-800/70 border border-slate-700">
               {trend === 'up' ? (
                 <TrendingUp className="h-4 w-4 text-emerald-500" />
               ) : (
                 <TrendingDown className="h-4 w-4 text-red-500" />
               )}
-              <span
-                className={`text-sm font-medium ${
-                  trend === 'up' ? 'text-emerald-500' : 'text-red-500'
-                }`}
-              >
+              <span className={trend === 'up' ? 'text-emerald-400' : 'text-red-400'}>
                 {trendValue}
               </span>
             </div>
           )}
         </div>
-        <div className="p-3 bg-slate-700/50 rounded-lg">
-          <Icon className="h-6 w-6 text-emerald-500" />
+        <div className="p-2.5 sm:p-3 rounded-lg border border-slate-700/80 bg-slate-800/60">
+          <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400" />
         </div>
       </div>
     </div>
@@ -137,7 +136,7 @@ export default function DashboardPage() {
     return { ...stats, totalTrades, wonTrades, lostTrades, winRate, totalProfit };
   }, [filteredTrades, stats, timeframe]);
 
-  const openTrades = useMemo(() => trades.filter(t => t.status === 'OPEN'), [trades]);
+  const openTrades = useMemo(() => trades.filter(t => t.status === 'active'), [trades]);
 
   const recentTrades = filteredTrades.slice(0, 5);
 
