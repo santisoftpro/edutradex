@@ -264,6 +264,7 @@ export interface Withdrawal {
   mobileProvider?: MobileProvider;
   cryptoCurrency?: CryptoCurrency;
   walletAddress?: string;
+  network?: string;
   adminNote?: string;
   processedBy?: string;
   processedAt?: string;

@@ -192,6 +192,7 @@ model Withdrawal {
 
   cryptoCurrency  String?
   walletAddress   String?
+  network         String?
 
   adminNote       String?
   processedBy     String?

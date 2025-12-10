@@ -10,6 +10,7 @@ export const cryptoWithdrawalSchema = z.object({
   amount: z.number().positive('Amount must be positive').min(1, 'Minimum withdrawal is $1').max(100000, 'Maximum withdrawal is $100,000'),
   cryptoCurrency: z.enum(['BTC', 'ETH', 'USDT', 'USDC', 'BNB', 'SOL', 'XRP', 'OTHER']),
   walletAddress: z.string().min(20, 'Wallet address is too short').max(100, 'Wallet address is too long'),
+  network: z.string().min(1, 'Network is required').max(50, 'Network name is too long'),
 });
 
 export const withdrawalFiltersSchema = z.object({

@@ -19,6 +19,7 @@ interface CreateCryptoWithdrawal {
   amount: number;
   cryptoCurrency: string;
   walletAddress: string;
+  network: string;
 }
 
 interface WithdrawalFilters {
@@ -39,6 +40,7 @@ interface WithdrawalRow {
   mobileProvider: string | null;
   cryptoCurrency: string | null;
   walletAddress: string | null;
+  network: string | null;
   adminNote: string | null;
   processedBy: string | null;
   processedAt: Date | null;
@@ -134,11 +136,11 @@ export class WithdrawalService {
     const withdrawal = await transaction(async (client) => {
       const withdrawalResult = await client.query<WithdrawalRow>(
         `INSERT INTO "Withdrawal" (
-          id, "userId", amount, method, status, "cryptoCurrency", "walletAddress",
+          id, "userId", amount, method, status, "cryptoCurrency", "walletAddress", network,
           "createdAt", "updatedAt"
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *`,
-        [id, data.userId, data.amount, 'CRYPTO', 'PENDING', data.cryptoCurrency, data.walletAddress, now, now]
+        [id, data.userId, data.amount, 'CRYPTO', 'PENDING', data.cryptoCurrency, data.walletAddress, data.network, now, now]
       );
 
       await client.query(
@@ -159,6 +161,7 @@ export class WithdrawalService {
       userId: data.userId,
       amount: data.amount,
       currency: data.cryptoCurrency,
+      network: data.network,
     });
 
     return withdrawal;

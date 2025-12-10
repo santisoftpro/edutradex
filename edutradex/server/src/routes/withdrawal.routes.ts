@@ -50,6 +50,7 @@ router.post(
         amount: req.body.amount,
         cryptoCurrency: req.body.cryptoCurrency,
         walletAddress: req.body.walletAddress,
+        network: req.body.network,
       });
 
       res.status(201).json({

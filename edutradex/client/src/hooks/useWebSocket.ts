@@ -36,253 +36,276 @@ export function useWebSocket(): UseWebSocketReturn {
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const subscribedSymbolsRef = useRef<Set<string>>(new Set());
   const isAuthenticatedRef = useRef(false);
+  const isConnectingRef = useRef(false);
 
-  const clearTimers = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-    if (pingIntervalRef.current) {
-      clearInterval(pingIntervalRef.current);
-      pingIntervalRef.current = null;
-    }
-  }, []);
-
-  const sendMessage = useCallback((message: WebSocketMessage) => {
+  // Stable sendMessage ref that doesn't change between renders
+  const sendMessageRef = useRef<(message: WebSocketMessage) => void>(() => {});
+  sendMessageRef.current = (message: WebSocketMessage) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     }
+  };
+
+  const sendMessage = useCallback((message: WebSocketMessage) => {
+    sendMessageRef.current(message);
   }, []);
 
   const subscribe = useCallback((symbol: string) => {
     subscribedSymbolsRef.current.add(symbol);
-    sendMessage({ type: 'subscribe', payload: { symbol } });
-  }, [sendMessage]);
+    sendMessageRef.current({ type: 'subscribe', payload: { symbol } });
+  }, []);
 
   const unsubscribe = useCallback((symbol: string) => {
     subscribedSymbolsRef.current.delete(symbol);
-    sendMessage({ type: 'unsubscribe', payload: { symbol } });
-  }, [sendMessage]);
+    sendMessageRef.current({ type: 'unsubscribe', payload: { symbol } });
+  }, []);
 
   const subscribeAll = useCallback((symbols: string[]) => {
     symbols.forEach(symbol => subscribedSymbolsRef.current.add(symbol));
-    sendMessage({ type: 'subscribe_all', payload: { symbols } });
-  }, [sendMessage]);
+    sendMessageRef.current({ type: 'subscribe_all', payload: { symbols } });
+  }, []);
 
-  const startPingInterval = useCallback(() => {
-    clearInterval(pingIntervalRef.current!);
-    pingIntervalRef.current = setInterval(() => {
-      sendMessage({ type: 'ping' });
-    }, PING_INTERVAL);
-  }, [sendMessage]);
+  // Connection effect - runs only once on mount
+  useEffect(() => {
+    const clearTimers = () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+    };
 
-  const connect = useCallback(() => {
-    try {
-      const ws = new WebSocket(WS_URL);
+    const startPingInterval = () => {
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+      }
+      pingIntervalRef.current = setInterval(() => {
+        sendMessageRef.current({ type: 'ping' });
+      }, PING_INTERVAL);
+    };
 
-      ws.onopen = () => {
-        console.log('[WebSocket] Connected');
-        setIsConnected(true);
-        clearTimers();
-        startPingInterval();
+    const connect = () => {
+      // Prevent multiple simultaneous connection attempts
+      if (isConnectingRef.current || wsRef.current?.readyState === WebSocket.OPEN) {
+        return;
+      }
 
-        // Authenticate with token if available
-        const currentToken = useAuthStore.getState().token;
-        if (currentToken) {
-          ws.send(JSON.stringify({ type: 'authenticate', payload: { token: currentToken } }));
-        }
+      isConnectingRef.current = true;
 
-        // Resubscribe to previously subscribed symbols
-        if (subscribedSymbolsRef.current.size > 0) {
-          const symbols = Array.from(subscribedSymbolsRef.current);
-          sendMessage({ type: 'subscribe_all', payload: { symbols } });
-        }
-      };
+      try {
+        const ws = new WebSocket(WS_URL);
 
-      ws.onmessage = (event) => {
-        try {
-          const message: WebSocketMessage = JSON.parse(event.data);
+        ws.onopen = () => {
+          console.log('[WebSocket] Connected');
+          isConnectingRef.current = false;
+          setIsConnected(true);
+          clearTimers();
+          startPingInterval();
 
-          switch (message.type) {
-            case 'connected':
-              console.log('[WebSocket] Connection confirmed', message.payload);
-              break;
+          // Authenticate with token if available
+          const currentToken = useAuthStore.getState().token;
+          if (currentToken) {
+            ws.send(JSON.stringify({ type: 'authenticate', payload: { token: currentToken } }));
+          }
 
-            case 'authenticated':
-              console.log('[WebSocket] Authenticated', message.payload);
-              isAuthenticatedRef.current = true;
-              break;
+          // Resubscribe to previously subscribed symbols
+          if (subscribedSymbolsRef.current.size > 0) {
+            const symbols = Array.from(subscribedSymbolsRef.current);
+            ws.send(JSON.stringify({ type: 'subscribe_all', payload: { symbols } }));
+          }
+        };
 
-            case 'price_update':
-              if (message.payload) {
-                const priceTick = message.payload as PriceTick;
-                // Batch updates to reduce re-renders
-                setLatestPrices((prev) => {
-                  // Only update if price actually changed
-                  const existing = prev.get(priceTick.symbol);
-                  if (existing?.price === priceTick.price) {
-                    return prev; // No change, don't trigger re-render
-                  }
-                  const newMap = new Map(prev);
-                  newMap.set(priceTick.symbol, priceTick);
-                  return newMap;
-                });
-                // Update price history
-                setPriceHistory((prev) => {
-                  const history = prev.get(priceTick.symbol) || [];
-                  // Mutate array in place for performance, then create new Map
-                  history.push(priceTick);
-                  if (history.length > MAX_HISTORY_LENGTH) {
-                    history.shift();
-                  }
-                  const newMap = new Map(prev);
-                  newMap.set(priceTick.symbol, history);
-                  return newMap;
-                });
-              }
-              break;
+        ws.onmessage = (event) => {
+          try {
+            const message: WebSocketMessage = JSON.parse(event.data);
 
-            // deposit_update and withdrawal_update are handled by DepositNotificationProvider
-            // to avoid duplicate notifications
+            switch (message.type) {
+              case 'connected':
+                console.log('[WebSocket] Connection confirmed', message.payload);
+                break;
 
-            case 'copy_trade_executed': {
-              const { symbol, direction, amount, leaderName } = message.payload;
-              useNotificationStore.getState().addNotification({
-                type: 'system',
-                title: 'Trade Copied',
-                message: `Copied ${direction} trade on ${symbol} for $${amount.toFixed(2)} from ${leaderName}`,
-                amount,
-              });
-              break;
-            }
+              case 'authenticated':
+                console.log('[WebSocket] Authenticated', message.payload);
+                isAuthenticatedRef.current = true;
+                break;
 
-            case 'pending_copy_trade': {
-              const { symbol, direction, suggestedAmount, leaderName } = message.payload;
-              useNotificationStore.getState().addNotification({
-                type: 'system',
-                title: 'Trade Pending Approval',
-                message: `${leaderName} placed a ${direction} trade on ${symbol}. Approve to copy for $${suggestedAmount.toFixed(2)}`,
-                amount: suggestedAmount,
-              });
-              break;
-            }
-
-            case 'leader_status_change': {
-              const { status, adminNote } = message.payload;
-              const isApproved = status === 'APPROVED';
-              const isSuspended = status === 'SUSPENDED';
-              useNotificationStore.getState().addNotification({
-                type: isApproved ? 'copy_trading_approved' : 'copy_trading_rejected',
-                title: isApproved
-                  ? 'Leader Application Approved'
-                  : isSuspended
-                  ? 'Leader Account Suspended'
-                  : 'Leader Application Rejected',
-                message: isApproved
-                  ? 'Congratulations! Your leader application has been approved. Traders can now follow you.'
-                  : isSuspended
-                  ? `Your leader account has been suspended.${adminNote ? ` Reason: ${adminNote}` : ''}`
-                  : `Your leader application has been rejected.${adminNote ? ` Reason: ${adminNote}` : ''}`,
-              });
-              break;
-            }
-
-            case 'trade_settled': {
-              console.log('[WebSocket] Trade settled received:', message.payload);
-              const { id, symbol, result, profit, amount } = message.payload || {};
-              const won = result === 'WON';
-              const profitAmount = typeof profit === 'number' ? profit : 0;
-              const tradeAmount = typeof amount === 'number' ? amount : 0;
-
-              // Only show notification if not already shown (prevents duplicates)
-              if (id && markTradeNotified(id)) {
-                console.log('[WebSocket] Trade result:', { won, profitAmount, tradeAmount, symbol });
-
-                // Play sound and show notification
-                if (won) {
-                  playWinSound();
-                  toast.success(`Profit +$${profitAmount.toFixed(2)} on ${symbol || 'trade'}`, { duration: 4000 });
-                } else {
-                  playLoseSound();
-                  toast.error(`Loss -$${tradeAmount.toFixed(2)} on ${symbol || 'trade'}`, { duration: 4000 });
-                }
-              }
-
-              // Remove trade from active trades (don't call full syncFromApi to save API calls)
-              if (id) {
-                const tradeStore = useTradeStore.getState();
-                const activeTrade = tradeStore.activeTrades.find(t => t.id === id);
-                if (activeTrade) {
-                  useTradeStore.setState({
-                    activeTrades: tradeStore.activeTrades.filter(t => t.id !== id),
-                    trades: tradeStore.trades.map(t =>
-                      t.id === id ? { ...t, status: won ? 'won' : 'lost', profit: profitAmount } : t
-                    ),
+              case 'price_update':
+                if (message.payload) {
+                  const priceTick = message.payload as PriceTick;
+                  // Batch updates to reduce re-renders
+                  setLatestPrices((prev) => {
+                    // Only update if price actually changed
+                    const existing = prev.get(priceTick.symbol);
+                    if (existing?.price === priceTick.price) {
+                      return prev; // No change, don't trigger re-render
+                    }
+                    const newMap = new Map(prev);
+                    newMap.set(priceTick.symbol, priceTick);
+                    return newMap;
+                  });
+                  // Update price history
+                  setPriceHistory((prev) => {
+                    const history = prev.get(priceTick.symbol) || [];
+                    // Mutate array in place for performance, then create new Map
+                    history.push(priceTick);
+                    if (history.length > MAX_HISTORY_LENGTH) {
+                      history.shift();
+                    }
+                    const newMap = new Map(prev);
+                    newMap.set(priceTick.symbol, history);
+                    return newMap;
                   });
                 }
+                break;
+
+              // deposit_update and withdrawal_update are handled by DepositNotificationProvider
+              // to avoid duplicate notifications
+
+              case 'copy_trade_executed': {
+                const { symbol, direction, amount, leaderName } = message.payload;
+                useNotificationStore.getState().addNotification({
+                  type: 'system',
+                  title: 'Trade Copied',
+                  message: `Copied ${direction} trade on ${symbol} for $${amount.toFixed(2)} from ${leaderName}`,
+                  amount,
+                });
+                break;
               }
 
-              // Refresh balance only
-              useAuthStore.getState().refreshProfile();
-              break;
+              case 'pending_copy_trade': {
+                const { symbol, direction, suggestedAmount, leaderName } = message.payload;
+                useNotificationStore.getState().addNotification({
+                  type: 'system',
+                  title: 'Trade Pending Approval',
+                  message: `${leaderName} placed a ${direction} trade on ${symbol}. Approve to copy for $${suggestedAmount.toFixed(2)}`,
+                  amount: suggestedAmount,
+                });
+                break;
+              }
+
+              case 'leader_status_change': {
+                const { status, adminNote } = message.payload;
+                const isApproved = status === 'APPROVED';
+                const isSuspended = status === 'SUSPENDED';
+                useNotificationStore.getState().addNotification({
+                  type: isApproved ? 'copy_trading_approved' : 'copy_trading_rejected',
+                  title: isApproved
+                    ? 'Leader Application Approved'
+                    : isSuspended
+                    ? 'Leader Account Suspended'
+                    : 'Leader Application Rejected',
+                  message: isApproved
+                    ? 'Congratulations! Your leader application has been approved. Traders can now follow you.'
+                    : isSuspended
+                    ? `Your leader account has been suspended.${adminNote ? ` Reason: ${adminNote}` : ''}`
+                    : `Your leader application has been rejected.${adminNote ? ` Reason: ${adminNote}` : ''}`,
+                });
+                break;
+              }
+
+              case 'trade_settled': {
+                console.log('[WebSocket] Trade settled received:', message.payload);
+                const { id, symbol, result, profit, amount } = message.payload || {};
+                const won = result === 'WON';
+                const profitAmount = typeof profit === 'number' ? profit : 0;
+                const tradeAmount = typeof amount === 'number' ? amount : 0;
+
+                // Only show notification if not already shown (prevents duplicates)
+                if (id && markTradeNotified(id)) {
+                  console.log('[WebSocket] Trade result:', { won, profitAmount, tradeAmount, symbol });
+
+                  // Play sound and show notification
+                  if (won) {
+                    playWinSound();
+                    toast.success(`Profit +$${profitAmount.toFixed(2)} on ${symbol || 'trade'}`, { duration: 4000 });
+                  } else {
+                    playLoseSound();
+                    toast.error(`Loss -$${tradeAmount.toFixed(2)} on ${symbol || 'trade'}`, { duration: 4000 });
+                  }
+                }
+
+                // Remove trade from active trades (don't call full syncFromApi to save API calls)
+                if (id) {
+                  const tradeStore = useTradeStore.getState();
+                  const activeTrade = tradeStore.activeTrades.find(t => t.id === id);
+                  if (activeTrade) {
+                    useTradeStore.setState({
+                      activeTrades: tradeStore.activeTrades.filter(t => t.id !== id),
+                      trades: tradeStore.trades.map(t =>
+                        t.id === id ? { ...t, status: won ? 'won' : 'lost', profit: profitAmount } : t
+                      ),
+                    });
+                  }
+                }
+
+                // Refresh balance only
+                useAuthStore.getState().refreshProfile();
+                break;
+              }
+
+              case 'subscribed':
+                console.log('[WebSocket] Subscribed to', message.payload?.symbol);
+                break;
+
+              case 'unsubscribed':
+                console.log('[WebSocket] Unsubscribed from', message.payload?.symbol);
+                break;
+
+              case 'pong':
+                // Heartbeat response
+                break;
+
+              case 'error':
+                console.error('[WebSocket] Server error', message.payload);
+                break;
+
+              default:
+                console.log('[WebSocket] Unknown message type', message.type);
             }
-
-            case 'subscribed':
-              console.log('[WebSocket] Subscribed to', message.payload?.symbol);
-              break;
-
-            case 'unsubscribed':
-              console.log('[WebSocket] Unsubscribed from', message.payload?.symbol);
-              break;
-
-            case 'pong':
-              // Heartbeat response
-              break;
-
-            case 'error':
-              console.error('[WebSocket] Server error', message.payload);
-              break;
-
-            default:
-              console.log('[WebSocket] Unknown message type', message.type);
+          } catch (error) {
+            console.error('[WebSocket] Failed to parse message', error);
           }
-        } catch (error) {
-          console.error('[WebSocket] Failed to parse message', error);
-        }
-      };
+        };
 
-      ws.onerror = () => {
-        // WebSocket errors don't provide useful info in browser
-        // The onclose handler will handle reconnection
-        console.warn('[WebSocket] Connection error occurred');
-      };
+        ws.onerror = () => {
+          // WebSocket errors don't provide useful info in browser
+          // The onclose handler will handle reconnection
+          console.warn('[WebSocket] Connection error occurred');
+          isConnectingRef.current = false;
+        };
 
-      ws.onclose = (event) => {
-        console.log('[WebSocket] Disconnected', event.code, event.reason);
-        setIsConnected(false);
-        clearTimers();
+        ws.onclose = (event) => {
+          console.log('[WebSocket] Disconnected', event.code, event.reason);
+          isConnectingRef.current = false;
+          setIsConnected(false);
+          clearTimers();
 
-        // Attempt reconnect
-        if (!event.wasClean) {
-          console.log(`[WebSocket] Reconnecting in ${RECONNECT_INTERVAL}ms...`);
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
-          }, RECONNECT_INTERVAL);
-        }
-      };
+          // Attempt reconnect
+          if (!event.wasClean) {
+            console.log(`[WebSocket] Reconnecting in ${RECONNECT_INTERVAL}ms...`);
+            reconnectTimeoutRef.current = setTimeout(() => {
+              connect();
+            }, RECONNECT_INTERVAL);
+          }
+        };
 
-      wsRef.current = ws;
-    } catch (error) {
-      console.error('[WebSocket] Connection failed', error);
-      reconnectTimeoutRef.current = setTimeout(() => {
-        connect();
-      }, RECONNECT_INTERVAL);
-    }
-  }, [clearTimers, startPingInterval, sendMessage]);
+        wsRef.current = ws;
+      } catch (error) {
+        console.error('[WebSocket] Connection failed', error);
+        isConnectingRef.current = false;
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connect();
+        }, RECONNECT_INTERVAL);
+      }
+    };
 
-  useEffect(() => {
+    // Start connection
     connect();
 
+    // Cleanup on unmount
     return () => {
       clearTimers();
       if (wsRef.current) {
@@ -290,7 +313,7 @@ export function useWebSocket(): UseWebSocketReturn {
         wsRef.current = null;
       }
     };
-  }, [connect, clearTimers]);
+  }, []); // Empty dependency array - runs only once on mount
 
   // Re-authenticate when token changes (e.g., user logs in after page load)
   useEffect(() => {

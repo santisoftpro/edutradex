@@ -236,10 +236,18 @@ export default function WithdrawPage() {
           setIsSubmitting(false);
           return;
         }
+
+        if (!selectedMethod.network) {
+          toast.error('Network information is missing. Please contact support.');
+          setIsSubmitting(false);
+          return;
+        }
+
         await api.createCryptoWithdrawal({
           amount: amountNum,
           cryptoCurrency: selectedMethod.cryptoCurrency as any,
           walletAddress,
+          network: selectedMethod.network,
         });
       }
 

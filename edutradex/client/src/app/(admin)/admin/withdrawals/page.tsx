@@ -82,7 +82,9 @@ function ProcessWithdrawalModal({
           <div className="flex items-center justify-between mt-2">
             <span className="text-slate-400">Method:</span>
             <span className="text-white">
-              {withdrawal.method === 'MOBILE_MONEY' ? withdrawal.mobileProvider : withdrawal.cryptoCurrency}
+              {withdrawal.method === 'MOBILE_MONEY'
+                ? withdrawal.mobileProvider
+                : `${withdrawal.cryptoCurrency}${withdrawal.network ? ` (${withdrawal.network})` : ''}`}
             </span>
           </div>
           <div className="flex items-center justify-between mt-2">
@@ -97,8 +99,14 @@ function ProcessWithdrawalModal({
           )}
           {withdrawal.method === 'CRYPTO' && withdrawal.walletAddress && (
             <div className="mt-2">
-              <span className="text-slate-400 block">Wallet:</span>
+              <span className="text-slate-400 block">Wallet Address:</span>
               <span className="text-white text-sm font-mono break-all">{withdrawal.walletAddress}</span>
+              {withdrawal.network && (
+                <div className="mt-1">
+                  <span className="text-slate-400">Network: </span>
+                  <span className="text-emerald-400 font-medium">{withdrawal.network}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -388,7 +396,12 @@ export default function AdminWithdrawalsPage() {
                           </>
                         ) : (
                           <>
-                            <p className="text-white">{withdrawal.cryptoCurrency}</p>
+                            <p className="text-white">
+                              {withdrawal.cryptoCurrency}
+                              {withdrawal.network && (
+                                <span className="text-emerald-400 ml-1">({withdrawal.network})</span>
+                              )}
+                            </p>
                             <p className="text-slate-400 truncate max-w-[150px]" title={withdrawal.walletAddress}>
                               {withdrawal.walletAddress}
                             </p>
@@ -407,7 +420,7 @@ export default function AdminWithdrawalsPage() {
                         {withdrawal.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-400 text-sm">
+                    <td className="px-6 py-4 text-slate-400 text-sm" suppressHydrationWarning>
                       {formatDate(withdrawal.createdAt)}
                     </td>
                     <td className="px-6 py-4">

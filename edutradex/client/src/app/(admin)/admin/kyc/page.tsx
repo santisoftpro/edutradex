@@ -60,6 +60,20 @@ function StatCard({
   );
 }
 
+// Helper to get the auth token from Zustand's persisted storage
+function getAuthToken(): string | null {
+  try {
+    const authStorage = localStorage.getItem('auth-storage');
+    if (authStorage) {
+      const parsed = JSON.parse(authStorage);
+      return parsed?.state?.token || null;
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return null;
+}
+
 // Document Viewer Component
 function DocumentViewer({
   url,
@@ -83,7 +97,7 @@ function DocumentViewer({
   useEffect(() => {
     const loadDocument = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = getAuthToken();
 
         const response = await fetch(fullUrl, {
           headers: {
@@ -313,7 +327,7 @@ function DocumentPreviewCard({
     const loadImage = async () => {
       try {
         const fullUrl = getFileUrl(url);
-        const token = localStorage.getItem('token');
+        const token = getAuthToken();
 
         const response = await fetch(fullUrl, {
           headers: {

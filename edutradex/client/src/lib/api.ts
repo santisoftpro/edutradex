@@ -591,6 +591,7 @@ class ApiClient {
     amount: number;
     cryptoCurrency: CryptoCurrency;
     walletAddress: string;
+    network: string;
   }): Promise<Withdrawal> {
     const response = await this.post<ApiResponse<Withdrawal>>('/withdrawals/crypto', data);
     return response.data;
