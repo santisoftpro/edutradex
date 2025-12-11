@@ -7,16 +7,16 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
-  Clock,
   Wallet,
   Copy,
   Check,
   ArrowRight,
   Search,
   Star,
-  ChevronRight,
-  X,
+  ChevronLeft,
   QrCode,
+  RefreshCw,
+  Info,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
@@ -32,33 +32,36 @@ const QUICK_AMOUNTS = [10, 25, 50, 100, 250, 500];
 
 function StepIndicator({ currentStep }: { currentStep: Step }) {
   const steps = [
-    { num: 1, label: 'Payment method' },
-    { num: 2, label: 'Payment details' },
-    { num: 3, label: 'Confirmation' },
+    { num: 1, label: 'Method' },
+    { num: 2, label: 'Details' },
+    { num: 3, label: 'Done' },
   ];
 
   return (
-    <div className="flex items-center justify-center gap-2 md:gap-4 mb-8">
+    <div className="flex items-center justify-between max-w-xs sm:max-w-sm mx-auto mb-4 sm:mb-6 px-2">
       {steps.map((step, index) => (
-        <div key={step.num} className="flex items-center">
-          <div className="flex items-center gap-2">
+        <div key={step.num} className="flex items-center flex-1">
+          <div className="flex flex-col items-center">
             <div className={cn(
-              'w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium transition-all',
+              'w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-semibold transition-all',
               currentStep >= step.num
                 ? 'bg-emerald-500 text-white'
-                : 'bg-[#252542] text-gray-500'
+                : 'bg-slate-700 text-slate-400'
             )}>
-              {currentStep > step.num ? <Check className="h-4 w-4" /> : step.num}
+              {currentStep > step.num ? <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : step.num}
             </div>
             <span className={cn(
-              'text-sm hidden sm:block',
-              currentStep >= step.num ? 'text-white' : 'text-gray-500'
+              'text-[10px] sm:text-xs mt-1',
+              currentStep >= step.num ? 'text-emerald-400' : 'text-slate-500'
             )}>
               {step.label}
             </span>
           </div>
           {index < steps.length - 1 && (
-            <ChevronRight className="h-4 w-4 text-gray-600 mx-2 md:mx-4" />
+            <div className={cn(
+              'flex-1 h-0.5 mx-1 sm:mx-2',
+              currentStep > step.num ? 'bg-emerald-500' : 'bg-slate-700'
+            )} />
           )}
         </div>
       ))}
@@ -79,25 +82,25 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="p-2 hover:bg-[#3d3d5c] rounded-lg transition-colors"
+      className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors shrink-0"
       title="Copy"
     >
       {copied ? (
-        <Check className="h-4 w-4 text-emerald-400" />
+        <Check className="h-3.5 w-3.5 text-emerald-400" />
       ) : (
-        <Copy className="h-4 w-4 text-gray-400" />
+        <Copy className="h-3.5 w-3.5 text-slate-400" />
       )}
     </button>
   );
 }
 
 function QRCodeDisplay({ address, name }: { address: string; name: string }) {
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(address)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(address)}`;
 
   return (
-    <div className="flex flex-col items-center gap-3 p-4 bg-[#252542] rounded-lg">
-      <img src={qrUrl} alt={`QR Code for ${name}`} className="w-32 h-32 rounded-lg bg-white p-2" />
-      <p className="text-xs text-gray-400">Scan QR code to get address</p>
+    <div className="flex flex-col items-center gap-2 p-3 bg-slate-900 rounded-lg">
+      <img src={qrUrl} alt={`QR Code for ${name}`} className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg bg-white p-1.5" />
+      <p className="text-[10px] sm:text-xs text-slate-500">Scan to get address</p>
     </div>
   );
 }
@@ -139,7 +142,7 @@ function getProviderIconText(provider?: string): string {
 }
 
 export default function DepositPage() {
-  const { user, refreshProfile } = useAuthStore();
+  const { user, refreshProfile, isHydrated } = useAuthStore();
   const [step, setStep] = useState<Step>(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<PaymentCategory>('popular');
@@ -148,11 +151,14 @@ export default function DepositPage() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showQR, setShowQR] = useState(false);
 
   // Form state
   const [amount, setAmount] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+
+  const balance = user?.demoBalance || 0;
 
   const filteredMethods = paymentMethods.filter(method => {
     const matchesSearch = method.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -192,16 +198,25 @@ export default function DepositPage() {
     }
   }, []);
 
-  // Listen for real-time deposit updates
   useDepositUpdates(useCallback((depositId: string, status: 'APPROVED' | 'REJECTED') => {
-    // Update the deposit status in local state immediately
     setDeposits(prev => prev.map(d =>
       d.id === depositId ? { ...d, status } : d
     ));
-    // Also refresh to ensure we have latest data
     refreshDeposits();
     refreshProfile();
   }, [refreshDeposits, refreshProfile]));
+
+  const handleRefreshBalance = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshProfile();
+      toast.success('Balance updated');
+    } catch {
+      toast.error('Failed to refresh balance');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -264,12 +279,13 @@ export default function DepositPage() {
   };
 
   const categories: { id: PaymentCategory; label: string; icon: React.ReactNode }[] = [
-    { id: 'popular', label: 'Popular', icon: <Star className="h-4 w-4" /> },
-    { id: 'mobile', label: 'Mobile', icon: <Smartphone className="h-4 w-4" /> },
-    { id: 'crypto', label: 'Crypto', icon: <Bitcoin className="h-4 w-4" /> },
+    { id: 'popular', label: 'Popular', icon: <Star className="h-3.5 w-3.5" /> },
+    { id: 'mobile', label: 'Mobile', icon: <Smartphone className="h-3.5 w-3.5" /> },
+    { id: 'crypto', label: 'Crypto', icon: <Bitcoin className="h-3.5 w-3.5" /> },
   ];
 
-  if (isLoading) {
+  // Wait for hydration to prevent mismatch
+  if (!isHydrated || isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
@@ -278,60 +294,66 @@ export default function DepositPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 p-4 md:p-6">
-      <div className="max-w-5xl mx-auto space-y-5">
+    <div className="min-h-screen bg-slate-900 p-3 sm:p-4 md:p-6">
+      <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4">
         {/* Header */}
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-bold text-white">Account Top-up</h1>
-          <p className="text-gray-400 text-sm">
-            Choose a payment method, enter the amount, and submit your request.
-          </p>
+        <div className="text-center">
+          <h1 className="text-lg sm:text-xl font-bold text-white">Deposit Funds</h1>
+          <p className="text-slate-400 text-xs sm:text-sm mt-1">Top up your account balance</p>
+        </div>
+
+        {/* Balance Card */}
+        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-1.5 sm:p-2 bg-emerald-600/20 rounded-lg">
+              <Wallet className="h-4 w-4 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-slate-400 text-[10px] sm:text-xs">Current Balance</p>
+              <p className="text-white text-base sm:text-lg font-bold">{formatCurrency(balance)}</p>
+            </div>
+          </div>
+          <button
+            onClick={handleRefreshBalance}
+            disabled={isRefreshing}
+            className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+          >
+            <RefreshCw className={cn('h-4 w-4 text-slate-400', isRefreshing && 'animate-spin')} />
+          </button>
         </div>
 
         {/* Step Indicator */}
         <StepIndicator currentStep={step} />
 
-        {/* Balance Card */}
-        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-600/20 rounded-lg">
-              <Wallet className="h-5 w-5 text-emerald-500" />
-            </div>
-            <div>
-              <p className="text-emerald-300 text-sm">Current Balance</p>
-              <p className="text-white text-xl font-bold">{formatCurrency(user?.demoBalance || 0)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
           {/* Main Content */}
           <div className="lg:col-span-2">
+            {/* Step 1: Select Method */}
             {step === 1 && (
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {/* Search */}
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search payment method..."
-                    className="w-full pl-10 pr-4 py-3 bg-[#1a1a2e] border border-[#2d2d44] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                    className="w-full pl-9 pr-3 py-2 sm:py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
 
                 {/* Categories */}
-                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                   {categories.map((cat) => (
                     <button
                       key={cat.id}
                       onClick={() => setActiveCategory(cat.id)}
                       className={cn(
-                        'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all',
+                        'flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all',
                         activeCategory === cat.id
                           ? 'bg-emerald-500 text-white'
-                          : 'bg-[#1a1a2e] text-gray-400 hover:bg-[#252542] hover:text-white'
+                          : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700 border border-slate-700'
                       )}
                     >
                       {cat.icon}
@@ -341,126 +363,112 @@ export default function DepositPage() {
                 </div>
 
                 {/* Payment Methods Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                   {filteredMethods.map((method) => (
                     <button
                       key={method.id}
                       onClick={() => handleMethodSelect(method)}
-                      className="flex items-center gap-3 p-4 bg-[#1a1a2e] border border-[#2d2d44] rounded-xl hover:border-emerald-500/50 hover:bg-[#1a1a2e]/80 transition-all text-left group"
+                      className="flex items-center gap-2.5 sm:gap-3 p-3 sm:p-4 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-emerald-500/50 hover:bg-slate-800 transition-all text-left group"
                     >
-                      <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden', method.iconBg)}>
+                      <div className={cn('w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0', method.iconBg)}>
                         {method.iconUrl ? (
                           <img
                             src={method.iconUrl}
                             alt={method.name}
-                            className="w-7 h-7 object-contain"
-                            onError={(e) => {
-                              const target = e.currentTarget;
-                              target.style.display = 'none';
-                              const fallback = target.nextElementSibling as HTMLElement;
-                              if (fallback) fallback.style.display = 'flex';
-                            }}
+                            className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
                           />
-                        ) : null}
-                        <span
-                          className="text-white font-bold text-xs items-center justify-center"
-                          style={{ display: method.iconUrl ? 'none' : 'flex' }}
-                        >
-                          {method.type === 'MOBILE_MONEY'
-                            ? getProviderIconText(method.mobileProvider)
-                            : method.cryptoCurrency?.slice(0, 3) || '?'}
-                        </span>
+                        ) : (
+                          <span className="text-white font-bold text-[10px] sm:text-xs flex items-center justify-center">
+                            {method.type === 'MOBILE_MONEY'
+                              ? getProviderIconText(method.mobileProvider)
+                              : method.cryptoCurrency?.slice(0, 3) || '?'}
+                          </span>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-white font-medium truncate">{method.name}</p>
-                          {method.isPopular && <Star className="h-3 w-3 text-amber-400 fill-amber-400 flex-shrink-0" />}
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-white font-medium text-sm truncate">{method.name}</p>
+                          {method.isPopular && <Star className="h-3 w-3 text-amber-400 fill-amber-400 shrink-0" />}
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                        <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500 mt-0.5">
                           <span>Min: ${method.minAmount}</span>
+                          <span>•</span>
                           <span>{method.processingTime}</span>
                         </div>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-gray-500 group-hover:text-emerald-400 transition-colors" />
+                      <ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-emerald-400 transition-colors shrink-0" />
                     </button>
                   ))}
                 </div>
 
                 {filteredMethods.length === 0 && (
-                  <div className="text-center py-12">
-                    <p className="text-gray-400">No payment methods found</p>
-                    <p className="text-gray-500 text-sm mt-1">Try a different search or category</p>
+                  <div className="text-center py-8 sm:py-12">
+                    <p className="text-slate-400 text-sm">No payment methods found</p>
+                    <p className="text-slate-500 text-xs mt-1">Try a different search or category</p>
                   </div>
                 )}
               </div>
             )}
 
+            {/* Step 2: Enter Details */}
             {step === 2 && selectedMethod && (
-              <div className="bg-[#1a1a2e] border border-[#2d2d44] rounded-xl overflow-hidden">
-                {/* Selected Method Header */}
-                <div className="p-4 border-b border-[#2d2d44] flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden', selectedMethod.iconBg)}>
+              <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
+                {/* Header */}
+                <div className="p-2.5 sm:p-3 border-b border-slate-700 flex items-center justify-between bg-slate-800">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <button
+                      onClick={() => setStep(1)}
+                      className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors"
+                    >
+                      <ChevronLeft className="h-4 w-4 text-slate-400" />
+                    </button>
+                    <div className={cn('w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center overflow-hidden', selectedMethod.iconBg)}>
                       {selectedMethod.iconUrl ? (
                         <img
                           src={selectedMethod.iconUrl}
                           alt={selectedMethod.name}
-                          className="w-7 h-7 object-contain"
-                          onError={(e) => {
-                            const target = e.currentTarget;
-                            target.style.display = 'none';
-                            const fallback = target.nextElementSibling as HTMLElement;
-                            if (fallback) fallback.style.display = 'flex';
-                          }}
+                          className="w-5 h-5 sm:w-6 sm:h-6 object-contain"
                         />
-                      ) : null}
-                      <span
-                        className="text-white font-bold text-xs items-center justify-center"
-                        style={{ display: selectedMethod.iconUrl ? 'none' : 'flex' }}
-                      >
-                        {selectedMethod.type === 'MOBILE_MONEY'
-                          ? getProviderIconText(selectedMethod.mobileProvider)
-                          : selectedMethod.cryptoCurrency?.slice(0, 3) || '?'}
-                      </span>
+                      ) : (
+                        <span className="text-white font-bold text-[10px] sm:text-xs flex items-center justify-center">
+                          {selectedMethod.type === 'MOBILE_MONEY'
+                            ? getProviderIconText(selectedMethod.mobileProvider)
+                            : selectedMethod.cryptoCurrency?.slice(0, 3) || '?'}
+                        </span>
+                      )}
                     </div>
                     <div>
-                      <p className="text-white font-medium">{selectedMethod.name}</p>
-                      <p className="text-xs text-gray-500">Min: ${selectedMethod.minAmount} • {selectedMethod.processingTime}</p>
+                      <p className="text-white font-medium text-xs sm:text-sm">{selectedMethod.name}</p>
+                      <p className="text-slate-500 text-[10px] sm:text-xs">Min: ${selectedMethod.minAmount} • {selectedMethod.processingTime}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setStep(1)}
-                    className="p-2 hover:bg-[#252542] rounded-lg transition-colors"
-                  >
-                    <X className="h-4 w-4 text-gray-400" />
-                  </button>
                 </div>
 
                 {/* Form */}
-                <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                <form onSubmit={handleSubmit} className="p-3 sm:p-4 space-y-3 sm:space-y-4">
                   {/* Amount */}
                   <div>
-                    <label className="block text-sm text-gray-400 mb-2">Amount (USD)</label>
+                    <label className="block text-xs sm:text-sm text-slate-400 mb-1.5">Amount (USD)</label>
                     <input
                       type="number"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      placeholder="Enter amount"
+                      placeholder="0.00"
                       min={selectedMethod.minAmount}
-                      className="w-full px-4 py-3 bg-[#252542] border border-[#3d3d5c] rounded-lg text-white text-lg placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                      className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-base sm:text-lg placeholder-slate-600 focus:outline-none focus:border-emerald-500"
                       required
                     />
-                    <div className="flex flex-wrap gap-2 mt-2">
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
                       {QUICK_AMOUNTS.filter(a => a >= selectedMethod.minAmount).map((quickAmount) => (
                         <button
                           key={quickAmount}
                           type="button"
                           onClick={() => setAmount(quickAmount.toString())}
                           className={cn(
-                            'px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                            'px-2.5 sm:px-3 py-1 rounded-lg text-[10px] sm:text-xs font-medium transition-all',
                             amount === quickAmount.toString()
                               ? 'bg-emerald-500 text-white'
-                              : 'bg-[#252542] text-gray-400 hover:bg-[#3d3d5c]'
+                              : 'bg-slate-900 text-slate-400 hover:bg-slate-700 border border-slate-700'
                           )}
                         >
                           ${quickAmount}
@@ -473,31 +481,34 @@ export default function DepositPage() {
                     <>
                       {/* Phone Number */}
                       <div>
-                        <label className="block text-sm text-gray-400 mb-2">Your Phone Number</label>
+                        <label className="block text-xs sm:text-sm text-slate-400 mb-1.5">Your Phone Number</label>
                         <input
                           type="tel"
                           value={phoneNumber}
                           onChange={(e) => setPhoneNumber(e.target.value)}
                           placeholder="+255 7XX XXX XXX"
-                          className="w-full px-4 py-3 bg-[#252542] border border-[#3d3d5c] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                          className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-emerald-500"
                           required
                         />
                       </div>
 
                       {/* Payment Instructions */}
                       {selectedMethod.phoneNumber && (
-                        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4">
-                          <p className="text-emerald-400 text-sm font-medium mb-2">Send payment to:</p>
-                          <div className="flex items-center justify-between bg-[#1a1a2e] rounded-lg px-3 py-2">
-                            <div>
-                              <span className="text-white font-mono">{selectedMethod.phoneNumber}</span>
+                        <div className="bg-emerald-900/20 border border-emerald-900/30 rounded-lg p-3">
+                          <p className="text-emerald-400 text-xs sm:text-sm font-medium mb-2">Send payment to:</p>
+                          <div className="flex items-center justify-between bg-slate-900 rounded-lg px-3 py-2 gap-2">
+                            <div className="min-w-0">
+                              <span className="text-white font-mono text-sm">{selectedMethod.phoneNumber}</span>
                               {selectedMethod.accountName && (
-                                <span className="text-gray-400 text-sm ml-2">({selectedMethod.accountName})</span>
+                                <span className="text-slate-400 text-xs ml-2 hidden sm:inline">({selectedMethod.accountName})</span>
                               )}
                             </div>
                             <CopyButton text={selectedMethod.phoneNumber} />
                           </div>
-                          <p className="text-gray-400 text-xs mt-2">
+                          {selectedMethod.accountName && (
+                            <p className="text-slate-400 text-xs mt-1.5 sm:hidden">Account: {selectedMethod.accountName}</p>
+                          )}
+                          <p className="text-slate-500 text-[10px] sm:text-xs mt-2">
                             Send the exact amount, then submit this form.
                           </p>
                         </div>
@@ -507,21 +518,21 @@ export default function DepositPage() {
                     <>
                       {/* Deposit Address with QR */}
                       {selectedMethod.walletAddress && (
-                        <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
+                        <div className="bg-amber-900/20 border border-amber-900/30 rounded-lg p-3">
                           <div className="flex items-center justify-between mb-2">
-                            <p className="text-orange-400 text-sm font-medium">
+                            <p className="text-amber-400 text-xs sm:text-sm font-medium">
                               Send {selectedMethod.cryptoCurrency} to:
                             </p>
                             <button
                               type="button"
                               onClick={() => setShowQR(!showQR)}
                               className={cn(
-                                'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
-                                showQR ? 'bg-orange-500 text-white' : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
+                                'flex items-center gap-1 px-2 py-1 rounded text-[10px] sm:text-xs transition-colors',
+                                showQR ? 'bg-amber-500 text-white' : 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
                               )}
                             >
                               <QrCode className="h-3 w-3" />
-                              {showQR ? 'Hide QR' : 'Show QR'}
+                              {showQR ? 'Hide' : 'QR'}
                             </button>
                           </div>
 
@@ -531,16 +542,16 @@ export default function DepositPage() {
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between bg-[#1a1a2e] rounded-lg px-3 py-2 gap-2">
-                            <span className="text-white font-mono text-xs break-all">{selectedMethod.walletAddress}</span>
+                          <div className="flex items-center justify-between bg-slate-900 rounded-lg px-3 py-2 gap-2">
+                            <span className="text-white font-mono text-[10px] sm:text-xs break-all">{selectedMethod.walletAddress}</span>
                             <CopyButton text={selectedMethod.walletAddress} />
                           </div>
                           {selectedMethod.network && (
-                            <p className="text-orange-300 text-xs mt-2">
+                            <p className="text-amber-300 text-[10px] sm:text-xs mt-2">
                               Network: <span className="font-medium">{selectedMethod.network}</span>
                             </p>
                           )}
-                          <p className="text-gray-400 text-xs mt-3">
+                          <p className="text-slate-500 text-[10px] sm:text-xs mt-2">
                             Send the exact amount to the address above, then click submit.
                           </p>
                         </div>
@@ -548,10 +559,18 @@ export default function DepositPage() {
                     </>
                   )}
 
+                  {/* Info Box */}
+                  <div className="bg-blue-900/20 border border-blue-900/30 rounded-lg p-3 flex items-start gap-2">
+                    <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+                    <p className="text-blue-300 text-[10px] sm:text-xs">
+                      Your deposit will be credited after admin approval. Processing time: {selectedMethod.processingTime}
+                    </p>
+                  </div>
+
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {isSubmitting ? (
                       <>
@@ -569,19 +588,26 @@ export default function DepositPage() {
               </div>
             )}
 
+            {/* Step 3: Confirmation */}
             {step === 3 && (
-              <div className="bg-[#1a1a2e] border border-[#2d2d44] rounded-xl p-8 text-center">
-                <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="h-8 w-8 text-emerald-400" />
+              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 sm:p-6 text-center">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                  <Loader2 className="h-7 w-7 sm:h-8 sm:w-8 text-amber-400 animate-spin" />
                 </div>
-                <h2 className="text-xl font-bold text-white mb-2">Deposit Submitted!</h2>
-                <p className="text-gray-400 mb-6">
-                  Your deposit request has been submitted and is pending approval.
-                  You will be notified once it's processed.
+                <h2 className="text-base sm:text-lg font-bold text-white mb-1">Deposit Pending</h2>
+                <p className="text-slate-400 text-xs sm:text-sm mb-2">
+                  Your deposit request has been submitted and is awaiting approval.
+                </p>
+                <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-2.5 sm:p-3 mb-3 sm:mb-4">
+                  <p className="text-slate-300 text-xs sm:text-sm font-medium">Estimated Processing Time</p>
+                  <p className="text-amber-400 text-base sm:text-lg font-bold">5 minutes - 4 hours</p>
+                </div>
+                <p className="text-slate-500 text-[10px] sm:text-xs mb-4 sm:mb-6">
+                  You will be notified in real-time when it's processed.
                 </p>
                 <button
                   onClick={handleReset}
-                  className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg transition-all"
+                  className="px-5 sm:px-6 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-all"
                 >
                   Make Another Deposit
                 </button>
@@ -590,28 +616,28 @@ export default function DepositPage() {
           </div>
 
           {/* Recent Deposits Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-[#1a1a2e] border border-[#2d2d44] rounded-xl overflow-hidden sticky top-6">
-              <div className="p-4 border-b border-[#2d2d44]">
-                <h2 className="text-white font-semibold">Recent Deposits</h2>
+          <div className="lg:col-span-1 order-first lg:order-last">
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden lg:sticky lg:top-4">
+              <div className="p-2.5 sm:p-3 border-b border-slate-700 bg-slate-800">
+                <h3 className="text-white font-medium text-xs sm:text-sm">Recent Deposits</h3>
               </div>
-              <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+              <div className="max-h-[200px] lg:max-h-[300px] overflow-y-auto">
                 {deposits.length === 0 ? (
-                  <div className="p-6 text-center">
-                    <Wallet className="h-10 w-10 text-gray-600 mx-auto mb-2" />
-                    <p className="text-gray-500 text-sm">No deposits yet</p>
+                  <div className="p-4 sm:p-6 text-center">
+                    <Wallet className="h-6 w-6 sm:h-8 sm:w-8 text-slate-600 mx-auto mb-2" />
+                    <p className="text-slate-500 text-xs sm:text-sm">No deposits yet</p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-[#2d2d44]">
+                  <div className="divide-y divide-slate-700/50">
                     {deposits.map((deposit) => (
-                      <div key={deposit.id} className="p-3 hover:bg-[#252542]/50 transition-colors">
+                      <div key={deposit.id} className="p-2.5 sm:p-3 hover:bg-slate-800/50 transition-colors">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-white font-medium text-sm">
+                          <span className="text-white font-medium text-xs sm:text-sm">
                             {formatCurrency(deposit.amount)}
                           </span>
                           <StatusBadge status={deposit.status} />
                         </div>
-                        <div className="flex items-center justify-between text-xs text-gray-500">
+                        <div className="flex items-center justify-between text-[10px] sm:text-xs text-slate-500">
                           <span>
                             {deposit.method === 'MOBILE_MONEY'
                               ? deposit.mobileProvider
@@ -619,6 +645,11 @@ export default function DepositPage() {
                           </span>
                           <span>{formatDate(deposit.createdAt)}</span>
                         </div>
+                        {deposit.adminNote && deposit.status !== 'PENDING' && (
+                          <div className="mt-1.5 sm:mt-2 p-1.5 sm:p-2 bg-slate-900 rounded text-[10px] sm:text-xs text-slate-400">
+                            <span className="text-slate-300">Note:</span> {deposit.adminNote}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

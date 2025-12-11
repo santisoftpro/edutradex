@@ -45,9 +45,11 @@ class DerivService {
   private ws: WebSocket | null = null;
   private isConnecting = false;
   private reconnectTimeout: NodeJS.Timeout | null = null;
+  private periodicRetryInterval: NodeJS.Timeout | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 3000;
+  private periodicRetryDelay = 60000; // Retry every 60 seconds after max attempts
   private subscriptions = new Map<string, SymbolSubscription>();
   private callbacks = new Set<PriceUpdateCallback>();
   private pingInterval: NodeJS.Timeout | null = null;
@@ -165,14 +167,59 @@ class DerivService {
     }
   }
 
+  /**
+   * Force reconnect - resets attempts counter and tries to connect
+   * Useful when connection has been down and you want to retry immediately
+   */
+  public forceReconnect(): void {
+    logger.info('[Deriv] Force reconnect requested');
+
+    // Clear any existing timeouts
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    if (this.periodicRetryInterval) {
+      clearInterval(this.periodicRetryInterval);
+      this.periodicRetryInterval = null;
+    }
+
+    // Close existing connection if any
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch (e) {
+        // Ignore close errors
+      }
+      this.ws = null;
+    }
+
+    // Reset state
+    this.isConnecting = false;
+    this.reconnectAttempts = 0;
+    this.isAvailable = false;
+
+    // Reconnect
+    this.connect();
+  }
+
   private connect = (): void => {
     if (this.isConnecting || (this.ws && this.ws.readyState === WebSocket.OPEN)) {
       return;
     }
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.error('[Deriv] Max reconnection attempts reached, marking as unavailable');
+      logger.error('[Deriv] Max reconnection attempts reached, starting periodic retry every 60s');
       this.isAvailable = false;
+
+      // Start periodic retry if not already running
+      if (!this.periodicRetryInterval) {
+        this.periodicRetryInterval = setInterval(() => {
+          logger.info('[Deriv] Periodic retry - attempting to reconnect...');
+          this.reconnectAttempts = 0; // Reset counter for new attempt cycle
+          this.connect();
+        }, this.periodicRetryDelay);
+      }
       return;
     }
 
@@ -188,6 +235,13 @@ class DerivService {
         this.isConnecting = false;
         this.isAvailable = true;
         this.reconnectAttempts = 0;
+
+        // Clear periodic retry interval since we're now connected
+        if (this.periodicRetryInterval) {
+          clearInterval(this.periodicRetryInterval);
+          this.periodicRetryInterval = null;
+          logger.info('[Deriv] Cleared periodic retry interval - connection restored');
+        }
 
         // Start ping to keep connection alive
         this.startPing();
@@ -506,15 +560,19 @@ class DerivService {
         try {
           const message = JSON.parse(data.toString());
 
-          // Log candles-related messages for debugging
-          if (message.msg_type === 'candles' || message.msg_type === 'history' || message.candles || message.error) {
-            logger.info(`[Deriv] Candles response for ${ourSymbol}: msg_type=${message.msg_type}, has_candles=${!!message.candles}, candles_count=${message.candles?.length || 0}, error=${message.error?.message || 'none'}, req_id_match=${message.echo_req?.req_id === requestId}`);
-          }
-
-          // Check if this is our candles response
+          // Check if this is our response by req_id match
           const isOurResponse = message.echo_req?.req_id === requestId;
 
-          if (isOurResponse) {
+          // Also check if this is a history/candles response for our symbol (without req_id match as backup)
+          const isHistoryResponse = message.msg_type === 'history' || message.msg_type === 'candles';
+          const matchesSymbol = message.echo_req?.ticks_history === derivSymbol;
+
+          // Log candles-related messages for debugging
+          if (isHistoryResponse || message.candles || (message.error && isOurResponse)) {
+            logger.info(`[Deriv] Response for ${ourSymbol}: msg_type=${message.msg_type}, has_candles=${!!message.candles}, candles_count=${message.candles?.length || 0}, error=${message.error?.message || 'none'}, req_id_match=${isOurResponse}, symbol_match=${matchesSymbol}`);
+          }
+
+          if (isOurResponse || (isHistoryResponse && matchesSymbol)) {
             resolved = true;
             // Remove this handler after receiving response
             this.ws?.removeListener('message', messageHandler);
@@ -539,6 +597,20 @@ class DerivService {
 
               logger.info(`[Deriv] Successfully fetched ${candles.length} candles for ${ourSymbol} (${granularity}s granularity)`);
               resolve(candles);
+            } else if (message.history && message.history.prices && Array.isArray(message.history.prices)) {
+              // Handle tick history response (when market is closed, Deriv returns ticks instead of candles)
+              const prices = message.history.prices;
+              const times = message.history.times;
+
+              if (prices.length > 0 && times && times.length === prices.length) {
+                // Convert ticks to candles by grouping
+                const tickCandles = this.convertTicksToCandles(prices, times, granularity);
+                logger.info(`[Deriv] Converted ${prices.length} ticks to ${tickCandles.length} candles for ${ourSymbol}`);
+                resolve(tickCandles);
+              } else {
+                logger.warn(`[Deriv] Received tick history but couldn't convert for ${ourSymbol}`);
+                resolve([]);
+              }
             } else {
               logger.warn(`[Deriv] No candles array in response for ${ourSymbol}. Response keys: ${Object.keys(message).join(', ')}`);
               resolve([]);
@@ -552,19 +624,25 @@ class DerivService {
       // Add temporary message listener
       this.ws.on('message', messageHandler);
 
-      // Send the ticks_history request using 'count' instead of 'start'/'end'
-      // This is more reliable for getting historical data
+      // Calculate time range for the request
+      // Use explicit start/end times as Deriv API can be unreliable with 'count' parameter
+      const now = Math.floor(Date.now() / 1000);
+      const duration = granularity * Math.min(count, 1000); // Limit to 1000 candles max
+      const start = now - duration;
+
+      // Send the ticks_history request with explicit time range
+      // This is more reliable than using 'count' parameter alone
       const request = {
         ticks_history: derivSymbol,
         style: 'candles',
         granularity: granularity,
-        count: count,  // Use count for number of candles to fetch
-        end: 'latest', // End at current time
+        start: start,
+        end: now,
         adjust_start_time: 1,
         req_id: requestId,
       };
 
-      logger.info(`[Deriv] Requesting ${count} candles for ${ourSymbol} (${derivSymbol}), granularity=${granularity}s`);
+      logger.info(`[Deriv] Requesting candles for ${ourSymbol} (${derivSymbol}), granularity=${granularity}s, range=${new Date(start * 1000).toISOString()} to ${new Date(now * 1000).toISOString()}`);
       this.ws.send(JSON.stringify(request));
 
       // Timeout after 15 seconds
@@ -577,6 +655,38 @@ class DerivService {
         }
       }, 15000);
     });
+  }
+
+  /**
+   * Convert tick history to candles by grouping prices into time buckets
+   */
+  private convertTicksToCandles(prices: number[], times: number[], granularity: number): DerivCandle[] {
+    const buckets = new Map<number, { open: number; high: number; low: number; close: number; time: number }>();
+
+    for (let i = 0; i < prices.length; i++) {
+      const price = prices[i];
+      const time = times[i];
+      const bucketTime = Math.floor(time / granularity) * granularity;
+
+      if (!buckets.has(bucketTime)) {
+        buckets.set(bucketTime, {
+          time: bucketTime,
+          open: price,
+          high: price,
+          low: price,
+          close: price,
+        });
+      } else {
+        const bucket = buckets.get(bucketTime)!;
+        bucket.high = Math.max(bucket.high, price);
+        bucket.low = Math.min(bucket.low, price);
+        bucket.close = price;
+      }
+    }
+
+    const candles = Array.from(buckets.values());
+    candles.sort((a, b) => a.time - b.time);
+    return candles;
   }
 
   /**
@@ -599,6 +709,11 @@ class DerivService {
       this.reconnectTimeout = null;
     }
 
+    if (this.periodicRetryInterval) {
+      clearInterval(this.periodicRetryInterval);
+      this.periodicRetryInterval = null;
+    }
+
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
@@ -614,10 +729,18 @@ class DerivService {
     this.isAvailable = false;
   }
 
-  // Wait briefly for the socket to be ready before performing one-off requests
-  private async waitForConnection(timeoutMs: number = 2000): Promise<boolean> {
+  // Wait for the socket to be ready before performing one-off requests
+  // If not connected, try to force reconnect and wait
+  private async waitForConnection(timeoutMs: number = 5000): Promise<boolean> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return true;
+    }
+
+    // If we're not connecting and not connected, trigger a reconnect attempt
+    if (!this.isConnecting && (!this.ws || this.ws.readyState !== WebSocket.CONNECTING)) {
+      logger.info('[Deriv] Connection not active, triggering reconnect for candle request...');
+      this.reconnectAttempts = 0; // Reset to allow immediate reconnect
+      this.connect();
     }
 
     const start = Date.now();
@@ -628,6 +751,7 @@ class DerivService {
           resolve(true);
         } else if (Date.now() - start >= timeoutMs) {
           clearInterval(interval);
+          logger.warn(`[Deriv] Wait for connection timed out after ${timeoutMs}ms`);
           resolve(false);
         }
       }, 100);

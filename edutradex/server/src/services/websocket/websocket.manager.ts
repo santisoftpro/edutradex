@@ -2,6 +2,9 @@ import { WebSocket } from 'ws';
 import { logger } from '../../utils/logger.js';
 import { PriceTick } from '../market/market.service.js';
 
+// Throttle price broadcasts to max 10 per second per symbol
+const PRICE_BROADCAST_THROTTLE_MS = 100;
+
 interface Client {
   ws: WebSocket;
   id: string;
@@ -18,6 +21,11 @@ class WebSocketManager {
   private clients: Map<string, Client> = new Map();
   private userClients: Map<string, Set<string>> = new Map(); // userId -> Set of clientIds
   private symbolSubscribers: Map<string, Set<string>> = new Map();
+
+  // Throttling state for price broadcasts
+  private lastPriceBroadcast: Map<string, number> = new Map();
+  private pendingPriceUpdates: Map<string, PriceTick> = new Map();
+  private priceUpdateTimers: Map<string, NodeJS.Timeout> = new Map();
 
   addClient(ws: WebSocket, clientId: string): void {
     const client: Client = {
@@ -329,6 +337,41 @@ class WebSocketManager {
     const subscribers = this.symbolSubscribers.get(priceTick.symbol);
     if (!subscribers || subscribers.size === 0) return;
 
+    const symbol = priceTick.symbol;
+    const now = Date.now();
+    const lastBroadcast = this.lastPriceBroadcast.get(symbol) || 0;
+    const timeSinceLastBroadcast = now - lastBroadcast;
+
+    // Always store the latest price (we'll send the most recent one)
+    this.pendingPriceUpdates.set(symbol, priceTick);
+
+    // If enough time has passed, broadcast immediately
+    if (timeSinceLastBroadcast >= PRICE_BROADCAST_THROTTLE_MS) {
+      this.sendPriceUpdate(symbol);
+    } else {
+      // Schedule a broadcast if one isn't already scheduled
+      if (!this.priceUpdateTimers.has(symbol)) {
+        const delay = PRICE_BROADCAST_THROTTLE_MS - timeSinceLastBroadcast;
+        const timer = setTimeout(() => {
+          this.priceUpdateTimers.delete(symbol);
+          this.sendPriceUpdate(symbol);
+        }, delay);
+        this.priceUpdateTimers.set(symbol, timer);
+      }
+      // If timer exists, it will send the latest pending update when it fires
+    }
+  }
+
+  private sendPriceUpdate(symbol: string): void {
+    const priceTick = this.pendingPriceUpdates.get(symbol);
+    if (!priceTick) return;
+
+    const subscribers = this.symbolSubscribers.get(symbol);
+    if (!subscribers || subscribers.size === 0) {
+      this.pendingPriceUpdates.delete(symbol);
+      return;
+    }
+
     const message: WebSocketMessage = {
       type: 'price_update',
       payload: priceTick,
@@ -337,6 +380,9 @@ class WebSocketManager {
     subscribers.forEach((clientId) => {
       this.sendToClient(clientId, message);
     });
+
+    this.lastPriceBroadcast.set(symbol, Date.now());
+    this.pendingPriceUpdates.delete(symbol);
   }
 
   broadcastAllPrices(priceTicks: PriceTick[]): void {
@@ -390,6 +436,30 @@ class WebSocketManager {
       subscriptions.set(symbol, subscribers.size);
     });
     return subscriptions;
+  }
+
+  // Get all online (connected) user IDs
+  getOnlineUserIds(): string[] {
+    return Array.from(this.userClients.keys());
+  }
+
+  // Check if a specific user is online
+  isUserOnline(userId: string): boolean {
+    return this.userClients.has(userId) && this.userClients.get(userId)!.size > 0;
+  }
+
+  // Get count of online users
+  getOnlineUserCount(): number {
+    return this.userClients.size;
+  }
+
+  // Get detailed online user info
+  getOnlineUsersInfo(): { userId: string; connectionCount: number }[] {
+    const users: { userId: string; connectionCount: number }[] = [];
+    this.userClients.forEach((clientIds, userId) => {
+      users.push({ userId, connectionCount: clientIds.size });
+    });
+    return users;
   }
 }
 

@@ -2,6 +2,7 @@ import { query, queryOne, queryMany } from '../../config/db.js';
 import { config } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { marketService } from '../market/market.service.js';
+import { wsManager } from '../websocket/websocket.manager.js';
 import { randomUUID } from 'crypto';
 
 interface UserListItem {
@@ -679,6 +680,327 @@ class AdminService {
       })),
       recentUsers,
     };
+  }
+
+  // Get online users with their details
+  async getOnlineUsers(): Promise<{
+    count: number;
+    users: {
+      id: string;
+      name: string;
+      email: string;
+      connectionCount: number;
+      liveBalance: number;
+      demoBalance: number;
+      activeAccountType: string;
+    }[];
+  }> {
+    const onlineUsersInfo = wsManager.getOnlineUsersInfo();
+
+    if (onlineUsersInfo.length === 0) {
+      return { count: 0, users: [] };
+    }
+
+    const userIds = onlineUsersInfo.map(u => u.userId);
+    const placeholders = userIds.map((_, i) => `$${i + 1}`).join(', ');
+
+    const users = await queryMany<{
+      id: string;
+      name: string;
+      email: string;
+      liveBalance: number;
+      demoBalance: number;
+      activeAccountType: string;
+    }>(
+      `SELECT id, name, email, "liveBalance", "demoBalance", "activeAccountType"
+       FROM "User" WHERE id IN (${placeholders})`,
+      userIds
+    );
+
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    return {
+      count: onlineUsersInfo.length,
+      users: onlineUsersInfo
+        .map(online => {
+          const user = userMap.get(online.userId);
+          if (!user) return null;
+          return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            connectionCount: online.connectionCount,
+            liveBalance: Number(user.liveBalance),
+            demoBalance: Number(user.demoBalance),
+            activeAccountType: user.activeAccountType,
+          };
+        })
+        .filter((u): u is NonNullable<typeof u> => u !== null),
+    };
+  }
+
+  // Check if specific user is online
+  isUserOnline(userId: string): boolean {
+    return wsManager.isUserOnline(userId);
+  }
+
+  // Get user's live (open) trades
+  async getUserLiveTrades(userId: string): Promise<{
+    id: string;
+    symbol: string;
+    direction: string;
+    amount: number;
+    entryPrice: number;
+    duration: number;
+    payoutPercent: number;
+    accountType: string;
+    openedAt: Date;
+    expiresAt: Date;
+  }[]> {
+    const trades = await queryMany<{
+      id: string;
+      symbol: string;
+      direction: string;
+      amount: number;
+      entryPrice: number;
+      duration: number;
+      payoutPercent: number;
+      accountType: string;
+      openedAt: Date;
+      expiresAt: Date;
+    }>(
+      `SELECT id, symbol, direction, amount, "entryPrice", duration, "payoutPercent", "accountType", "openedAt", "expiresAt"
+       FROM "Trade"
+       WHERE "userId" = $1 AND status = 'OPEN'
+       ORDER BY "openedAt" DESC`,
+      [userId]
+    );
+
+    return trades.map(t => ({
+      ...t,
+      amount: Number(t.amount),
+      entryPrice: Number(t.entryPrice),
+      payoutPercent: Number(t.payoutPercent),
+    }));
+  }
+
+  // Get user's transaction history (deposits and withdrawals)
+  async getUserTransactions(userId: string, options: {
+    page?: number;
+    limit?: number;
+    type?: 'deposit' | 'withdrawal' | 'all';
+  } = {}): Promise<{
+    transactions: {
+      id: string;
+      type: 'deposit' | 'withdrawal';
+      amount: number;
+      status: string;
+      method: string;
+      createdAt: Date;
+      processedAt?: Date;
+    }[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const { page = 1, limit = 20, type = 'all' } = options;
+    const offset = (page - 1) * limit;
+
+    let deposits: any[] = [];
+    let withdrawals: any[] = [];
+    let depositCount = 0;
+    let withdrawalCount = 0;
+
+    if (type === 'all' || type === 'deposit') {
+      const [dRows, dCount] = await Promise.all([
+        queryMany<{
+          id: string;
+          amount: number;
+          status: string;
+          method: string;
+          createdAt: Date;
+          processedAt: Date | null;
+        }>(
+          `SELECT id, amount, status, method, "createdAt", "processedAt"
+           FROM "Deposit" WHERE "userId" = $1
+           ORDER BY "createdAt" DESC`,
+          [userId]
+        ),
+        queryOne<{ count: string }>(
+          `SELECT COUNT(*) as count FROM "Deposit" WHERE "userId" = $1`,
+          [userId]
+        ),
+      ]);
+      deposits = dRows.map(d => ({
+        ...d,
+        type: 'deposit' as const,
+        amount: Number(d.amount),
+      }));
+      depositCount = parseInt(dCount?.count || '0', 10);
+    }
+
+    if (type === 'all' || type === 'withdrawal') {
+      const [wRows, wCount] = await Promise.all([
+        queryMany<{
+          id: string;
+          amount: number;
+          status: string;
+          method: string;
+          createdAt: Date;
+          processedAt: Date | null;
+        }>(
+          `SELECT id, amount, status, method, "createdAt", "processedAt"
+           FROM "Withdrawal" WHERE "userId" = $1
+           ORDER BY "createdAt" DESC`,
+          [userId]
+        ),
+        queryOne<{ count: string }>(
+          `SELECT COUNT(*) as count FROM "Withdrawal" WHERE "userId" = $1`,
+          [userId]
+        ),
+      ]);
+      withdrawals = wRows.map(w => ({
+        ...w,
+        type: 'withdrawal' as const,
+        amount: Number(w.amount),
+      }));
+      withdrawalCount = parseInt(wCount?.count || '0', 10);
+    }
+
+    // Combine and sort by date
+    const allTransactions = [...deposits, ...withdrawals]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const total = type === 'all' ? depositCount + withdrawalCount : (type === 'deposit' ? depositCount : withdrawalCount);
+    const paginatedTransactions = allTransactions.slice(offset, offset + limit);
+
+    return {
+      transactions: paginatedTransactions,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  // Get comprehensive user detail with all info
+  async getUserFullDetail(userId: string): Promise<{
+    user: UserDetail;
+    isOnline: boolean;
+    liveTrades: {
+      id: string;
+      symbol: string;
+      direction: string;
+      amount: number;
+      entryPrice: number;
+      duration: number;
+      payoutPercent: number;
+      accountType: string;
+      openedAt: Date;
+      expiresAt: Date;
+    }[];
+    accountStats: {
+      liveBalance: number;
+      demoBalance: number;
+      activeAccountType: string;
+      totalDeposits: number;
+      totalWithdrawals: number;
+      pendingDeposits: number;
+      pendingWithdrawals: number;
+    };
+  }> {
+    const user = await this.getUserDetail(userId);
+    const isOnline = this.isUserOnline(userId);
+    const liveTrades = await this.getUserLiveTrades(userId);
+
+    // Get account stats
+    const [accountInfo, depositStats, withdrawalStats] = await Promise.all([
+      queryOne<{
+        liveBalance: number;
+        demoBalance: number;
+        activeAccountType: string;
+      }>(
+        `SELECT "liveBalance", "demoBalance", "activeAccountType" FROM "User" WHERE id = $1`,
+        [userId]
+      ),
+      queryOne<{ total: number; pending: number }>(
+        `SELECT
+          COALESCE(SUM(amount) FILTER (WHERE status = 'APPROVED'), 0) as total,
+          COUNT(*) FILTER (WHERE status = 'PENDING') as pending
+         FROM "Deposit" WHERE "userId" = $1`,
+        [userId]
+      ),
+      queryOne<{ total: number; pending: number }>(
+        `SELECT
+          COALESCE(SUM(amount) FILTER (WHERE status = 'APPROVED'), 0) as total,
+          COUNT(*) FILTER (WHERE status = 'PENDING') as pending
+         FROM "Withdrawal" WHERE "userId" = $1`,
+        [userId]
+      ),
+    ]);
+
+    return {
+      user,
+      isOnline,
+      liveTrades,
+      accountStats: {
+        liveBalance: Number(accountInfo?.liveBalance || 0),
+        demoBalance: Number(accountInfo?.demoBalance || 0),
+        activeAccountType: accountInfo?.activeAccountType || 'DEMO',
+        totalDeposits: Number(depositStats?.total || 0),
+        totalWithdrawals: Number(withdrawalStats?.total || 0),
+        pendingDeposits: Number(depositStats?.pending || 0),
+        pendingWithdrawals: Number(withdrawalStats?.pending || 0),
+      },
+    };
+  }
+
+  // Get platform-wide recent trades with user info
+  async getRecentPlatformTrades(limit: number = 20): Promise<{
+    id: string;
+    userId: string;
+    userName: string;
+    userEmail: string;
+    symbol: string;
+    direction: string;
+    amount: number;
+    profit: number | null;
+    status: string;
+    result: string | null;
+    accountType: string;
+    openedAt: Date;
+    closedAt: Date | null;
+  }[]> {
+    const trades = await queryMany<{
+      id: string;
+      userId: string;
+      userName: string;
+      userEmail: string;
+      symbol: string;
+      direction: string;
+      amount: number;
+      profit: number | null;
+      status: string;
+      result: string | null;
+      accountType: string;
+      openedAt: Date;
+      closedAt: Date | null;
+    }>(
+      `SELECT t.id, t."userId", u.name as "userName", u.email as "userEmail",
+              t.symbol, t.direction, t.amount, t.profit, t.status, t.result,
+              t."accountType", t."openedAt", t."closedAt"
+       FROM "Trade" t
+       JOIN "User" u ON u.id = t."userId"
+       ORDER BY t."openedAt" DESC LIMIT $1`,
+      [limit]
+    );
+
+    return trades.map(t => ({
+      ...t,
+      amount: Number(t.amount),
+      profit: t.profit ? Number(t.profit) : null,
+    }));
   }
 }
 

@@ -338,6 +338,88 @@ export class DepositService {
       totalVolume: Number(result?.totalVolume || 0),
     };
   }
+
+  // Get user's approved deposit method for withdrawal restriction
+  async getUserDepositMethod(userId: string) {
+    // Get the most recent approved deposit for this user
+    const deposit = await queryOne<{
+      method: string;
+      mobileProvider: string | null;
+      cryptoCurrency: string | null;
+      phoneNumber: string | null;
+    }>(
+      `SELECT method, "mobileProvider", "cryptoCurrency", "phoneNumber"
+       FROM "Deposit"
+       WHERE "userId" = $1 AND status = 'APPROVED'
+       ORDER BY "createdAt" DESC
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (!deposit) {
+      return null;
+    }
+
+    // Find the matching payment method
+    if (deposit.method === 'MOBILE_MONEY' && deposit.mobileProvider) {
+      const paymentMethod = await queryOne<{
+        id: string;
+        type: string;
+        name: string;
+        code: string;
+        mobileProvider: string | null;
+        phoneNumber: string | null;
+        accountName: string | null;
+        iconUrl: string | null;
+        iconBg: string;
+        minAmount: number;
+        maxAmount: number;
+        processingTime: string;
+        isActive: boolean;
+        isPopular: boolean;
+      }>(
+        `SELECT id, type, name, code, "mobileProvider", "phoneNumber", "accountName",
+                "iconUrl", "iconBg", "minAmount", "maxAmount", "processingTime", "isActive", "isPopular"
+         FROM "PaymentMethod"
+         WHERE type = 'MOBILE_MONEY' AND "mobileProvider" = $1 AND "isActive" = true
+         LIMIT 1`,
+        [deposit.mobileProvider]
+      );
+
+      return paymentMethod ? {
+        ...paymentMethod,
+        userPhoneNumber: deposit.phoneNumber, // The phone number user used for deposit
+      } : null;
+    } else if (deposit.method === 'CRYPTO' && deposit.cryptoCurrency) {
+      const paymentMethod = await queryOne<{
+        id: string;
+        type: string;
+        name: string;
+        code: string;
+        cryptoCurrency: string | null;
+        network: string | null;
+        walletAddress: string | null;
+        iconUrl: string | null;
+        iconBg: string;
+        minAmount: number;
+        maxAmount: number;
+        processingTime: string;
+        isActive: boolean;
+        isPopular: boolean;
+      }>(
+        `SELECT id, type, name, code, "cryptoCurrency", network, "walletAddress",
+                "iconUrl", "iconBg", "minAmount", "maxAmount", "processingTime", "isActive", "isPopular"
+         FROM "PaymentMethod"
+         WHERE type = 'CRYPTO' AND "cryptoCurrency" = $1 AND "isActive" = true
+         LIMIT 1`,
+        [deposit.cryptoCurrency]
+      );
+
+      return paymentMethod;
+    }
+
+    return null;
+  }
 }
 
 export const depositService = new DepositService();

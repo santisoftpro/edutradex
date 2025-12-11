@@ -8,7 +8,10 @@ import {
   withdrawalFiltersSchema,
   processWithdrawalSchema,
   userWithdrawalsQuerySchema,
+  sendVerificationCodeSchema,
+  verifyWithdrawalCodeSchema,
 } from '../validators/withdrawal.validators.js';
+import { emailService } from '../services/email/email.service.js';
 
 const router = Router();
 
@@ -100,6 +103,70 @@ router.get(
       res.json({
         success: true,
         data: withdrawal,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Withdrawal verification routes
+router.post(
+  '/send-verification',
+  authMiddleware,
+  validateBody(sendVerificationCodeSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { amount, method } = req.body;
+      const user = req.user!;
+
+      const code = await emailService.sendWithdrawalVerificationCode(
+        user.email,
+        user.name,
+        amount,
+        method
+      );
+
+      if (!code) {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to send verification code. Please try again.',
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        message: 'Verification code sent to your email',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.post(
+  '/verify-code',
+  authMiddleware,
+  validateBody(verifyWithdrawalCodeSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { code } = req.body;
+      const user = req.user!;
+
+      const isValid = await emailService.verifyWithdrawalCode(user.email, code);
+
+      if (!isValid) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid or expired verification code',
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        message: 'Code verified successfully',
       });
     } catch (error) {
       next(error);

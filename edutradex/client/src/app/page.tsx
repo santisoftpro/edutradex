@@ -724,7 +724,7 @@ export default function LandingPage() {
 
           <div className="pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-slate-500 text-sm">
-              &copy; {new Date().getFullYear()} OptigoBroker. All rights reserved.
+              &copy; 2025 OptigoBroker. All rights reserved.
             </p>
             <p className="text-slate-500 text-sm">
               Trade responsibly. Your capital is at risk.

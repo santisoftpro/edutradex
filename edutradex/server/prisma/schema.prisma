@@ -502,3 +502,64 @@ model SupportTicket {
   @@index([ticketNumber])
   @@index([createdAt])
 }
+
+model SimulatedLeader {
+  id              String   @id @default(uuid())
+
+  displayName     String
+  description     String?
+  avatarUrl       String?
+
+  winRate         Float    @default(65)
+  totalProfit     Float    @default(1000)
+  totalTrades     Int      @default(100)
+  followerCount   Int      @default(50)
+
+  // Variation settings for dynamic updates
+  winRateMin      Float    @default(60)
+  winRateMax      Float    @default(85)
+  profitMin       Float    @default(500)
+  profitMax       Float    @default(10000)
+  followerMin     Int      @default(20)
+  followerMax     Int      @default(500)
+  tradesMin       Int      @default(50)
+  tradesMax       Int      @default(1000)
+
+  // Activity simulation settings
+  tradeFrequency  Int      @default(5)  // trades per hour (simulated)
+
+  isActive        Boolean  @default(true)
+  displayOrder    Int      @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Real followers tracking
+  followers       SimulatedLeaderFollower[]
+
+  @@index([isActive])
+  @@index([displayOrder])
+}
+
+// Track users following simulated leaders (visual only, no real trades)
+model SimulatedLeaderFollower {
+  id                  String          @id @default(uuid())
+
+  userId              String
+  simulatedLeaderId   String
+  simulatedLeader     SimulatedLeader @relation(fields: [simulatedLeaderId], references: [id], onDelete: Cascade)
+
+  // Copy settings (display only, no real trades)
+  copyMode            String          @default("AUTOMATIC")
+  fixedAmount         Float           @default(10)
+  maxDailyTrades      Int             @default(50)
+  isActive            Boolean         @default(true)
+
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@unique([userId, simulatedLeaderId])
+  @@index([userId])
+  @@index([simulatedLeaderId])
+  @@index([isActive])
+}

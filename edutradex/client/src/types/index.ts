@@ -9,6 +9,7 @@ export interface User {
   demoBalance: number;
   activeAccountType: AccountType;
   emailVerified: boolean;
+  kycStatus?: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
 // KYC Types
@@ -522,4 +523,92 @@ export interface UpdateLeaderProfileInput {
   displayName?: string;
   description?: string;
   isPublic?: boolean;
+}
+
+// Simulated Leaders for fake activity
+export interface SimulatedLeader {
+  id: string;
+  displayName: string;
+  description: string | null;
+  avatarUrl: string | null;
+  winRate: number;
+  totalProfit: number;
+  totalTrades: number;
+  followerCount: number;
+  winRateMin: number;
+  winRateMax: number;
+  profitMin: number;
+  profitMax: number;
+  followerMin: number;
+  followerMax: number;
+  tradesMin: number;
+  tradesMax: number;
+  tradeFrequency: number;
+  isActive: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SimulatedLeaderForDisplay {
+  id: string;
+  displayName: string;
+  description: string | null;
+  avatarUrl: string | null;
+  winRate: number;
+  totalProfit: number;
+  totalTrades: number;
+  followerCount: number;
+  isSimulated: true;
+  tradeFrequency: number;
+  bounds: {
+    winRate: { min: number; max: number };
+    profit: { min: number; max: number };
+    followers: { min: number; max: number };
+    trades: { min: number; max: number };
+  };
+}
+
+export interface CreateSimulatedLeaderInput {
+  displayName: string;
+  description?: string;
+  avatarUrl?: string;
+  winRate?: number;
+  totalProfit?: number;
+  totalTrades?: number;
+  followerCount?: number;
+  winRateMin?: number;
+  winRateMax?: number;
+  profitMin?: number;
+  profitMax?: number;
+  followerMin?: number;
+  followerMax?: number;
+  tradesMin?: number;
+  tradesMax?: number;
+  tradeFrequency?: number;
+  isActive?: boolean;
+  displayOrder?: number;
+}
+
+export interface SimulatedLeaderStats {
+  total: number;
+  active: number;
+  inactive: number;
+}
+
+// Simulated Leader Following Types (visual only, no real trades)
+export interface SimulatedLeaderFollower {
+  id: string;
+  userId: string;
+  simulatedLeaderId: string;
+  copyMode: CopyMode;
+  fixedAmount: number;
+  maxDailyTrades: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SimulatedLeaderFollowingInfo extends SimulatedLeaderFollower {
+  simulatedLeader: SimulatedLeader;
 }

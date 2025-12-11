@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowUp, ArrowDown, DollarSign, Zap, Edit3, Loader2 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
+import { getDefaultTradeAmount } from '@/lib/settings';
 
 interface TradingPanelProps {
   balance: number;
@@ -33,6 +34,14 @@ const QUICK_AMOUNTS = [5, 10, 25, 50, 100, 500, 1000, 5000];
 export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 85, isTradesPanelOpen = true, initialDuration, onDurationChange }: TradingPanelProps) {
   const [amount, setAmount] = useState(10);
   const [duration, setDuration] = useState(60);
+
+  // Load default amount from settings on mount
+  useEffect(() => {
+    const defaultAmount = getDefaultTradeAmount();
+    if (defaultAmount && defaultAmount !== amount) {
+      setAmount(defaultAmount);
+    }
+  }, []);
 
   // Sync duration from parent after hydration to avoid SSR mismatch
   useEffect(() => {

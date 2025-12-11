@@ -251,6 +251,116 @@ router.get(
   }
 );
 
+// Get online users
+router.get(
+  '/online-users',
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const onlineUsers = await adminService.getOnlineUsers();
+
+      res.json({
+        success: true,
+        data: onlineUsers,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get recent platform trades
+router.get(
+  '/recent-trades',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      const trades = await adminService.getRecentPlatformTrades(limit);
+
+      res.json({
+        success: true,
+        data: trades,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get full user detail with live trades and account stats
+router.get(
+  '/users/:userId/full',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const data = await adminService.getUserFullDetail(userId);
+
+      res.json({
+        success: true,
+        data,
+      });
+    } catch (error) {
+      if (error instanceof AdminServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Get user's live trades
+router.get(
+  '/users/:userId/live-trades',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const trades = await adminService.getUserLiveTrades(userId);
+
+      res.json({
+        success: true,
+        data: trades,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get user's transaction history
+router.get(
+  '/users/:userId/transactions',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const type = (req.query.type as string) || 'all';
+
+      const transactions = await adminService.getUserTransactions(userId, {
+        page,
+        limit,
+        type: type as 'deposit' | 'withdrawal' | 'all',
+      });
+
+      res.json({
+        success: true,
+        data: transactions.transactions,
+        pagination: {
+          page: transactions.page,
+          limit: transactions.limit,
+          total: transactions.total,
+          totalPages: transactions.totalPages,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // ============= Market Configuration =============
 
 router.get(
@@ -861,6 +971,53 @@ router.patch(
         });
         return;
       }
+      next(error);
+    }
+  }
+);
+
+// Get fake activity setting
+router.get(
+  '/copy-trading/settings/fake-activity',
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const enabled = await adminService.getSystemSetting('copy_trading_fake_activity');
+
+      res.json({
+        success: true,
+        data: {
+          enabled: enabled === 'true',
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Toggle fake activity setting
+router.put(
+  '/copy-trading/settings/fake-activity',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { enabled } = req.body;
+
+      if (typeof enabled !== 'boolean') {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request body. "enabled" must be a boolean.',
+        });
+        return;
+      }
+
+      await adminService.setSystemSetting('copy_trading_fake_activity', String(enabled));
+
+      res.json({
+        success: true,
+        message: `Fake activity ${enabled ? 'enabled' : 'disabled'}`,
+        data: { enabled },
+      });
+    } catch (error) {
       next(error);
     }
   }

@@ -15,8 +15,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
-  Filter,
   RefreshCw,
+  Zap,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
@@ -33,9 +35,12 @@ export default function AdminCopyTradingPage() {
   const [activeTab, setActiveTab] = useState<TabType>('pending');
   const [stats, setStats] = useState<CopyTradingPlatformStats | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [fakeActivityEnabled, setFakeActivityEnabled] = useState(false);
+  const [isTogglingFakeActivity, setIsTogglingFakeActivity] = useState(false);
 
   useEffect(() => {
     loadStats();
+    loadFakeActivitySetting();
   }, []);
 
   const loadStats = async () => {
@@ -47,6 +52,30 @@ export default function AdminCopyTradingPage() {
       console.error('Failed to load stats:', error);
     } finally {
       setIsLoadingStats(false);
+    }
+  };
+
+  const loadFakeActivitySetting = async () => {
+    try {
+      const data = await api.getFakeActivitySetting();
+      setFakeActivityEnabled(data.enabled);
+    } catch (error) {
+      console.error('Failed to load fake activity setting:', error);
+    }
+  };
+
+  const toggleFakeActivity = async () => {
+    setIsTogglingFakeActivity(true);
+    try {
+      const newValue = !fakeActivityEnabled;
+      await api.setFakeActivitySetting(newValue);
+      setFakeActivityEnabled(newValue);
+      toast.success(`Live activity simulation ${newValue ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      console.error('Failed to toggle fake activity:', error);
+      toast.error('Failed to toggle live activity simulation');
+    } finally {
+      setIsTogglingFakeActivity(false);
     }
   };
 
@@ -63,14 +92,38 @@ export default function AdminCopyTradingPage() {
           <h1 className="text-2xl font-bold text-white">Copy Trading Management</h1>
           <p className="text-slate-400 mt-1">Manage leaders, followers, and copy trading activity</p>
         </div>
-        <button
-          onClick={loadStats}
-          disabled={isLoadingStats}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={cn('h-4 w-4', isLoadingStats && 'animate-spin')} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Live Activity Simulation Toggle */}
+          <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg">
+            <Zap className={cn('h-4 w-4', fakeActivityEnabled ? 'text-yellow-400' : 'text-slate-500')} />
+            <span className="text-sm text-slate-300">Live Simulation</span>
+            <button
+              onClick={toggleFakeActivity}
+              disabled={isTogglingFakeActivity}
+              className={cn(
+                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-800',
+                fakeActivityEnabled ? 'bg-emerald-600' : 'bg-slate-600',
+                isTogglingFakeActivity && 'opacity-50 cursor-not-allowed'
+              )}
+              title={fakeActivityEnabled ? 'Disable live activity simulation' : 'Enable live activity simulation'}
+            >
+              <span
+                className={cn(
+                  'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                  fakeActivityEnabled ? 'translate-x-6' : 'translate-x-1'
+                )}
+              />
+            </button>
+          </div>
+          <button
+            onClick={loadStats}
+            disabled={isLoadingStats}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={cn('h-4 w-4', isLoadingStats && 'animate-spin')} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Stats Overview */}

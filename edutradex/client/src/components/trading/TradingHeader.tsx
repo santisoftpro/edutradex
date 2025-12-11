@@ -13,15 +13,38 @@ import {
   Settings,
   TrendingUp,
   TrendingDown,
-  ArrowLeft,
+  Menu,
+  X,
   ArrowDownToLine,
   ArrowUpFromLine,
+  LayoutDashboard,
+  LineChart,
+  Users,
+  Receipt,
+  BarChart3,
+  Gift,
+  HelpCircle,
+  Shield,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
 import { AssetSelector } from './AssetSelector';
 import { PriceTick } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+
+const navItems = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard/trade', label: 'Trade', icon: LineChart },
+  { href: '/dashboard/copy-trading', label: 'Copy Trading', icon: Users },
+  { href: '/dashboard/deposit', label: 'Deposit', icon: Wallet },
+  { href: '/dashboard/withdraw', label: 'Withdraw', icon: ArrowUpFromLine },
+  { href: '/dashboard/transactions', label: 'Transactions', icon: Receipt },
+  { href: '/dashboard/history', label: 'Trade History', icon: History },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/dashboard/affiliate', label: 'Affiliate', icon: Gift },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+  { href: '/dashboard/support', label: 'Support', icon: HelpCircle },
+];
 
 interface TradingHeaderProps {
   selectedAsset: string;
@@ -35,6 +58,9 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, live
   const { user, logout } = useAuthStore();
   const [showMenu, setShowMenu] = useState(false);
   const [showBalanceMenu, setShowBalanceMenu] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+  const isAdmin = user?.role === 'ADMIN';
 
   const handleLogout = () => {
     logout();
@@ -44,19 +70,21 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, live
 
   if (!user) return null;
 
+  const balance = user.demoBalance ?? 0;
   const priceColor = currentPrice?.changePercent !== undefined && currentPrice.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400';
   const TrendIcon = currentPrice?.changePercent !== undefined && currentPrice.changePercent >= 0 ? TrendingUp : TrendingDown;
 
   return (
+    <>
     <header className="h-12 md:h-14 bg-[#1a1a2e] border-b border-[#2d2d44] flex items-center justify-between px-2 md:px-4">
       {/* Left - Logo & Asset */}
       <div className="flex items-center gap-2 md:gap-6">
-        {/* Back button for mobile */}
+        {/* Hamburger menu for mobile */}
         <button
-          onClick={() => router.push('/dashboard')}
+          onClick={() => setShowMobileMenu(true)}
           className="md:hidden p-1.5 hover:bg-[#252542] rounded-lg transition-colors"
         >
-          <ArrowLeft className="h-5 w-5 text-gray-400" />
+          <Menu className="h-5 w-5 text-gray-400" />
         </button>
 
         {/* Logo - hidden on mobile */}
@@ -197,5 +225,137 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, live
         </div>
       </div>
     </header>
+
+    {/* Mobile Slide-out Menu */}
+    {showMobileMenu && (
+      <>
+        {/* Backdrop */}
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setShowMobileMenu(false)}
+        />
+
+        {/* Menu Panel */}
+        <div className="fixed inset-y-0 left-0 w-72 bg-slate-800 z-50 md:hidden flex flex-col animate-slide-in">
+          {/* Menu Header */}
+          <div className="flex items-center justify-between p-4 border-b border-slate-700">
+            <div className="flex items-center gap-2">
+              <Image src="/logo.png" alt="OptigoBroker" width={24} height={24} />
+              <span className="text-lg font-bold text-white">OptigoBroker</span>
+            </div>
+            <button
+              onClick={() => setShowMobileMenu(false)}
+              className="p-2 text-slate-400 hover:text-white"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* User Info */}
+          <div className="p-4 border-b border-slate-700">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 bg-emerald-600 rounded-full flex items-center justify-center">
+                <User className="h-6 w-6 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-medium truncate">{user.name}</p>
+                <p className="text-sm text-slate-400 truncate">{user.email}</p>
+              </div>
+            </div>
+
+            {/* Balance Display */}
+            <div className="mt-3">
+              <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5 text-emerald-500" />
+                  <span className="text-white font-medium">Balance</span>
+                </div>
+                <span className="text-emerald-500 font-bold">
+                  {formatCurrency(balance)}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex gap-2 mt-3">
+              <Link
+                href="/dashboard/deposit"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex-1 text-center text-xs bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 rounded transition-colors"
+              >
+                Deposit
+              </Link>
+              <Link
+                href="/dashboard/withdraw"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex-1 text-center text-xs bg-purple-600 hover:bg-purple-700 text-white py-1.5 rounded transition-colors"
+              >
+                Withdraw
+              </Link>
+            </div>
+          </div>
+
+          {/* Navigation Links */}
+          <nav className="flex-1 overflow-y-auto py-4">
+            <div className="px-3 space-y-1">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setShowMobileMenu(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span className="font-medium">{item.label}</span>
+                  </Link>
+                );
+              })}
+
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  onClick={() => setShowMobileMenu(false)}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-red-400 hover:bg-red-900/30 transition-colors"
+                >
+                  <Shield className="h-5 w-5" />
+                  <span className="font-medium">Admin Panel</span>
+                </Link>
+              )}
+            </div>
+          </nav>
+
+          {/* Logout Button */}
+          <div className="p-4 border-t border-slate-700">
+            <button
+              onClick={() => {
+                setShowMobileMenu(false);
+                handleLogout();
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 transition-colors"
+            >
+              <LogOut className="h-5 w-5" />
+              <span className="font-medium">Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </>
+    )}
+
+    <style jsx global>{`
+      @keyframes slide-in {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(0);
+        }
+      }
+      .animate-slide-in {
+        animation: slide-in 0.2s ease-out;
+      }
+    `}</style>
+    </>
   );
 }

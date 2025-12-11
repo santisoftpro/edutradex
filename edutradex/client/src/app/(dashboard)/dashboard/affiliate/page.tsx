@@ -21,6 +21,12 @@ export default function AffiliatePage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'referrals' | 'commissions'>('overview');
+  const [baseUrl, setBaseUrl] = useState('');
+
+  // Set base URL on client only to avoid hydration mismatch
+  useEffect(() => {
+    setBaseUrl(window.location.origin);
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -47,10 +53,9 @@ export default function AffiliatePage() {
   }, [fetchData]);
 
   const getReferralLink = () => {
-    if (!stats?.referralCode) return '';
-    // Use current domain dynamically
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    return `${baseUrl}/register?ref=${stats.referralCode}`;
+    if (!stats?.referralCode || !baseUrl) return '';
+    // Use SEO-friendly referral URL
+    return `${baseUrl}/ref/${stats.referralCode}`;
   };
 
   const copyToClipboard = async (text: string) => {

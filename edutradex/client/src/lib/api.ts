@@ -31,6 +31,12 @@ import type {
   KYCSubmission,
   KYCStats,
   DocumentType,
+  SimulatedLeader,
+  SimulatedLeaderForDisplay,
+  SimulatedLeaderStats,
+  CreateSimulatedLeaderInput,
+  SimulatedLeaderFollower,
+  SimulatedLeaderFollowingInfo,
 } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -415,6 +421,184 @@ class ApiClient {
     return response.data;
   }
 
+  async getOnlineUsers(): Promise<{
+    count: number;
+    users: {
+      id: string;
+      name: string;
+      email: string;
+      connectionCount: number;
+      liveBalance: number;
+      demoBalance: number;
+      activeAccountType: string;
+    }[];
+  }> {
+    const response = await this.get<ApiResponse<{
+      count: number;
+      users: {
+        id: string;
+        name: string;
+        email: string;
+        connectionCount: number;
+        liveBalance: number;
+        demoBalance: number;
+        activeAccountType: string;
+      }[];
+    }>>('/admin/online-users');
+    return response.data;
+  }
+
+  async getRecentPlatformTrades(limit?: number): Promise<{
+    id: string;
+    userId: string;
+    userName: string;
+    userEmail: string;
+    symbol: string;
+    direction: string;
+    amount: number;
+    profit: number | null;
+    status: string;
+    result: string | null;
+    accountType: string;
+    openedAt: string;
+    closedAt: string | null;
+  }[]> {
+    const params = limit ? `?limit=${limit}` : '';
+    const response = await this.get<ApiResponse<{
+      id: string;
+      userId: string;
+      userName: string;
+      userEmail: string;
+      symbol: string;
+      direction: string;
+      amount: number;
+      profit: number | null;
+      status: string;
+      result: string | null;
+      accountType: string;
+      openedAt: string;
+      closedAt: string | null;
+    }[]>>(`/admin/recent-trades${params}`);
+    return response.data;
+  }
+
+  async getAdminUserFullDetail(userId: string): Promise<{
+    user: AdminUserDetail;
+    isOnline: boolean;
+    liveTrades: {
+      id: string;
+      symbol: string;
+      direction: string;
+      amount: number;
+      entryPrice: number;
+      duration: number;
+      payoutPercent: number;
+      accountType: string;
+      openedAt: string;
+      expiresAt: string;
+    }[];
+    accountStats: {
+      liveBalance: number;
+      demoBalance: number;
+      activeAccountType: string;
+      totalDeposits: number;
+      totalWithdrawals: number;
+      pendingDeposits: number;
+      pendingWithdrawals: number;
+    };
+  }> {
+    const response = await this.get<ApiResponse<{
+      user: AdminUserDetail;
+      isOnline: boolean;
+      liveTrades: {
+        id: string;
+        symbol: string;
+        direction: string;
+        amount: number;
+        entryPrice: number;
+        duration: number;
+        payoutPercent: number;
+        accountType: string;
+        openedAt: string;
+        expiresAt: string;
+      }[];
+      accountStats: {
+        liveBalance: number;
+        demoBalance: number;
+        activeAccountType: string;
+        totalDeposits: number;
+        totalWithdrawals: number;
+        pendingDeposits: number;
+        pendingWithdrawals: number;
+      };
+    }>>(`/admin/users/${userId}/full`);
+    return response.data;
+  }
+
+  async getUserLiveTrades(userId: string): Promise<{
+    id: string;
+    symbol: string;
+    direction: string;
+    amount: number;
+    entryPrice: number;
+    duration: number;
+    payoutPercent: number;
+    accountType: string;
+    openedAt: string;
+    expiresAt: string;
+  }[]> {
+    const response = await this.get<ApiResponse<{
+      id: string;
+      symbol: string;
+      direction: string;
+      amount: number;
+      entryPrice: number;
+      duration: number;
+      payoutPercent: number;
+      accountType: string;
+      openedAt: string;
+      expiresAt: string;
+    }[]>>(`/admin/users/${userId}/live-trades`);
+    return response.data;
+  }
+
+  async getUserTransactions(userId: string, options?: {
+    page?: number;
+    limit?: number;
+    type?: 'deposit' | 'withdrawal' | 'all';
+  }): Promise<PaginatedResponse<{
+    id: string;
+    type: 'deposit' | 'withdrawal';
+    amount: number;
+    status: string;
+    method: string;
+    createdAt: string;
+    processedAt?: string;
+  }>> {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.type) params.append('type', options.type);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const response = await this.get<{
+      success: boolean;
+      data: {
+        id: string;
+        type: 'deposit' | 'withdrawal';
+        amount: number;
+        status: string;
+        method: string;
+        createdAt: string;
+        processedAt?: string;
+      }[];
+      pagination: { page: number; limit: number; total: number; totalPages: number };
+    }>(`/admin/users/${userId}/transactions${queryString}`);
+    return {
+      data: response.data,
+      pagination: response.pagination,
+    };
+  }
+
   async getMarketConfigs(): Promise<MarketConfig[]> {
     const response = await this.get<ApiResponse<MarketConfig[]>>('/admin/markets');
     return response.data;
@@ -489,6 +673,11 @@ class ApiClient {
 
   async getDepositById(depositId: string): Promise<Deposit> {
     const response = await this.get<ApiResponse<Deposit>>(`/deposits/${depositId}`);
+    return response.data;
+  }
+
+  async getMyDepositMethod(): Promise<(PaymentMethod & { userPhoneNumber?: string }) | null> {
+    const response = await this.get<ApiResponse<(PaymentMethod & { userPhoneNumber?: string }) | null>>('/deposits/my-deposit-method');
     return response.data;
   }
 
@@ -612,6 +801,15 @@ class ApiClient {
   async getWithdrawalById(withdrawalId: string): Promise<Withdrawal> {
     const response = await this.get<ApiResponse<Withdrawal>>(`/withdrawals/${withdrawalId}`);
     return response.data;
+  }
+
+  // Withdrawal Verification Methods
+  async sendWithdrawalVerificationCode(data: { amount: number; method: string }): Promise<void> {
+    await this.post<ApiResponse<void>>('/withdrawals/send-verification', data);
+  }
+
+  async verifyWithdrawalCode(code: string): Promise<void> {
+    await this.post<ApiResponse<void>>('/withdrawals/verify-code', { code });
   }
 
   // Withdrawal API Methods (Admin)
@@ -936,6 +1134,103 @@ class ApiClient {
       '/admin/copy-trading/leaders/pending?limit=1'
     );
     return response.pagination?.total || response.data.length;
+  }
+
+  // Fake Activity Settings (Admin)
+  async getFakeActivitySetting(): Promise<{ enabled: boolean }> {
+    const response = await this.get<ApiResponse<{ enabled: boolean }>>('/admin/copy-trading/settings/fake-activity');
+    return response.data;
+  }
+
+  async setFakeActivitySetting(enabled: boolean): Promise<{ enabled: boolean }> {
+    const response = await this.put<ApiResponse<{ enabled: boolean }>>('/admin/copy-trading/settings/fake-activity', { enabled });
+    return response.data;
+  }
+
+  // Fake Activity Settings (Public - read only)
+  async getCopyTradingFakeActivitySetting(): Promise<{ enabled: boolean }> {
+    const response = await this.get<ApiResponse<{ enabled: boolean }>>('/simulated-leaders/settings/enabled');
+    return response.data;
+  }
+
+  // Simulated Leaders API Methods (Admin)
+  async getSimulatedLeaders(): Promise<SimulatedLeader[]> {
+    const response = await this.get<ApiResponse<SimulatedLeader[]>>('/simulated-leaders');
+    return response.data;
+  }
+
+  async getSimulatedLeaderStats(): Promise<SimulatedLeaderStats> {
+    const response = await this.get<ApiResponse<SimulatedLeaderStats>>('/simulated-leaders/stats');
+    return response.data;
+  }
+
+  async getSimulatedLeaderById(id: string): Promise<SimulatedLeader> {
+    const response = await this.get<ApiResponse<SimulatedLeader>>(`/simulated-leaders/${id}`);
+    return response.data;
+  }
+
+  async createSimulatedLeader(data: CreateSimulatedLeaderInput): Promise<SimulatedLeader> {
+    const response = await this.post<ApiResponse<SimulatedLeader>>('/simulated-leaders', data);
+    return response.data;
+  }
+
+  async updateSimulatedLeader(id: string, data: Partial<CreateSimulatedLeaderInput>): Promise<SimulatedLeader> {
+    const response = await this.patch<ApiResponse<SimulatedLeader>>(`/simulated-leaders/${id}`, data);
+    return response.data;
+  }
+
+  async toggleSimulatedLeader(id: string): Promise<SimulatedLeader> {
+    const response = await this.post<ApiResponse<SimulatedLeader>>(`/simulated-leaders/${id}/toggle`);
+    return response.data;
+  }
+
+  async deleteSimulatedLeader(id: string): Promise<void> {
+    await this.delete(`/simulated-leaders/${id}`);
+  }
+
+  async autoGenerateSimulatedLeaders(count: number): Promise<SimulatedLeader[]> {
+    const response = await this.post<ApiResponse<SimulatedLeader[]>>('/simulated-leaders/auto-generate', { count });
+    return response.data;
+  }
+
+  // Simulated Leaders API Methods (Public - for display)
+  async getActiveSimulatedLeaders(): Promise<SimulatedLeaderForDisplay[]> {
+    const response = await this.get<ApiResponse<SimulatedLeaderForDisplay[]>>('/simulated-leaders/public');
+    return response.data;
+  }
+
+  // Simulated Leaders Following API Methods (User)
+  async followSimulatedLeader(leaderId: string, data: {
+    copyMode?: 'AUTOMATIC' | 'MANUAL';
+    fixedAmount?: number;
+    maxDailyTrades?: number;
+  }): Promise<SimulatedLeaderFollower> {
+    const response = await this.post<ApiResponse<SimulatedLeaderFollower>>(`/simulated-leaders/follow/${leaderId}`, data);
+    return response.data;
+  }
+
+  async unfollowSimulatedLeader(leaderId: string): Promise<void> {
+    await this.delete(`/simulated-leaders/follow/${leaderId}`);
+  }
+
+  async updateSimulatedLeaderFollowSettings(leaderId: string, data: {
+    copyMode?: 'AUTOMATIC' | 'MANUAL';
+    fixedAmount?: number;
+    maxDailyTrades?: number;
+    isActive?: boolean;
+  }): Promise<SimulatedLeaderFollower> {
+    const response = await this.patch<ApiResponse<SimulatedLeaderFollower>>(`/simulated-leaders/follow/${leaderId}`, data);
+    return response.data;
+  }
+
+  async getMySimulatedLeaderFollowing(): Promise<SimulatedLeaderFollowingInfo[]> {
+    const response = await this.get<ApiResponse<SimulatedLeaderFollowingInfo[]>>('/simulated-leaders/following');
+    return response.data;
+  }
+
+  async getMySimulatedLeaderFollowingIds(): Promise<string[]> {
+    const response = await this.get<ApiResponse<string[]>>('/simulated-leaders/following/ids');
+    return response.data;
   }
 
   // Referral/Affiliate API Methods (Public)

@@ -11,8 +11,9 @@ import {
   ArrowUp,
   ArrowDown,
   Clock,
-  AlertTriangle,
-  TrendingUp as SparkUp,
+  Wallet,
+  ArrowUpRight,
+  ArrowDownRight,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuthStore } from '@/store/auth.store';
@@ -23,59 +24,39 @@ function StatCard({
   title,
   value,
   icon: Icon,
-  trend,
-  trendValue,
+  iconBg,
+  subtitle,
 }: {
   title: string;
   value: string;
   icon: React.ElementType;
-  trend?: 'up' | 'down';
-  trendValue?: string;
+  iconBg: string;
+  subtitle?: string;
 }) {
   return (
-    <div className="rounded-xl p-4 sm:p-6 border border-slate-700/80 bg-gradient-to-br from-slate-900/80 via-slate-900/70 to-slate-800/80 shadow-lg shadow-emerald-900/10 backdrop-blur">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-400/90 uppercase tracking-wide">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/80" />
-            {title}
-          </p>
-          <p className="text-xl md:text-2xl font-bold text-white/90 leading-tight">{value}</p>
-          {trendValue && (
-            <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-slate-800/70 border border-slate-700">
-              {trend === 'up' ? (
-                <TrendingUp className="h-4 w-4 text-emerald-500" />
-              ) : (
-                <TrendingDown className="h-4 w-4 text-red-500" />
-              )}
-              <span className={trend === 'up' ? 'text-emerald-400' : 'text-red-400'}>
-                {trendValue}
-              </span>
-            </div>
-          )}
+    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+      <div className="flex items-center gap-3">
+        <div className={cn('p-2.5 rounded-lg', iconBg)}>
+          <Icon className="h-5 w-5" />
         </div>
-        <div className="p-2.5 sm:p-3 rounded-lg border border-slate-700/80 bg-slate-800/60">
-          <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-slate-400 truncate">{title}</p>
+          <p className="text-lg font-bold text-white truncate">{value}</p>
+          {subtitle && <p className="text-xs text-slate-500 truncate">{subtitle}</p>}
         </div>
       </div>
     </div>
   );
 }
 
-function RecentTradeRow({ trade }: { trade: Trade }) {
-  const formatTime = (dateString: string) => {
-    return format(new Date(dateString), 'HH:mm');
-  };
-
+function RecentTradeItem({ trade }: { trade: Trade }) {
   return (
-    <div className="flex items-center justify-between py-3 border-b border-slate-700 last:border-0">
+    <div className="flex items-center justify-between py-3 border-b border-slate-700/50 last:border-0">
       <div className="flex items-center gap-3">
-        <div
-          className={cn(
-            'p-2 rounded-lg',
-            trade.direction === 'UP' ? 'bg-emerald-500/10' : 'bg-red-500/10'
-          )}
-        >
+        <div className={cn(
+          'p-2 rounded-lg',
+          trade.direction === 'UP' ? 'bg-emerald-500/20' : 'bg-red-500/20'
+        )}>
           {trade.direction === 'UP' ? (
             <ArrowUp className="h-4 w-4 text-emerald-400" />
           ) : (
@@ -83,28 +64,20 @@ function RecentTradeRow({ trade }: { trade: Trade }) {
           )}
         </div>
         <div>
-          <p className="text-white font-medium">{trade.symbol}</p>
-          <p className="text-slate-500 text-xs">{formatTime(trade.createdAt)}</p>
+          <p className="text-sm text-white font-medium">{trade.symbol}</p>
+          <p className="text-xs text-slate-500">{format(new Date(trade.createdAt), 'HH:mm')}</p>
         </div>
       </div>
       <div className="text-right">
-        <p
-          className={cn(
-            'font-medium',
-            trade.status === 'won'
-              ? 'text-emerald-400'
-              : trade.status === 'lost'
-              ? 'text-red-400'
-              : 'text-yellow-400'
-          )}
-        >
-          {trade.status === 'won'
-            ? `+$${(trade.profit || 0).toFixed(2)}`
-            : trade.status === 'lost'
-            ? `-$${trade.amount.toFixed(2)}`
-            : 'Active'}
+        <p className={cn(
+          'text-sm font-medium',
+          trade.status === 'won' ? 'text-emerald-400' :
+          trade.status === 'lost' ? 'text-red-400' : 'text-amber-400'
+        )}>
+          {trade.status === 'won' ? `+${formatCurrency(trade.profit || 0)}` :
+           trade.status === 'lost' ? `-${formatCurrency(trade.amount)}` : 'Active'}
         </p>
-        <p className="text-slate-500 text-xs capitalize">{trade.status}</p>
+        <p className="text-xs text-slate-500 capitalize">{trade.status}</p>
       </div>
     </div>
   );
@@ -137,299 +110,244 @@ export default function DashboardPage() {
   }, [filteredTrades, stats, timeframe]);
 
   const openTrades = useMemo(() => trades.filter(t => t.status === 'active'), [trades]);
-
   const recentTrades = filteredTrades.slice(0, 5);
-
-  const profitTrend = filteredStats.totalProfit >= 0 ? 'up' : 'down';
   const currentBalance = user?.demoBalance || 0;
-  const baseBalance = currentBalance - filteredStats.totalProfit;
-  const profitPercent =
-    filteredStats.totalTrades > 0 && baseBalance > 0
-      ? `${filteredStats.totalProfit >= 0 ? '+' : ''}${((filteredStats.totalProfit / baseBalance) * 100).toFixed(1)}%`
-      : '0%';
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">
-            Welcome back, {user?.name?.split(' ')[0]}!
+          <h1 className="text-xl font-bold text-white">
+            Welcome back, {user?.name?.split(' ')[0] || 'Trader'}
           </h1>
-          <p className="text-slate-400 mt-1">
-            Here&apos;s an overview of your trading activity
-          </p>
+          <p className="text-sm text-slate-400 mt-0.5">Your trading overview</p>
         </div>
-        <div className="flex flex-col gap-2 items-start sm:flex-row sm:items-center sm:gap-3 text-sm text-slate-300">
-          <div className="px-3 py-2 bg-slate-800 rounded-lg border border-slate-700">
-            Balance: <span className="font-semibold text-white">{formatCurrency(currentBalance)}</span>
-          </div>
-          <div className="px-3 py-2 bg-slate-800 rounded-lg border border-slate-700">
-            Win rate: <span className="font-semibold text-emerald-400">{filteredStats.winRate.toFixed(1)}%</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span>Showing:</span>
+        <div className="flex items-center gap-2">
           <div className="flex gap-1 bg-slate-800 rounded-lg border border-slate-700 p-1">
             {(['all', '7d', '30d'] as const).map(tf => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
                 className={cn(
-                  'px-2.5 py-1 rounded-md font-medium transition-colors',
-                  timeframe === tf ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:bg-slate-700'
+                  'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                  timeframe === tf ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'
                 )}
               >
-                {tf === 'all' ? 'All time' : tf.toUpperCase()}
+                {tf === 'all' ? 'All' : tf.toUpperCase()}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+      {/* Main Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
-          title="Account Balance"
-          value={formatCurrency(user?.demoBalance || 0)}
-          icon={DollarSign}
+          title="Balance"
+          value={formatCurrency(currentBalance)}
+          icon={Wallet}
+          iconBg="bg-emerald-500/20 text-emerald-400"
         />
-        <StatCard title="Total Trades" value={filteredStats.totalTrades.toString()} icon={BarChart2} />
+        <StatCard
+          title="Total Trades"
+          value={filteredStats.totalTrades.toString()}
+          icon={BarChart2}
+          iconBg="bg-blue-500/20 text-blue-400"
+        />
         <StatCard
           title="Win Rate"
           value={`${filteredStats.winRate.toFixed(1)}%`}
           icon={Activity}
+          iconBg="bg-purple-500/20 text-purple-400"
         />
         <StatCard
-          title="Total Profit"
-          value={`${filteredStats.totalProfit >= 0 ? '+' : ''}$${filteredStats.totalProfit.toFixed(2)}`}
-          icon={TrendingUp}
-          trend={profitTrend}
-          trendValue={profitPercent}
+          title="Profit/Loss"
+          value={`${filteredStats.totalProfit >= 0 ? '+' : ''}${formatCurrency(filteredStats.totalProfit)}`}
+          icon={filteredStats.totalProfit >= 0 ? TrendingUp : TrendingDown}
+          iconBg={filteredStats.totalProfit >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <ActionCard href="/dashboard/trade" icon={TrendingUp} label="Start Trading" highlight />
-            <ActionCard href="/dashboard/deposit" icon={DollarSign} label="Deposit" />
-            <ActionCard href="/dashboard/withdraw" icon={TrendingDown} label="Withdraw" />
-            <ActionCard href="/dashboard/history" icon={BarChart2} label="History" />
+      {/* Quick Actions */}
+      <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+        <h2 className="text-sm font-semibold text-white mb-3">Quick Actions</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <Link
+            href="/dashboard/trade"
+            className="flex flex-col items-center gap-2 p-3 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+          >
+            <TrendingUp className="h-5 w-5 text-white" />
+            <span className="text-xs font-medium text-white">Trade</span>
+          </Link>
+          <Link
+            href="/dashboard/deposit"
+            className="flex flex-col items-center gap-2 p-3 bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 rounded-lg transition-colors"
+          >
+            <ArrowUpRight className="h-5 w-5 text-emerald-400" />
+            <span className="text-xs font-medium text-slate-300">Deposit</span>
+          </Link>
+          <Link
+            href="/dashboard/withdraw"
+            className="flex flex-col items-center gap-2 p-3 bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 rounded-lg transition-colors"
+          >
+            <ArrowDownRight className="h-5 w-5 text-orange-400" />
+            <span className="text-xs font-medium text-slate-300">Withdraw</span>
+          </Link>
+          <Link
+            href="/dashboard/history"
+            className="flex flex-col items-center gap-2 p-3 bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 rounded-lg transition-colors"
+          >
+            <BarChart2 className="h-5 w-5 text-blue-400" />
+            <span className="text-xs font-medium text-slate-300">History</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Open Trades + Recent Trades */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Open Trades */}
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-amber-400" />
+              <h2 className="text-sm font-semibold text-white">Open Trades</h2>
+            </div>
+            <span className="text-xs text-slate-400">{openTrades.length} active</span>
+          </div>
+          <div className="p-4">
+            {openTrades.length === 0 ? (
+              <div className="text-center py-6">
+                <Clock className="h-10 w-10 text-slate-600 mx-auto" />
+                <p className="text-slate-400 mt-2 text-sm">No open trades</p>
+                <Link
+                  href="/dashboard/trade"
+                  className="inline-block mt-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg transition-colors"
+                >
+                  Start Trading
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {openTrades.slice(0, 5).map((trade) => (
+                  <div key={trade.id} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-1.5 rounded',
+                        trade.direction === 'UP' ? 'bg-emerald-500/20' : 'bg-red-500/20'
+                      )}>
+                        {trade.direction === 'UP' ? (
+                          <ArrowUp className="h-3.5 w-3.5 text-emerald-400" />
+                        ) : (
+                          <ArrowDown className="h-3.5 w-3.5 text-red-400" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm text-white font-medium">{trade.symbol}</p>
+                        <p className="text-xs text-slate-500">{formatCurrency(trade.amount)}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400">{format(new Date(trade.createdAt), 'HH:mm')}</p>
+                      <span className={cn(
+                        'text-xs font-medium',
+                        trade.direction === 'UP' ? 'text-emerald-400' : 'text-red-400'
+                      )}>
+                        {trade.direction}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Recent Trades</h2>
+        {/* Recent Trades */}
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-purple-400" />
+              <h2 className="text-sm font-semibold text-white">Recent Trades</h2>
+            </div>
             {trades.length > 0 && (
-              <Link
-                href="/dashboard/history"
-                className="text-emerald-500 text-sm hover:text-emerald-400"
-              >
+              <Link href="/dashboard/history" className="text-xs text-emerald-400 hover:text-emerald-300">
                 View all
               </Link>
             )}
           </div>
-          {recentTrades.length === 0 ? (
-            <div className="text-center py-8">
-              <Activity className="h-12 w-12 text-slate-600 mx-auto" />
-              <p className="text-slate-400 mt-3">No trades yet</p>
-              <p className="text-slate-500 text-sm">
-                Start trading to see your history here
-              </p>
-            </div>
-          ) : (
-            <div>
-              {recentTrades.map((trade) => (
-                <RecentTradeRow key={trade.id} trade={trade} />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-white">Open Trades</h2>
-              <p className="text-slate-400 text-sm">Live positions with quick status</p>
-            </div>
-            <Link href="/dashboard/trade" className="text-emerald-500 text-sm hover:text-emerald-400">
-              Go to Trading
-            </Link>
-          </div>
-          {openTrades.length === 0 ? (
-            <div className="text-center py-6">
-              <Clock className="h-10 w-10 text-slate-600 mx-auto" />
-              <p className="text-slate-400 mt-2 text-sm">No open trades</p>
-            </div>
-          ) : (
-            <div className="space-y-3 max-h-72 overflow-y-auto custom-scrollbar">
-              {openTrades.slice(0, 5).map((trade) => (
-                <div key={trade.id} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-700/70">
-                  <div>
-                    <p className="text-white font-medium text-sm">{trade.symbol}</p>
-                    <p className="text-slate-400 text-xs">Amount: {formatCurrency(trade.amount)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-400">Opened: {format(new Date(trade.createdAt), 'HH:mm')}</p>
-                    <span className={cn(
-                      'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold mt-1',
-                      trade.direction === 'UP' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
-                    )}>
-                      {trade.direction}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-4 lg:col-span-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-white">Funding & Health</h2>
-              <p className="text-slate-400 text-sm">Keep your balance and goals on track</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 rounded-lg bg-slate-900/60 border border-slate-700 space-y-2">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-400" />
-                <p className="text-white font-semibold text-sm">Balance snapshot</p>
+          <div className="p-4">
+            {recentTrades.length === 0 ? (
+              <div className="text-center py-6">
+                <Activity className="h-10 w-10 text-slate-600 mx-auto" />
+                <p className="text-slate-400 mt-2 text-sm">No trades yet</p>
+                <p className="text-slate-500 text-xs mt-1">Start trading to see your history</p>
               </div>
-              <p className="text-2xl font-bold text-white">{formatCurrency(currentBalance)}</p>
-              <p className="text-slate-400 text-xs">
-                {currentBalance < 20
-                  ? 'Low balance detected. Consider a quick top-up before trading.'
-                  : 'Balance is healthy. Stay within your risk limits.'}
-              </p>
-              <div className="flex gap-2">
-                <Link
-                  href="/dashboard/deposit"
-                  className="flex-1 text-center px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
-                >
-                  Deposit
-                </Link>
-                <Link
-                  href="/dashboard/withdraw"
-                  className="flex-1 text-center px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-lg text-sm font-medium transition-colors"
-                >
-                  Withdraw
-                </Link>
+            ) : (
+              <div className="max-h-64 overflow-y-auto">
+                {recentTrades.map((trade) => (
+                  <RecentTradeItem key={trade.id} trade={trade} />
+                ))}
               </div>
-            </div>
-
-            <div className="p-4 rounded-lg bg-slate-900/60 border border-slate-700 space-y-2">
-              <div className="flex items-center gap-2">
-                <SparkUp className="h-4 w-4 text-emerald-400" />
-                <p className="text-white font-semibold text-sm">Recent performance</p>
-              </div>
-              <p className="text-slate-300 text-sm">
-                {filteredStats.totalTrades > 0
-                  ? `Win rate ${filteredStats.winRate.toFixed(1)}% • Profit ${filteredStats.totalProfit >= 0 ? '+' : ''}$${filteredStats.totalProfit.toFixed(2)}`
-                  : 'Not enough data yet. Place trades to see insights.'}
-              </p>
-              <p className="text-slate-400 text-xs">
-                Timeframe: {timeframe === 'all' ? 'All time' : timeframe.toUpperCase()}
-              </p>
-            </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Performance Summary */}
       {filteredStats.totalTrades > 0 && (
-        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-          <h2 className="text-lg font-semibold text-white mb-4">Performance Summary</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <SummaryCard label="Profitable Trades" value={filteredStats.wonTrades} valueClass="text-emerald-400" />
-            <SummaryCard label="Loss Trades" value={filteredStats.lostTrades} valueClass="text-red-400" />
-            <SummaryCard label="Profit Rate" value={`${filteredStats.winRate.toFixed(0)}%`} />
-            <SummaryCard
-              label={filteredStats.totalProfit >= 0 ? 'Total Profit' : 'Total Loss'}
-              value={`$${Math.abs(filteredStats.totalProfit).toFixed(2)}`}
-              valueClass={filteredStats.totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}
-            />
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+          <h2 className="text-sm font-semibold text-white mb-3">Performance Summary</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="text-center p-3 bg-slate-700/30 rounded-lg">
+              <p className="text-lg font-bold text-emerald-400">{filteredStats.wonTrades}</p>
+              <p className="text-xs text-slate-400">Wins</p>
+            </div>
+            <div className="text-center p-3 bg-slate-700/30 rounded-lg">
+              <p className="text-lg font-bold text-red-400">{filteredStats.lostTrades}</p>
+              <p className="text-xs text-slate-400">Losses</p>
+            </div>
+            <div className="text-center p-3 bg-slate-700/30 rounded-lg">
+              <p className="text-lg font-bold text-white">{filteredStats.winRate.toFixed(0)}%</p>
+              <p className="text-xs text-slate-400">Win Rate</p>
+            </div>
+            <div className="text-center p-3 bg-slate-700/30 rounded-lg">
+              <p className={cn(
+                'text-lg font-bold',
+                filteredStats.totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'
+              )}>
+                {formatCurrency(Math.abs(filteredStats.totalProfit))}
+              </p>
+              <p className="text-xs text-slate-400">{filteredStats.totalProfit >= 0 ? 'Profit' : 'Loss'}</p>
+            </div>
           </div>
         </div>
       )}
 
-      <div className="bg-gradient-to-r from-emerald-900/50 to-slate-800 rounded-xl p-6 border border-emerald-800/50">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-emerald-600/20 rounded-lg">
-            <Activity className="h-6 w-6 text-emerald-500" />
+      {/* CTA Banner */}
+      <div className="bg-gradient-to-r from-emerald-900/40 to-slate-800/40 rounded-xl p-4 border border-emerald-800/30">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-emerald-600/20 rounded-lg hidden sm:block">
+            <TrendingUp className="h-6 w-6 text-emerald-400" />
           </div>
-          <div>
-            <h3 className="text-lg font-semibold text-white">
-              {(user?.demoBalance || 0) > 0 ? 'Ready to start trading?' : 'Get started with trading'}
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-white">
+              {currentBalance > 0 ? 'Ready to trade?' : 'Get started'}
             </h3>
-            <p className="text-slate-400 mt-1">
-              {(user?.demoBalance || 0) > 0 ? (
-                <>Your current balance: ${formatCurrency(user?.demoBalance || 0).replace('$', '')}. Trade Forex and OTC markets.</>
-              ) : (
-                <>Make a deposit to start trading Forex and OTC markets. Build your trading skills and strategy.</>
-              )}
+            <p className="text-xs text-slate-400 mt-0.5">
+              {currentBalance > 0
+                ? `Balance: ${formatCurrency(currentBalance)} - Trade Forex and OTC markets`
+                : 'Make a deposit to start trading Forex and OTC markets'}
             </p>
-            <Link
-              href={(user?.demoBalance || 0) > 0 ? '/dashboard/trade' : '/dashboard/deposit'}
-              className="inline-block mt-4 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
-            >
-              {(user?.demoBalance || 0) > 0 ? 'Go to Trading' : 'Make a Deposit'}
-            </Link>
           </div>
+          <Link
+            href={currentBalance > 0 ? '/dashboard/trade' : '/dashboard/deposit'}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+          >
+            {currentBalance > 0 ? 'Trade Now' : 'Deposit'}
+          </Link>
         </div>
       </div>
-    </div>
-  );
-}
-
-function ActionCard({
-  href,
-  icon: Icon,
-  label,
-  highlight = false,
-}: {
-  href: string;
-  icon: React.ElementType;
-  label: string;
-  highlight?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        'p-4 rounded-lg text-center transition-colors border',
-        highlight
-          ? 'bg-emerald-600 hover:bg-emerald-700 border-emerald-700 text-white'
-          : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-      )}
-    >
-      <Icon className="h-6 w-6 mx-auto" />
-      <p className="font-medium mt-2 text-sm">{label}</p>
-    </Link>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  valueClass,
-}: {
-  label: string;
-  value: string | number;
-  valueClass?: string;
-}) {
-  return (
-    <div className="text-center p-4 bg-slate-700/50 rounded-lg border border-slate-600/60">
-      <p className={cn('text-xl font-bold text-white', valueClass)}>{value}</p>
-      <p className="text-slate-400 text-sm mt-1">{label}</p>
     </div>
   );
 }

@@ -403,6 +403,30 @@ router.post(
 );
 
 // =====================================
+// Settings Routes
+// =====================================
+
+// Get fake activity setting (for live activity simulation)
+router.get(
+  '/settings/fake-activity',
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { adminService } = await import('../services/admin/admin.service.js');
+      const enabled = await adminService.getSystemSetting('copy_trading_fake_activity');
+
+      res.json({
+        success: true,
+        data: {
+          enabled: enabled === 'true',
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// =====================================
 // History & Stats Routes
 // =====================================
 

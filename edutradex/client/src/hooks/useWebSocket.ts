@@ -46,10 +46,6 @@ export function useWebSocket(): UseWebSocketReturn {
     }
   };
 
-  const sendMessage = useCallback((message: WebSocketMessage) => {
-    sendMessageRef.current(message);
-  }, []);
-
   const subscribe = useCallback((symbol: string) => {
     subscribedSymbolsRef.current.add(symbol);
     sendMessageRef.current({ type: 'subscribe', payload: { symbol } });
@@ -149,13 +145,12 @@ export function useWebSocket(): UseWebSocketReturn {
                   // Update price history
                   setPriceHistory((prev) => {
                     const history = prev.get(priceTick.symbol) || [];
-                    // Mutate array in place for performance, then create new Map
-                    history.push(priceTick);
-                    if (history.length > MAX_HISTORY_LENGTH) {
-                      history.shift();
+                    const newHistory = [...history, priceTick];
+                    if (newHistory.length > MAX_HISTORY_LENGTH) {
+                      newHistory.shift();
                     }
                     const newMap = new Map(prev);
-                    newMap.set(priceTick.symbol, history);
+                    newMap.set(priceTick.symbol, newHistory);
                     return newMap;
                   });
                 }

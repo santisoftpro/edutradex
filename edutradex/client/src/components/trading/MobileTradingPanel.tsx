@@ -4,6 +4,7 @@ import { useState, useEffect, memo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowUp, ArrowDown, Clock, DollarSign, Loader2, LineChart, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getDefaultTradeAmount } from '@/lib/settings';
 
 interface MobileTradingPanelProps {
   balance: number;
@@ -48,6 +49,14 @@ function MobileTradingPanelComponent({
   const [duration, setDuration] = useState(300);
   const [showTimeSheet, setShowTimeSheet] = useState(false);
   const [showAmountSheet, setShowAmountSheet] = useState(false);
+
+  // Load default amount from settings on mount
+  useEffect(() => {
+    const defaultAmount = getDefaultTradeAmount();
+    if (defaultAmount && defaultAmount !== amount) {
+      setAmount(defaultAmount);
+    }
+  }, []);
 
   // Sync duration from parent after hydration to avoid SSR mismatch
   useEffect(() => {

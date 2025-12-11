@@ -133,8 +133,19 @@ function PendingTradeCard({
   onApprove,
   onReject,
 }: PendingTradeCardProps) {
-  const isExpired = new Date(trade.expiresAt) < new Date();
-  const timeLeft = formatDistanceToNow(new Date(trade.expiresAt), { addSuffix: true });
+  const [isExpired, setIsExpired] = useState(false);
+  const [timeLeft, setTimeLeft] = useState('');
+
+  // Update time-dependent values on client only to avoid hydration mismatch
+  useEffect(() => {
+    const updateTime = () => {
+      setIsExpired(new Date(trade.expiresAt) < new Date());
+      setTimeLeft(formatDistanceToNow(new Date(trade.expiresAt), { addSuffix: true }));
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, [trade.expiresAt]);
 
   return (
     <div className={cn(

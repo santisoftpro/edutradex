@@ -30,7 +30,18 @@ export const userWithdrawalsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).optional(),
 });
 
+export const sendVerificationCodeSchema = z.object({
+  amount: z.number().positive('Amount must be positive').min(1, 'Minimum withdrawal is $1').max(100000, 'Maximum withdrawal is $100,000'),
+  method: z.string().min(1, 'Method is required'),
+});
+
+export const verifyWithdrawalCodeSchema = z.object({
+  code: z.string().length(6, 'Verification code must be 6 digits').regex(/^[0-9]+$/, 'Code must contain only digits'),
+});
+
 export type MobileMoneyWithdrawalInput = z.infer<typeof mobileMoneyWithdrawalSchema>;
 export type CryptoWithdrawalInput = z.infer<typeof cryptoWithdrawalSchema>;
 export type WithdrawalFiltersInput = z.infer<typeof withdrawalFiltersSchema>;
 export type ProcessWithdrawalInput = z.infer<typeof processWithdrawalSchema>;
+export type SendVerificationCodeInput = z.infer<typeof sendVerificationCodeSchema>;
+export type VerifyWithdrawalCodeInput = z.infer<typeof verifyWithdrawalCodeSchema>;

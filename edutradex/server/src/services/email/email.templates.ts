@@ -390,4 +390,21 @@ export const emailTemplates = {
       <p>Thank you for your patience!<br><strong>The OptigoBroker Team</strong></p>
     `);
   },
+
+  withdrawalVerificationCode: (userName: string, code: string, amount: number, method: string): string => {
+    return wrapTemplate(`
+      <h2>Withdrawal Verification</h2>
+      <p>Hello ${userName},</p>
+      <p>You have requested a withdrawal of <strong>$${amount.toFixed(2)}</strong> via <strong>${method}</strong>.</p>
+      <p>Use the verification code below to confirm your withdrawal:</p>
+      <div class="code-box">
+        <div class="code">${code}</div>
+        <p style="margin: 10px 0 0 0; color: #666; font-size: 14px;">This code expires in 10 minutes</p>
+      </div>
+      <div class="warning">
+        <strong>Security Notice:</strong> Never share this code with anyone. OptigoBroker staff will never ask for this code.
+      </div>
+      <p>If you did not request this withdrawal, please secure your account immediately and contact support.</p>
+    `);
+  },
 };

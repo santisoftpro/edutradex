@@ -1,4 +1,5 @@
 // Trading sound effects using Web Audio API
+import { isSoundEnabled } from './settings';
 
 let audioContext: AudioContext | null = null;
 
@@ -10,6 +11,9 @@ function getAudioContext(): AudioContext {
 }
 
 function playTone(frequency: number, duration: number, type: OscillatorType = 'sine', volume: number = 0.3) {
+  // Check if sound effects are enabled in settings
+  if (!isSoundEnabled()) return;
+
   try {
     const ctx = getAudioContext();
 

@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { z } from 'zod';
-import { kycService } from '../services/kyc/kyc.service.js';
+import { kycService, KYCServiceError } from '../services/kyc/kyc.service.js';
 import { authMiddleware, adminMiddleware } from '../middleware/auth.middleware.js';
 import { logger } from '../utils/logger.js';
 
@@ -264,6 +264,18 @@ router.get('/documents/:filename', authMiddleware, adminMiddleware, async (req: 
     logger.error('KYC document serve error', { error: (error as Error).message });
     next(error);
   }
+});
+
+// Error handler for this router
+router.use((error: Error, req: Request, res: Response, next: NextFunction): void => {
+  if (error instanceof KYCServiceError) {
+    res.status(error.statusCode).json({
+      success: false,
+      error: error.message,
+    });
+    return;
+  }
+  next(error);
 });
 
 export default router;

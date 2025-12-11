@@ -123,6 +123,33 @@ router.get(
 );
 
 /**
+ * GET /api/deposits/my-deposit-method
+ * Get user's approved deposit method for withdrawal
+ */
+router.get(
+  '/my-deposit-method',
+  authMiddleware,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.userId) {
+        res.status(401).json({ success: false, error: 'Not authenticated' });
+        return;
+      }
+
+      const depositMethod = await depositService.getUserDepositMethod(req.userId);
+
+      res.json({
+        success: true,
+        data: depositMethod,
+      });
+    } catch (error) {
+      logger.error('Get user deposit method error', { error });
+      res.status(500).json({ success: false, error: 'Failed to fetch deposit method' });
+    }
+  }
+);
+
+/**
  * GET /api/deposits/:depositId
  * Get a specific deposit (user can only see their own)
  */

@@ -292,6 +292,60 @@ class EmailService {
     return this.sendEmail(email, 'Password Changed - OptigoBroker', html);
   }
 
+  // Send withdrawal verification code
+  async sendWithdrawalVerificationCode(
+    email: string,
+    userName: string,
+    amount: number,
+    method: string
+  ): Promise<string | null> {
+    const code = this.generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const now = new Date();
+
+    try {
+      await query(
+        `INSERT INTO "EmailVerification" (id, email, code, type, "expiresAt", verified, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [randomUUID(), email, code, 'WITHDRAWAL', expiresAt, false, now]
+      );
+
+      const html = emailTemplates.withdrawalVerificationCode(userName, code, amount, method);
+      const sent = await this.sendEmail(email, 'Withdrawal Verification Code - OptigoBroker', html);
+
+      return sent ? code : null;
+    } catch (error) {
+      logger.error('Failed to create withdrawal verification code', { email, error });
+      return null;
+    }
+  }
+
+  // Verify withdrawal code
+  async verifyWithdrawalCode(email: string, code: string): Promise<boolean> {
+    try {
+      const verification = await queryOne<{ id: string }>(
+        `SELECT id FROM "EmailVerification"
+         WHERE email = $1 AND code = $2 AND type = 'WITHDRAWAL' AND verified = false AND "expiresAt" > $3
+         ORDER BY "createdAt" DESC LIMIT 1`,
+        [email, code, new Date()]
+      );
+
+      if (!verification) {
+        return false;
+      }
+
+      await query(
+        `UPDATE "EmailVerification" SET verified = true WHERE id = $1`,
+        [verification.id]
+      );
+
+      return true;
+    } catch (error) {
+      logger.error('Failed to verify withdrawal code', { email, error });
+      return false;
+    }
+  }
+
   // Send new ticket notification to admin
   async sendNewTicketNotification(
     adminEmail: string,

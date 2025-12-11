@@ -19,6 +19,9 @@ import {
   HelpCircle,
   Shield,
   ArrowUpFromLine,
+  Users,
+  Receipt,
+  Gift,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
@@ -29,12 +32,15 @@ import { AccountDropdown } from './AccountDropdown';
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/trade', label: 'Trade', icon: LineChart },
+  { href: '/dashboard/copy-trading', label: 'Copy Trading', icon: Users },
   { href: '/dashboard/deposit', label: 'Deposit', icon: Wallet },
   { href: '/dashboard/withdraw', label: 'Withdraw', icon: ArrowUpFromLine },
-  { href: '/dashboard/history', label: 'History', icon: History },
+  { href: '/dashboard/transactions', label: 'Transactions', icon: Receipt },
+  { href: '/dashboard/history', label: 'Trade History', icon: History },
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/dashboard/affiliate', label: 'Affiliate', icon: Gift },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
-  { href: '/dashboard/help', label: 'Help', icon: HelpCircle },
+  { href: '/dashboard/support', label: 'Support', icon: HelpCircle },
 ];
 
 export function Header() {
