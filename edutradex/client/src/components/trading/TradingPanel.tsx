@@ -31,7 +31,7 @@ const DURATIONS = [
 
 const QUICK_AMOUNTS = [5, 10, 25, 50, 100, 500, 1000, 5000];
 
-export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 85, isTradesPanelOpen = true, initialDuration, onDurationChange }: TradingPanelProps) {
+export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, isTradesPanelOpen = true, initialDuration, onDurationChange }: TradingPanelProps) {
   const [amount, setAmount] = useState(10);
   const [duration, setDuration] = useState(60);
 

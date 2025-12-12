@@ -367,7 +367,7 @@ export interface UpdatePaymentMethodInput {
 
 // Copy Trading Types
 export type LeaderStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
-export type CopyMode = 'AUTOMATIC' | 'MANUAL';
+export type CopyMode = 'PERCENTAGE' | 'FIXED_AMOUNT';
 export type PendingTradeStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
 
 export interface CopyTradingLeader {
@@ -417,8 +417,12 @@ export interface CopyTradingFollower {
   id: string;
   leaderId: string;
   copyMode: CopyMode;
+  percentageAmount: number;
   fixedAmount: number;
-  maxDailyTrades: number;
+  dailyLossLimit: number | null;
+  dailyProfitLimit: number | null;
+  maxDailyTrades: number | null;
+  unlimitedTrades: boolean;
   isActive: boolean;
   totalCopied: number;
   totalProfit: number;
@@ -430,8 +434,12 @@ export interface FollowerInfo {
   id: string;
   followerId: string;
   copyMode: CopyMode;
+  percentageAmount: number;
   fixedAmount: number;
-  maxDailyTrades: number;
+  dailyLossLimit: number | null;
+  dailyProfitLimit: number | null;
+  maxDailyTrades: number | null;
+  unlimitedTrades: boolean;
   isActive: boolean;
   totalCopied: number;
   totalProfit: number;
@@ -503,14 +511,22 @@ export interface CopyTradingPlatformStats {
 
 export interface FollowLeaderInput {
   copyMode: CopyMode;
-  fixedAmount: number;
-  maxDailyTrades?: number;
+  percentageAmount?: number;
+  fixedAmount?: number;
+  dailyLossLimit?: number | null;
+  dailyProfitLimit?: number | null;
+  maxDailyTrades?: number | null;
+  unlimitedTrades?: boolean;
 }
 
 export interface UpdateFollowSettingsInput {
   copyMode?: CopyMode;
+  percentageAmount?: number;
   fixedAmount?: number;
-  maxDailyTrades?: number;
+  dailyLossLimit?: number | null;
+  dailyProfitLimit?: number | null;
+  maxDailyTrades?: number | null;
+  unlimitedTrades?: boolean;
   isActive?: boolean;
 }
 
@@ -602,8 +618,12 @@ export interface SimulatedLeaderFollower {
   userId: string;
   simulatedLeaderId: string;
   copyMode: CopyMode;
+  percentageAmount: number;
   fixedAmount: number;
-  maxDailyTrades: number;
+  dailyLossLimit: number | null;
+  dailyProfitLimit: number | null;
+  maxDailyTrades: number | null;
+  unlimitedTrades: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

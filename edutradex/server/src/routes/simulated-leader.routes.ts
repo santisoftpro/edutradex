@@ -64,10 +64,25 @@ router.get(
 // User Routes (authenticated users)
 // ==========================================
 
+// Helper for nullable number fields that can be null, undefined, or a valid number
+const nullablePositiveNumber = (minVal: number, maxVal?: number) =>
+  z.union([
+    z.null(),
+    z.undefined(),
+    z.literal(''),
+    z.coerce.number().positive().min(minVal).pipe(
+      maxVal ? z.number().max(maxVal) : z.number()
+    ),
+  ]).transform((val) => (val === '' || val === undefined ? null : val));
+
 const followSettingsSchema = z.object({
-  copyMode: z.enum(['AUTOMATIC', 'MANUAL']).optional(),
+  copyMode: z.enum(['PERCENTAGE', 'FIXED_AMOUNT']).optional(),
+  percentageAmount: z.number().min(1).max(1000).optional(),
   fixedAmount: z.number().min(1).max(10000).optional(),
-  maxDailyTrades: z.number().int().min(1).max(500).optional(),
+  dailyLossLimit: nullablePositiveNumber(1).optional(),
+  dailyProfitLimit: nullablePositiveNumber(1).optional(),
+  maxDailyTrades: nullablePositiveNumber(1, 500).optional(),
+  unlimitedTrades: z.boolean().optional(),
   isActive: z.boolean().optional(),
 });
 

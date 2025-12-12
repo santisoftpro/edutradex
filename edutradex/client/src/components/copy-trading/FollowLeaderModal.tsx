@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Loader2, Zap, Hand } from 'lucide-react';
+import { X, Loader2, Percent, DollarSign, Infinity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
@@ -20,21 +20,36 @@ export function FollowLeaderModal({
   onSuccess,
 }: FollowLeaderModalProps) {
   const { user } = useAuthStore();
-  const [copyMode, setCopyMode] = useState<CopyMode>('AUTOMATIC');
+  const [copyMode, setCopyMode] = useState<CopyMode>('PERCENTAGE');
+  const [percentageAmount, setPercentageAmount] = useState(100);
   const [fixedAmount, setFixedAmount] = useState(10);
+  const [dailyLossLimit, setDailyLossLimit] = useState<number | null>(null);
+  const [dailyProfitLimit, setDailyProfitLimit] = useState<number | null>(null);
   const [maxDailyTrades, setMaxDailyTrades] = useState(50);
+  const [unlimitedTrades, setUnlimitedTrades] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (fixedAmount < 1) {
-      toast.error('Minimum amount is $1');
-      return;
+    if (copyMode === 'PERCENTAGE') {
+      if (percentageAmount < 1 || percentageAmount > 1000) {
+        toast.error('Percentage must be between 1% and 1000%');
+        return;
+      }
+    } else {
+      if (fixedAmount < 1) {
+        toast.error('Minimum amount is $1');
+        return;
+      }
+      if (fixedAmount > (user?.demoBalance || 0)) {
+        toast.error('Amount exceeds your balance');
+        return;
+      }
     }
 
-    if (fixedAmount > (user?.demoBalance || 0)) {
-      toast.error('Amount exceeds your balance');
+    if (!unlimitedTrades && maxDailyTrades < 1) {
+      toast.error('Max daily trades must be at least 1');
       return;
     }
 
@@ -42,8 +57,12 @@ export function FollowLeaderModal({
     try {
       await api.followLeader(leader.id, {
         copyMode,
-        fixedAmount,
-        maxDailyTrades,
+        percentageAmount: copyMode === 'PERCENTAGE' ? percentageAmount : undefined,
+        fixedAmount: copyMode === 'FIXED_AMOUNT' ? fixedAmount : undefined,
+        dailyLossLimit: copyMode === 'FIXED_AMOUNT' ? dailyLossLimit : null,
+        dailyProfitLimit: copyMode === 'FIXED_AMOUNT' ? dailyProfitLimit : null,
+        maxDailyTrades: unlimitedTrades ? null : maxDailyTrades,
+        unlimitedTrades,
       });
       onSuccess();
     } catch (error: any) {
@@ -54,154 +73,183 @@ export function FollowLeaderModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-xl w-full max-w-md border border-slate-700">
+    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-slate-900 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[85vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <h2 className="text-lg font-semibold text-white">Follow Leader</h2>
+        <div className="flex items-center justify-between p-4 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+              {leader.displayName.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <h3 className="text-white font-semibold">{leader.displayName}</h3>
+              <p className="text-slate-500 text-xs">
+                {leader.winRate.toFixed(0)}% win rate
+              </p>
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+            className="p-2 hover:bg-slate-800 rounded-full transition-colors"
           >
             <X className="h-5 w-5 text-slate-400" />
           </button>
         </div>
 
-        {/* Leader Info */}
-        <div className="p-4 border-b border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
-              {leader.displayName.charAt(0).toUpperCase()}
-            </div>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Mode Toggle */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setCopyMode('PERCENTAGE')}
+              className={cn(
+                'flex items-center justify-center gap-2 p-3 rounded-xl border transition-all',
+                copyMode === 'PERCENTAGE'
+                  ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                  : 'border-slate-700 text-slate-400 hover:border-slate-600'
+              )}
+            >
+              <Percent className="h-4 w-4" />
+              <span className="text-sm font-medium">Percentage</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCopyMode('FIXED_AMOUNT')}
+              className={cn(
+                'flex items-center justify-center gap-2 p-3 rounded-xl border transition-all',
+                copyMode === 'FIXED_AMOUNT'
+                  ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                  : 'border-slate-700 text-slate-400 hover:border-slate-600'
+              )}
+            >
+              <DollarSign className="h-4 w-4" />
+              <span className="text-sm font-medium">Fixed</span>
+            </button>
+          </div>
+
+          {/* Percentage Settings */}
+          {copyMode === 'PERCENTAGE' && (
             <div>
-              <h3 className="text-white font-semibold">{leader.displayName}</h3>
-              <p className="text-slate-400 text-sm">
-                Win Rate: {leader.winRate.toFixed(1)}% | {leader.followerCount} followers
+              <label className="text-xs text-slate-500 mb-1.5 block">Copy percentage</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={percentageAmount}
+                  onChange={(e) => setPercentageAmount(Number(e.target.value))}
+                  min={1}
+                  max={1000}
+                  className="w-full px-4 py-3 pr-12 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">%</span>
+              </div>
+              <p className="text-xs text-slate-600 mt-1.5">
+                Leader trades $100 → You trade ${(100 * percentageAmount / 100).toFixed(0)}
               </p>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* Copy Mode */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Copy Mode
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setCopyMode('AUTOMATIC')}
-                className={cn(
-                  'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors',
-                  copyMode === 'AUTOMATIC'
-                    ? 'border-emerald-500 bg-emerald-600/10'
-                    : 'border-slate-600 hover:border-slate-500'
-                )}
-              >
-                <Zap className={cn(
-                  'h-6 w-6',
-                  copyMode === 'AUTOMATIC' ? 'text-emerald-400' : 'text-slate-400'
-                )} />
-                <span className={cn(
-                  'font-medium',
-                  copyMode === 'AUTOMATIC' ? 'text-emerald-400' : 'text-slate-300'
-                )}>
-                  Automatic
-                </span>
-                <span className="text-xs text-slate-500 text-center">
-                  Trades copied instantly
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCopyMode('MANUAL')}
-                className={cn(
-                  'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors',
-                  copyMode === 'MANUAL'
-                    ? 'border-blue-500 bg-blue-600/10'
-                    : 'border-slate-600 hover:border-slate-500'
-                )}
-              >
-                <Hand className={cn(
-                  'h-6 w-6',
-                  copyMode === 'MANUAL' ? 'text-blue-400' : 'text-slate-400'
-                )} />
-                <span className={cn(
-                  'font-medium',
-                  copyMode === 'MANUAL' ? 'text-blue-400' : 'text-slate-300'
-                )}>
-                  Manual
-                </span>
-                <span className="text-xs text-slate-500 text-center">
-                  Approve each trade
-                </span>
-              </button>
-            </div>
-          </div>
+          {/* Fixed Amount Settings */}
+          {copyMode === 'FIXED_AMOUNT' && (
+            <>
+              <div>
+                <label className="text-xs text-slate-500 mb-1.5 block">Amount per trade</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                  <input
+                    type="number"
+                    value={fixedAmount}
+                    onChange={(e) => setFixedAmount(Number(e.target.value))}
+                    min={1}
+                    max={10000}
+                    className="w-full pl-9 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
 
-          {/* Fixed Amount */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Fixed Amount Per Trade
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
-              <input
-                type="number"
-                value={fixedAmount}
-                onChange={(e) => setFixedAmount(Number(e.target.value))}
-                min={1}
-                max={10000}
-                className="w-full pl-8 pr-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Your balance: ${user?.demoBalance?.toFixed(2) || 0}
-            </p>
-          </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-500 mb-1.5 block">Daily loss limit</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                    <input
+                      type="number"
+                      value={dailyLossLimit ?? ''}
+                      onChange={(e) => setDailyLossLimit(e.target.value ? Number(e.target.value) : null)}
+                      min={1}
+                      placeholder="None"
+                      className="w-full pl-9 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1.5 block">Daily profit limit</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                    <input
+                      type="number"
+                      value={dailyProfitLimit ?? ''}
+                      onChange={(e) => setDailyProfitLimit(e.target.value ? Number(e.target.value) : null)}
+                      min={1}
+                      placeholder="None"
+                      className="w-full pl-9 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Max Daily Trades */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Max Daily Trades
-            </label>
-            <input
-              type="number"
-              value={maxDailyTrades}
-              onChange={(e) => setMaxDailyTrades(Number(e.target.value))}
-              min={1}
-              max={500}
-              className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white rounded-lg transition-colors"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Following...
-                </>
-              ) : (
-                'Follow Leader'
-              )}
-            </button>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-slate-500">Max daily trades</label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={unlimitedTrades}
+                  onChange={(e) => setUnlimitedTrades(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500"
+                />
+                <span className="text-xs text-slate-500 flex items-center gap-1">
+                  <Infinity className="h-3 w-3" /> Unlimited
+                </span>
+              </label>
+            </div>
+            {!unlimitedTrades && (
+              <input
+                type="number"
+                value={maxDailyTrades}
+                onChange={(e) => setMaxDailyTrades(Number(e.target.value))}
+                min={1}
+                max={500}
+                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
+              />
+            )}
           </div>
         </form>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-slate-800 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white text-sm font-medium rounded-xl transition-colors"
+          >
+            {isSubmitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              'Follow'
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

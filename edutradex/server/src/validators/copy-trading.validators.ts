@@ -25,30 +25,26 @@ export const updateLeaderProfileBodySchema = z.object({
   isPublic: z.boolean().optional(),
 });
 
-export const followLeaderBodySchema = z.object({
-  copyMode: z.enum(['AUTOMATIC', 'MANUAL'], {
-    message: 'Copy mode must be AUTOMATIC or MANUAL',
-  }),
-  fixedAmount: z.coerce
-    .number()
-    .positive('Fixed amount must be positive')
-    .min(1, 'Minimum amount is $1')
-    .max(10000, 'Maximum amount is $10,000'),
-  maxDailyTrades: z.coerce
-    .number()
-    .int()
-    .positive()
-    .min(1, 'Minimum is 1 trade per day')
-    .max(500, 'Maximum is 500 trades per day')
-    .optional()
-    .default(50),
-});
+// Helper for nullable number fields that can be null, undefined, or a valid number
+const nullablePositiveNumber = (minVal: number, maxVal?: number, errorMsg?: string) =>
+  z.union([
+    z.null(),
+    z.undefined(),
+    z.literal(''),
+    z.coerce.number().positive(errorMsg || 'Must be positive').min(minVal).pipe(
+      maxVal ? z.number().max(maxVal) : z.number()
+    ),
+  ]).transform((val) => (val === '' || val === undefined ? null : val));
 
-export const updateFollowSettingsBodySchema = z.object({
-  copyMode: z
-    .enum(['AUTOMATIC', 'MANUAL'], {
-      message: 'Copy mode must be AUTOMATIC or MANUAL',
-    })
+export const followLeaderBodySchema = z.object({
+  copyMode: z.enum(['PERCENTAGE', 'FIXED_AMOUNT'], {
+    message: 'Copy mode must be PERCENTAGE or FIXED_AMOUNT',
+  }),
+  percentageAmount: z.coerce
+    .number()
+    .positive('Percentage must be positive')
+    .min(1, 'Minimum percentage is 1%')
+    .max(1000, 'Maximum percentage is 1000%')
     .optional(),
   fixedAmount: z.coerce
     .number()
@@ -56,13 +52,34 @@ export const updateFollowSettingsBodySchema = z.object({
     .min(1, 'Minimum amount is $1')
     .max(10000, 'Maximum amount is $10,000')
     .optional(),
-  maxDailyTrades: z.coerce
-    .number()
-    .int()
-    .positive()
-    .min(1, 'Minimum is 1 trade per day')
-    .max(500, 'Maximum is 500 trades per day')
+  dailyLossLimit: nullablePositiveNumber(1, undefined, 'Daily loss limit must be positive').optional(),
+  dailyProfitLimit: nullablePositiveNumber(1, undefined, 'Daily profit limit must be positive').optional(),
+  maxDailyTrades: nullablePositiveNumber(1, 500, 'Max daily trades must be positive').optional(),
+  unlimitedTrades: z.boolean().optional().default(false),
+});
+
+export const updateFollowSettingsBodySchema = z.object({
+  copyMode: z
+    .enum(['PERCENTAGE', 'FIXED_AMOUNT'], {
+      message: 'Copy mode must be PERCENTAGE or FIXED_AMOUNT',
+    })
     .optional(),
+  percentageAmount: z.coerce
+    .number()
+    .positive('Percentage must be positive')
+    .min(1, 'Minimum percentage is 1%')
+    .max(1000, 'Maximum percentage is 1000%')
+    .optional(),
+  fixedAmount: z.coerce
+    .number()
+    .positive('Fixed amount must be positive')
+    .min(1, 'Minimum amount is $1')
+    .max(10000, 'Maximum amount is $10,000')
+    .optional(),
+  dailyLossLimit: nullablePositiveNumber(1, undefined, 'Daily loss limit must be positive').optional(),
+  dailyProfitLimit: nullablePositiveNumber(1, undefined, 'Daily profit limit must be positive').optional(),
+  maxDailyTrades: nullablePositiveNumber(1, 500, 'Max daily trades must be positive').optional(),
+  unlimitedTrades: z.boolean().optional(),
   isActive: z.boolean().optional(),
 });
 

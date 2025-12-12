@@ -165,7 +165,7 @@ export function MyLeaderProfile() {
                   <div>
                     <p className="text-white font-medium">{follower.follower?.name || follower.user?.name}</p>
                     <p className="text-slate-400 text-sm">
-                      {follower.copyMode === 'AUTOMATIC' ? 'Auto' : 'Manual'} | ${follower.fixedAmount}/trade
+                      {follower.copyMode === 'PERCENTAGE' ? `${follower.percentageAmount}%` : `$${follower.fixedAmount}`}/trade
                     </p>
                   </div>
                 </div>

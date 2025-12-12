@@ -8,15 +8,23 @@ interface BecomeLeaderInput {
 }
 
 interface FollowLeaderInput {
-  copyMode: 'AUTOMATIC' | 'MANUAL';
-  fixedAmount: number;
-  maxDailyTrades?: number;
+  copyMode: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  percentageAmount?: number;
+  fixedAmount?: number;
+  dailyLossLimit?: number | null;
+  dailyProfitLimit?: number | null;
+  maxDailyTrades?: number | null;
+  unlimitedTrades?: boolean;
 }
 
 interface UpdateFollowSettingsInput {
-  copyMode?: 'AUTOMATIC' | 'MANUAL';
+  copyMode?: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  percentageAmount?: number;
   fixedAmount?: number;
-  maxDailyTrades?: number;
+  dailyLossLimit?: number | null;
+  dailyProfitLimit?: number | null;
+  maxDailyTrades?: number | null;
+  unlimitedTrades?: boolean;
   isActive?: boolean;
 }
 
@@ -55,8 +63,12 @@ interface FollowerInfo {
   id: string;
   followerId: string;
   copyMode: string;
+  percentageAmount: number;
   fixedAmount: number;
-  maxDailyTrades: number;
+  dailyLossLimit: number | null;
+  dailyProfitLimit: number | null;
+  maxDailyTrades: number | null;
+  unlimitedTrades: boolean;
   isActive: boolean;
   totalCopied: number;
   totalProfit: number;
@@ -72,8 +84,12 @@ interface FollowingInfo {
   id: string;
   leaderId: string;
   copyMode: string;
+  percentageAmount: number;
   fixedAmount: number;
-  maxDailyTrades: number;
+  dailyLossLimit: number | null;
+  dailyProfitLimit: number | null;
+  maxDailyTrades: number | null;
+  unlimitedTrades: boolean;
   isActive: boolean;
   totalCopied: number;
   totalProfit: number;
@@ -103,14 +119,21 @@ interface FollowerRow {
   followerId: string;
   leaderId: string;
   copyMode: string;
+  percentageAmount: number;
   fixedAmount: number;
-  maxDailyTrades: number;
+  dailyLossLimit: number | null;
+  dailyProfitLimit: number | null;
+  dailyLoss: number;
+  dailyProfit: number;
+  maxDailyTrades: number | null;
+  unlimitedTrades: boolean;
   isActive: boolean;
   totalCopied: number;
   totalProfit: number;
   tradesToday: number;
   lastTradeDate: Date | null;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 class CopyTradingServiceError extends Error {
@@ -472,11 +495,14 @@ export class CopyTradingService {
       throw new CopyTradingServiceError('User not found', 404);
     }
 
-    if (settings.fixedAmount > followerUser.demoBalance) {
-      throw new CopyTradingServiceError(
-        'Fixed amount cannot be greater than your current balance',
-        400
-      );
+    // Validate fixed amount for FIXED_AMOUNT mode
+    if (settings.copyMode === 'FIXED_AMOUNT' && settings.fixedAmount !== undefined) {
+      if (settings.fixedAmount > followerUser.demoBalance) {
+        throw new CopyTradingServiceError(
+          'Fixed amount cannot be greater than your current balance',
+          400
+        );
+      }
     }
 
     const id = randomUUID();
@@ -484,10 +510,25 @@ export class CopyTradingService {
 
     const follow = await queryOne<FollowerRow>(
       `INSERT INTO "CopyTradingFollower" (
-        id, "followerId", "leaderId", "copyMode", "fixedAmount", "maxDailyTrades", "createdAt", "updatedAt"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        id, "followerId", "leaderId", "copyMode", "percentageAmount", "fixedAmount",
+        "dailyLossLimit", "dailyProfitLimit", "maxDailyTrades", "unlimitedTrades",
+        "createdAt", "updatedAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *`,
-      [id, followerId, leaderId, settings.copyMode, settings.fixedAmount, settings.maxDailyTrades ?? 50, now, now]
+      [
+        id,
+        followerId,
+        leaderId,
+        settings.copyMode,
+        settings.percentageAmount ?? 100,
+        settings.fixedAmount ?? 10,
+        settings.dailyLossLimit ?? null,
+        settings.dailyProfitLimit ?? null,
+        settings.unlimitedTrades ? null : (settings.maxDailyTrades ?? 50),
+        settings.unlimitedTrades ?? false,
+        now,
+        now
+      ]
     );
 
     const leaderUser = await queryOne<{ name: string }>(
@@ -506,8 +547,12 @@ export class CopyTradingService {
       id: follow!.id,
       leaderId: follow!.leaderId,
       copyMode: follow!.copyMode,
+      percentageAmount: Number(follow!.percentageAmount),
       fixedAmount: Number(follow!.fixedAmount),
+      dailyLossLimit: follow!.dailyLossLimit ? Number(follow!.dailyLossLimit) : null,
+      dailyProfitLimit: follow!.dailyProfitLimit ? Number(follow!.dailyProfitLimit) : null,
       maxDailyTrades: follow!.maxDailyTrades,
+      unlimitedTrades: follow!.unlimitedTrades,
       isActive: follow!.isActive,
       totalCopied: follow!.totalCopied,
       totalProfit: Number(follow!.totalProfit),
@@ -586,13 +631,29 @@ export class CopyTradingService {
       updates.push(`"copyMode" = $${paramIndex++}`);
       params.push(settings.copyMode);
     }
+    if (settings.percentageAmount !== undefined) {
+      updates.push(`"percentageAmount" = $${paramIndex++}`);
+      params.push(settings.percentageAmount);
+    }
     if (settings.fixedAmount !== undefined) {
       updates.push(`"fixedAmount" = $${paramIndex++}`);
       params.push(settings.fixedAmount);
     }
+    if (settings.dailyLossLimit !== undefined) {
+      updates.push(`"dailyLossLimit" = $${paramIndex++}`);
+      params.push(settings.dailyLossLimit);
+    }
+    if (settings.dailyProfitLimit !== undefined) {
+      updates.push(`"dailyProfitLimit" = $${paramIndex++}`);
+      params.push(settings.dailyProfitLimit);
+    }
     if (settings.maxDailyTrades !== undefined) {
       updates.push(`"maxDailyTrades" = $${paramIndex++}`);
       params.push(settings.maxDailyTrades);
+    }
+    if (settings.unlimitedTrades !== undefined) {
+      updates.push(`"unlimitedTrades" = $${paramIndex++}`);
+      params.push(settings.unlimitedTrades);
     }
     if (settings.isActive !== undefined) {
       updates.push(`"isActive" = $${paramIndex++}`);
@@ -629,8 +690,12 @@ export class CopyTradingService {
       id: updated!.id,
       leaderId: updated!.leaderId,
       copyMode: updated!.copyMode,
+      percentageAmount: Number(updated!.percentageAmount),
       fixedAmount: Number(updated!.fixedAmount),
+      dailyLossLimit: updated!.dailyLossLimit ? Number(updated!.dailyLossLimit) : null,
+      dailyProfitLimit: updated!.dailyProfitLimit ? Number(updated!.dailyProfitLimit) : null,
       maxDailyTrades: updated!.maxDailyTrades,
+      unlimitedTrades: updated!.unlimitedTrades,
       isActive: updated!.isActive,
       totalCopied: updated!.totalCopied,
       totalProfit: Number(updated!.totalProfit),
@@ -701,8 +766,12 @@ export class CopyTradingService {
         id: f.id,
         leaderId: f.leaderId,
         copyMode: f.copyMode,
+        percentageAmount: Number(f.percentageAmount ?? 100),
         fixedAmount: Number(f.fixedAmount),
+        dailyLossLimit: f.dailyLossLimit ? Number(f.dailyLossLimit) : null,
+        dailyProfitLimit: f.dailyProfitLimit ? Number(f.dailyProfitLimit) : null,
         maxDailyTrades: f.maxDailyTrades,
+        unlimitedTrades: f.unlimitedTrades ?? false,
         isActive: f.isActive,
         totalCopied: f.totalCopied,
         totalProfit: Number(f.totalProfit),
@@ -764,8 +833,12 @@ export class CopyTradingService {
         id: f.id,
         followerId: f.followerId,
         copyMode: f.copyMode,
+        percentageAmount: Number(f.percentageAmount ?? 100),
         fixedAmount: Number(f.fixedAmount),
+        dailyLossLimit: f.dailyLossLimit ? Number(f.dailyLossLimit) : null,
+        dailyProfitLimit: f.dailyProfitLimit ? Number(f.dailyProfitLimit) : null,
         maxDailyTrades: f.maxDailyTrades,
+        unlimitedTrades: f.unlimitedTrades ?? false,
         isActive: f.isActive,
         totalCopied: f.totalCopied,
         totalProfit: Number(f.totalProfit),

@@ -37,7 +37,7 @@ function MobileTradingPanelComponent({
   balance,
   onTrade,
   isLoading,
-  payoutPercent = 85,
+  payoutPercent = 98,
   onDurationChange,
   initialDuration,
   onOpenTrades,

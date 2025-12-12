@@ -37,6 +37,12 @@ import type {
   CreateSimulatedLeaderInput,
   SimulatedLeaderFollower,
   SimulatedLeaderFollowingInfo,
+  FollowLeaderInput,
+  UpdateFollowSettingsInput,
+  CopyTradingFollower,
+  FollowerInfo,
+  PendingCopyTrade,
+  CopyMode,
 } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -976,7 +982,7 @@ class ApiClient {
     return response.data;
   }
 
-  async followLeader(leaderId: string, data: { copyMode: 'AUTOMATIC' | 'MANUAL'; fixedAmount: number; maxDailyTrades?: number }): Promise<CopyTradingFollower> {
+  async followLeader(leaderId: string, data: FollowLeaderInput): Promise<CopyTradingFollower> {
     const response = await this.post<ApiResponse<CopyTradingFollower>>(`/copy-trading/follow/${leaderId}`, data);
     return response.data;
   }
@@ -985,7 +991,7 @@ class ApiClient {
     await this.delete(`/copy-trading/follow/${leaderId}`);
   }
 
-  async updateFollowSettings(leaderId: string, data: { copyMode?: 'AUTOMATIC' | 'MANUAL'; fixedAmount?: number; maxDailyTrades?: number; isActive?: boolean }): Promise<CopyTradingFollower> {
+  async updateFollowSettings(leaderId: string, data: UpdateFollowSettingsInput): Promise<CopyTradingFollower> {
     const response = await this.patch<ApiResponse<CopyTradingFollower>>(`/copy-trading/follow/${leaderId}`, data);
     return response.data;
   }
@@ -1200,11 +1206,7 @@ class ApiClient {
   }
 
   // Simulated Leaders Following API Methods (User)
-  async followSimulatedLeader(leaderId: string, data: {
-    copyMode?: 'AUTOMATIC' | 'MANUAL';
-    fixedAmount?: number;
-    maxDailyTrades?: number;
-  }): Promise<SimulatedLeaderFollower> {
+  async followSimulatedLeader(leaderId: string, data: FollowLeaderInput): Promise<SimulatedLeaderFollower> {
     const response = await this.post<ApiResponse<SimulatedLeaderFollower>>(`/simulated-leaders/follow/${leaderId}`, data);
     return response.data;
   }
@@ -1213,12 +1215,7 @@ class ApiClient {
     await this.delete(`/simulated-leaders/follow/${leaderId}`);
   }
 
-  async updateSimulatedLeaderFollowSettings(leaderId: string, data: {
-    copyMode?: 'AUTOMATIC' | 'MANUAL';
-    fixedAmount?: number;
-    maxDailyTrades?: number;
-    isActive?: boolean;
-  }): Promise<SimulatedLeaderFollower> {
+  async updateSimulatedLeaderFollowSettings(leaderId: string, data: UpdateFollowSettingsInput): Promise<SimulatedLeaderFollower> {
     const response = await this.patch<ApiResponse<SimulatedLeaderFollower>>(`/simulated-leaders/follow/${leaderId}`, data);
     return response.data;
   }
@@ -1424,50 +1421,7 @@ interface CopyTradingLeaderDetail extends CopyTradingLeader {
   }>;
 }
 
-type CopyModeType = 'AUTOMATIC' | 'MANUAL';
-
-interface CopyTradingFollower {
-  id: string;
-  leaderId: string;
-  copyMode: CopyModeType;
-  fixedAmount: number;
-  maxDailyTrades: number;
-  isActive: boolean;
-  totalCopied: number;
-  totalProfit: number;
-  createdAt: string;
-  leader: CopyTradingLeader;
-}
-
-interface FollowerInfo {
-  id: string;
-  followerId: string;
-  copyMode: CopyModeType;
-  fixedAmount: number;
-  maxDailyTrades: number;
-  isActive: boolean;
-  totalCopied: number;
-  totalProfit: number;
-  createdAt: string;
-  follower?: { id: string; name: string; email: string };
-  user?: { id: string; name: string; email: string };
-}
-
-type DirectionType = 'UP' | 'DOWN';
-type PendingStatusType = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
-
-interface PendingCopyTrade {
-  id: string;
-  followerId: string;
-  originalTradeId: string;
-  symbol: string;
-  direction: DirectionType;
-  suggestedAmount: number;
-  status: PendingStatusType;
-  expiresAt: string;
-  createdAt: string;
-  leader?: { displayName: string };
-}
+// CopyTradingFollower, FollowerInfo, and PendingCopyTrade are imported from @/types
 
 interface CopiedTrade {
   id: string;

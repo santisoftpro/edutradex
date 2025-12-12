@@ -49,8 +49,14 @@ interface FollowerRow {
   followerId: string;
   leaderId: string;
   copyMode: string;
+  percentageAmount: number;
   fixedAmount: number;
-  maxDailyTrades: number;
+  dailyLossLimit: number | null;
+  dailyProfitLimit: number | null;
+  dailyLoss: number;
+  dailyProfit: number;
+  maxDailyTrades: number | null;
+  unlimitedTrades: boolean;
   isActive: boolean;
   totalCopied: number;
   totalProfit: number;
@@ -134,6 +140,9 @@ export class CopyExecutionService {
       [leaderId]
     );
 
+    // Get the leader's trade amount for percentage calculations
+    const leaderTradeAmount = originalTrade.amount;
+
     if (followers.length === 0) {
       return results;
     }
@@ -158,13 +167,16 @@ export class CopyExecutionService {
 
         if (shouldResetDaily) {
           await query(
-            `UPDATE "CopyTradingFollower" SET "tradesToday" = 0, "lastTradeDate" = $1, "updatedAt" = $2 WHERE id = $3`,
+            `UPDATE "CopyTradingFollower" SET "tradesToday" = 0, "dailyLoss" = 0, "dailyProfit" = 0, "lastTradeDate" = $1, "updatedAt" = $2 WHERE id = $3`,
             [today, new Date(), follow.id]
           );
           follow.tradesToday = 0;
+          follow.dailyLoss = 0;
+          follow.dailyProfit = 0;
         }
 
-        if (follow.tradesToday >= follow.maxDailyTrades) {
+        // Check daily trade limit (unless unlimited trades is enabled)
+        if (!follow.unlimitedTrades && follow.maxDailyTrades !== null && follow.tradesToday >= follow.maxDailyTrades) {
           results.push({
             followerId: follow.followerId,
             copiedTradeId: null,
@@ -174,7 +186,61 @@ export class CopyExecutionService {
           continue;
         }
 
-        if (follow.fixedAmount > follow.followerBalance) {
+        // For FIXED_AMOUNT mode, check daily loss/profit limits
+        if (follow.copyMode === 'FIXED_AMOUNT') {
+          logger.debug('Checking daily limits for follower', {
+            followerId: follow.followerId,
+            copyMode: follow.copyMode,
+            dailyLoss: follow.dailyLoss,
+            dailyLossLimit: follow.dailyLossLimit,
+            dailyProfit: follow.dailyProfit,
+            dailyProfitLimit: follow.dailyProfitLimit,
+          });
+
+          if (follow.dailyLossLimit !== null && follow.dailyLoss >= follow.dailyLossLimit) {
+            logger.info('Daily loss limit reached for follower', {
+              followerId: follow.followerId,
+              dailyLoss: follow.dailyLoss,
+              dailyLossLimit: follow.dailyLossLimit,
+            });
+            results.push({
+              followerId: follow.followerId,
+              copiedTradeId: null,
+              status: 'skipped',
+              reason: 'Daily loss limit reached',
+            });
+            continue;
+          }
+
+          if (follow.dailyProfitLimit !== null && follow.dailyProfit >= follow.dailyProfitLimit) {
+            logger.info('Daily profit limit reached for follower', {
+              followerId: follow.followerId,
+              dailyProfit: follow.dailyProfit,
+              dailyProfitLimit: follow.dailyProfitLimit,
+            });
+            results.push({
+              followerId: follow.followerId,
+              copiedTradeId: null,
+              status: 'skipped',
+              reason: 'Daily profit limit reached',
+            });
+            continue;
+          }
+        }
+
+        // Calculate trade amount based on copy mode
+        let tradeAmount: number;
+        if (follow.copyMode === 'PERCENTAGE') {
+          // Percentage of leader's trade amount
+          tradeAmount = (leaderTradeAmount * follow.percentageAmount) / 100;
+          // Ensure minimum $1 trade
+          tradeAmount = Math.max(1, Math.round(tradeAmount * 100) / 100);
+        } else {
+          // Fixed amount per trade
+          tradeAmount = follow.fixedAmount;
+        }
+
+        if (tradeAmount > follow.followerBalance) {
           results.push({
             followerId: follow.followerId,
             copiedTradeId: null,
@@ -184,25 +250,18 @@ export class CopyExecutionService {
           continue;
         }
 
-        if (follow.copyMode === 'AUTOMATIC') {
-          const copiedTrade = await this.executeAutomaticCopy(
-            follow,
-            originalTrade,
-            leaderId
-          );
-          results.push({
-            followerId: follow.followerId,
-            copiedTradeId: copiedTrade.id,
-            status: 'copied',
-          });
-        } else {
-          await this.createPendingCopyTrade(follow, originalTrade);
-          results.push({
-            followerId: follow.followerId,
-            copiedTradeId: null,
-            status: 'pending',
-          });
-        }
+        // Both modes now execute automatically
+        const copiedTrade = await this.executeCopyTrade(
+          follow,
+          originalTrade,
+          leaderId,
+          tradeAmount
+        );
+        results.push({
+          followerId: follow.followerId,
+          copiedTradeId: copiedTrade.id,
+          status: 'copied',
+        });
       } catch (error) {
         logger.error('Error copying trade for follower', {
           followerId: follow.followerId,
@@ -227,15 +286,15 @@ export class CopyExecutionService {
     return results;
   }
 
-  private async executeAutomaticCopy(
+  private async executeCopyTrade(
     follow: {
       id: string;
       followerId: string;
-      fixedAmount: number;
       tradesToday: number;
     },
     originalTrade: TradeData,
-    leaderId: string
+    leaderId: string,
+    tradeAmount: number
   ) {
     const payoutPercent = config.trading.defaultPayoutPercentage;
     const tradeId = randomUUID();
@@ -254,7 +313,7 @@ export class CopyExecutionService {
           follow.followerId,
           originalTrade.symbol,
           originalTrade.direction,
-          follow.fixedAmount,
+          tradeAmount,
           originalTrade.entryPrice,
           originalTrade.duration,
           originalTrade.market,
@@ -270,7 +329,7 @@ export class CopyExecutionService {
       // Deduct balance
       await client.query(
         `UPDATE "User" SET "demoBalance" = "demoBalance" - $1, "updatedAt" = $2 WHERE id = $3`,
-        [follow.fixedAmount, now, follow.followerId]
+        [tradeAmount, now, follow.followerId]
       );
 
       // Update follower stats
@@ -288,7 +347,7 @@ export class CopyExecutionService {
     await query(
       `INSERT INTO "CopiedTrade" (id, "followerId", "leaderId", "originalTradeId", "copiedTradeId", amount, "createdAt")
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [copiedTradeRecordId, follow.id, leaderId, originalTrade.id, copiedTrade.id, follow.fixedAmount, now]
+      [copiedTradeRecordId, follow.id, leaderId, originalTrade.id, copiedTrade.id, tradeAmount, now]
     );
 
     this.scheduleTradeSettlement(copiedTrade.id, originalTrade.duration, follow.id, leaderId);
@@ -305,19 +364,22 @@ export class CopyExecutionService {
       originalTradeId: originalTrade.id,
       symbol: originalTrade.symbol,
       direction: originalTrade.direction,
-      amount: follow.fixedAmount,
+      amount: tradeAmount,
       leaderName: leader?.displayName ?? 'Unknown',
     });
 
-    logger.info('Automatic copy trade executed', {
+    logger.info('Copy trade executed', {
       followerId: follow.followerId,
       copiedTradeId: copiedTrade.id,
       originalTradeId: originalTrade.id,
+      amount: tradeAmount,
     });
 
     return copiedTrade;
   }
 
+  // NOTE: This method is kept for backwards compatibility but is no longer used
+  // since both PERCENTAGE and FIXED_AMOUNT modes now execute automatically
   private async createPendingCopyTrade(
     follow: { id: string; followerId: string; fixedAmount: number; leaderId?: string },
     originalTrade: TradeData
@@ -624,12 +686,20 @@ export class CopyExecutionService {
     followRelationId: string,
     leaderId: string
   ): Promise<void> {
+    logger.info('updateCopiedTradeResult called', { tradeId, followRelationId, leaderId });
+
     const trade = await queryOne<TradeRow>(
       `SELECT * FROM "Trade" WHERE id = $1`,
       [tradeId]
     );
 
-    if (!trade || trade.status !== 'CLOSED') {
+    if (!trade) {
+      logger.warn('Trade not found for copied trade update', { tradeId });
+      return;
+    }
+
+    if (trade.status !== 'CLOSED') {
+      logger.warn('Trade not yet closed for copied trade update', { tradeId, status: trade.status });
       return;
     }
 
@@ -642,10 +712,46 @@ export class CopyExecutionService {
         [profit, tradeId]
       );
 
-      await client.query(
-        `UPDATE "CopyTradingFollower" SET "totalProfit" = "totalProfit" + $1, "updatedAt" = $3 WHERE id = $2`,
-        [profit, followRelationId, now]
-      );
+      // Update total profit and daily profit/loss tracking
+      if (profit >= 0) {
+        logger.info('Updating daily profit for follower', {
+          followRelationId,
+          tradeId,
+          profit,
+          type: 'profit',
+        });
+        await client.query(
+          `UPDATE "CopyTradingFollower" SET "totalProfit" = "totalProfit" + $1, "dailyProfit" = "dailyProfit" + $1, "updatedAt" = $3 WHERE id = $2`,
+          [profit, followRelationId, now]
+        );
+      } else {
+        logger.info('Updating daily loss for follower', {
+          followRelationId,
+          tradeId,
+          profit,
+          dailyLossAmount: Math.abs(profit),
+          type: 'loss',
+        });
+        await client.query(
+          `UPDATE "CopyTradingFollower" SET "totalProfit" = "totalProfit" + $1, "dailyLoss" = "dailyLoss" + $2, "updatedAt" = $3 WHERE id = $4`,
+          [profit, Math.abs(profit), now, followRelationId]
+        );
+      }
+    });
+
+    // Fetch and log the updated follower state
+    const updatedFollower = await queryOne<{ dailyLoss: number; dailyProfit: number; dailyLossLimit: number | null; dailyProfitLimit: number | null }>(
+      `SELECT "dailyLoss", "dailyProfit", "dailyLossLimit", "dailyProfitLimit" FROM "CopyTradingFollower" WHERE id = $1`,
+      [followRelationId]
+    );
+    logger.info('Copied trade result updated - follower state', {
+      tradeId,
+      followRelationId,
+      tradeProfit: profit,
+      followerDailyLoss: updatedFollower?.dailyLoss,
+      followerDailyProfit: updatedFollower?.dailyProfit,
+      followerDailyLossLimit: updatedFollower?.dailyLossLimit,
+      followerDailyProfitLimit: updatedFollower?.dailyProfitLimit,
     });
   }
 

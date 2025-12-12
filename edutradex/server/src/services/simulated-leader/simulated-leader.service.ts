@@ -281,8 +281,12 @@ class SimulatedLeaderService {
     simulatedLeaderId: string,
     settings: {
       copyMode?: string;
+      percentageAmount?: number;
       fixedAmount?: number;
-      maxDailyTrades?: number;
+      dailyLossLimit?: number | null;
+      dailyProfitLimit?: number | null;
+      maxDailyTrades?: number | null;
+      unlimitedTrades?: boolean;
     }
   ): Promise<SimulatedLeaderFollower> {
     const leader = await prisma.simulatedLeader.findUnique({
@@ -313,9 +317,13 @@ class SimulatedLeaderService {
       data: {
         userId,
         simulatedLeaderId,
-        copyMode: settings.copyMode || 'AUTOMATIC',
-        fixedAmount: settings.fixedAmount || 10,
-        maxDailyTrades: settings.maxDailyTrades || 50,
+        copyMode: settings.copyMode || 'PERCENTAGE',
+        percentageAmount: settings.percentageAmount ?? 100,
+        fixedAmount: settings.fixedAmount ?? 10,
+        dailyLossLimit: settings.dailyLossLimit ?? undefined,
+        dailyProfitLimit: settings.dailyProfitLimit ?? undefined,
+        maxDailyTrades: settings.unlimitedTrades ? undefined : (settings.maxDailyTrades ?? 50),
+        unlimitedTrades: settings.unlimitedTrades ?? false,
         isActive: true,
       },
     });
@@ -370,8 +378,12 @@ class SimulatedLeaderService {
     simulatedLeaderId: string,
     settings: {
       copyMode?: string;
+      percentageAmount?: number;
       fixedAmount?: number;
-      maxDailyTrades?: number;
+      dailyLossLimit?: number | null;
+      dailyProfitLimit?: number | null;
+      maxDailyTrades?: number | null;
+      unlimitedTrades?: boolean;
       isActive?: boolean;
     }
   ): Promise<SimulatedLeaderFollower> {
@@ -385,9 +397,19 @@ class SimulatedLeaderService {
       throw new Error('Not following this leader');
     }
 
+    // Build update data
+    const updateData: any = { ...settings };
+
+    // Handle unlimited trades toggle
+    if (settings.unlimitedTrades !== undefined) {
+      if (settings.unlimitedTrades) {
+        updateData.maxDailyTrades = null;
+      }
+    }
+
     return prisma.simulatedLeaderFollower.update({
       where: { id: follower.id },
-      data: settings,
+      data: updateData,
     });
   }
 

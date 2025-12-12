@@ -285,10 +285,28 @@ model CopyTradingFollower {
   leaderId   String
   leader     CopyTradingLeader @relation(fields: [leaderId], references: [id], onDelete: Cascade)
 
-  copyMode       String  @default("AUTOMATIC")
-  fixedAmount    Float
-  maxDailyTrades Int     @default(50)
-  isActive       Boolean @default(true)
+  // Mode: "PERCENTAGE" or "FIXED_AMOUNT"
+  copyMode         String  @default("PERCENTAGE")
+
+  // For PERCENTAGE mode - percentage of leader's trade amount (e.g., 50, 100, 150)
+  percentageAmount Float   @default(100)
+
+  // For FIXED_AMOUNT mode - fixed $ amount per trade
+  fixedAmount      Float   @default(10)
+
+  // For FIXED_AMOUNT mode - daily limits (null = no limit)
+  dailyLossLimit   Float?
+  dailyProfitLimit Float?
+
+  // Daily tracking counters (reset daily)
+  dailyLoss        Float   @default(0)
+  dailyProfit      Float   @default(0)
+
+  // Max trades per day (null when unlimitedTrades is true)
+  maxDailyTrades   Int?    @default(50)
+  unlimitedTrades  Boolean @default(false)
+
+  isActive         Boolean @default(true)
 
   tradesToday    Int      @default(0)
   lastTradeDate  DateTime?
@@ -550,9 +568,23 @@ model SimulatedLeaderFollower {
   simulatedLeader     SimulatedLeader @relation(fields: [simulatedLeaderId], references: [id], onDelete: Cascade)
 
   // Copy settings (display only, no real trades)
-  copyMode            String          @default("AUTOMATIC")
+  // Mode: "PERCENTAGE" or "FIXED_AMOUNT"
+  copyMode            String          @default("PERCENTAGE")
+
+  // For PERCENTAGE mode - percentage of leader's trade amount
+  percentageAmount    Float           @default(100)
+
+  // For FIXED_AMOUNT mode - fixed $ amount per trade
   fixedAmount         Float           @default(10)
-  maxDailyTrades      Int             @default(50)
+
+  // For FIXED_AMOUNT mode - daily limits (null = no limit)
+  dailyLossLimit      Float?
+  dailyProfitLimit    Float?
+
+  // Max trades per day (null when unlimitedTrades is true)
+  maxDailyTrades      Int?            @default(50)
+  unlimitedTrades     Boolean         @default(false)
+
   isActive            Boolean         @default(true)
 
   createdAt           DateTime        @default(now())
