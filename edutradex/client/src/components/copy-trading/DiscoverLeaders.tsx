@@ -7,6 +7,7 @@ import {
   Check,
   Activity,
   ChevronRight,
+  Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -39,6 +40,7 @@ export function DiscoverLeaders({ onFollowSuccess }: DiscoverLeadersProps) {
   const [realLeaders, setRealLeaders] = useState<CopyTradingLeader[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sortBy, setSortBy] = useState<SortOption>('totalProfit');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedLeader, setSelectedLeader] = useState<CopyTradingLeader | null>(null);
   const [showFollowModal, setShowFollowModal] = useState(false);
 
@@ -140,6 +142,14 @@ export function DiscoverLeaders({ onFollowSuccess }: DiscoverLeadersProps) {
     return combined;
   }, [realLeaders, simulatedLeaders, animatedStats, fakeActivityEnabled, sortBy, followingSimulatedIds]);
 
+  const filteredLeaders = useMemo(() => {
+    if (!searchQuery.trim()) return allLeaders;
+    const query = searchQuery.toLowerCase().trim();
+    return allLeaders.filter((leader) =>
+      leader.displayName.toLowerCase().includes(query)
+    );
+  }, [allLeaders, searchQuery]);
+
   const handleFollowClick = (leader: DisplayLeader) => {
     if (leader.isSimulated) {
       const simulatedLeader = simulatedLeaders.find((l) => l.id === leader.id);
@@ -188,6 +198,18 @@ export function DiscoverLeaders({ onFollowSuccess }: DiscoverLeadersProps) {
         <LiveActivityTicker activities={activities} />
       )}
 
+      {/* Search Input */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search leaders..."
+          className="w-full pl-10 pr-4 py-2.5 bg-slate-800/50 border border-slate-700/50 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-slate-600"
+        />
+      </div>
+
       {/* Sort Pills */}
       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
         {sortOptions.map((option) => (
@@ -211,15 +233,15 @@ export function DiscoverLeaders({ onFollowSuccess }: DiscoverLeadersProps) {
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
         </div>
-      ) : allLeaders.length === 0 ? (
+      ) : filteredLeaders.length === 0 ? (
         <div className="text-center py-20">
           <TrendingUp className="h-12 w-12 text-slate-600 mx-auto" />
           <p className="text-slate-400 mt-4">No leaders found</p>
-          <p className="text-slate-500 text-sm mt-1">Check back later</p>
+          <p className="text-slate-500 text-sm mt-1">{searchQuery ? 'Try a different search' : 'Check back later'}</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {allLeaders.map((leader, index) => (
+          {filteredLeaders.map((leader, index) => (
             <LeaderCard
               key={leader.id}
               leader={leader}

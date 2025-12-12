@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   History,
   ArrowUp,
@@ -10,6 +10,7 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Search,
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -22,6 +23,7 @@ export function CopyHistory() {
   const [trades, setTrades] = useState<CopiedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<FilterStatus>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     loadHistory();
@@ -39,13 +41,30 @@ export function CopyHistory() {
     }
   };
 
-  const filteredTrades = trades.filter((trade) => {
-    if (filter === 'all') return true;
-    if (filter === 'won') return trade.copiedTrade?.result === 'WIN';
-    if (filter === 'lost') return trade.copiedTrade?.result === 'LOSS';
-    if (filter === 'open') return trade.copiedTrade?.result === null;
-    return true;
-  });
+  const filteredTrades = useMemo(() => {
+    let result = trades;
+
+    // Apply status filter
+    if (filter !== 'all') {
+      result = result.filter((trade) => {
+        if (filter === 'won') return trade.copiedTrade?.result === 'WIN';
+        if (filter === 'lost') return trade.copiedTrade?.result === 'LOSS';
+        if (filter === 'open') return trade.copiedTrade?.result === null;
+        return true;
+      });
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter((trade) =>
+        trade.copiedTrade?.symbol?.toLowerCase().includes(query) ||
+        trade.leader?.displayName?.toLowerCase().includes(query)
+      );
+    }
+
+    return result;
+  }, [trades, filter, searchQuery]);
 
   const stats = {
     total: trades.length,
@@ -106,29 +125,41 @@ export function CopyHistory() {
         </div>
       </div>
 
-      {/* Filter */}
-      <div className="flex items-center gap-2">
-        <Filter className="h-4 w-4 text-slate-400" />
-        <div className="flex gap-1 bg-slate-800/50 rounded-lg p-1 border border-slate-700/50">
-          {([
-            { value: 'all', label: 'All' },
-            { value: 'won', label: 'Won' },
-            { value: 'lost', label: 'Lost' },
-            { value: 'open', label: 'Open' },
-          ] as const).map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setFilter(opt.value)}
-              className={cn(
-                'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-                filter === opt.value
-                  ? 'bg-emerald-600 text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
+      {/* Search and Filter */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by symbol or leader..."
+            className="w-full pl-10 pr-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-slate-600"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-slate-400" />
+          <div className="flex gap-1 bg-slate-800/50 rounded-lg p-1 border border-slate-700/50">
+            {([
+              { value: 'all', label: 'All' },
+              { value: 'won', label: 'Won' },
+              { value: 'lost', label: 'Lost' },
+              { value: 'open', label: 'Open' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setFilter(opt.value)}
+                className={cn(
+                  'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                  filter === opt.value
+                    ? 'bg-emerald-600 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -136,7 +167,7 @@ export function CopyHistory() {
       <div className="space-y-2">
         {filteredTrades.length === 0 ? (
           <div className="text-center py-8 text-slate-400 text-sm">
-            No trades match the filter
+            {searchQuery ? 'No trades match your search' : 'No trades match the filter'}
           </div>
         ) : (
           filteredTrades.map((trade) => (

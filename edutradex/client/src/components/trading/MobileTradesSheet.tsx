@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   X,
   Clock,
@@ -10,6 +10,7 @@ import {
   CheckCircle,
   XCircle,
   ChevronDown,
+  Search,
 } from 'lucide-react';
 import { useTradeStore, Trade } from '@/store/trade.store';
 import { PriceTick } from '@/lib/api';
@@ -38,6 +39,7 @@ function formatPrice(price: number, symbol: string): string {
 export function MobileTradesSheet({ isOpen, onClose, latestPrices }: MobileTradesSheetProps) {
   const [activeTab, setActiveTab] = useState<TabType>('opened');
   const [isClient, setIsClient] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { activeTrades, trades } = useTradeStore();
 
   // Prevent hydration mismatch - only render on client side
@@ -48,6 +50,22 @@ export function MobileTradesSheet({ isOpen, onClose, latestPrices }: MobileTrade
   const closedTrades = trades
     .filter(t => t.status === 'won' || t.status === 'lost')
     .slice(0, 20);
+
+  const filteredActiveTrades = useMemo(() => {
+    if (!searchQuery.trim()) return activeTrades;
+    const query = searchQuery.toLowerCase().trim();
+    return activeTrades.filter((trade) =>
+      trade.symbol.toLowerCase().includes(query)
+    );
+  }, [activeTrades, searchQuery]);
+
+  const filteredClosedTrades = useMemo(() => {
+    if (!searchQuery.trim()) return closedTrades;
+    const query = searchQuery.toLowerCase().trim();
+    return closedTrades.filter((trade) =>
+      trade.symbol.toLowerCase().includes(query)
+    );
+  }, [closedTrades, searchQuery]);
 
   if (!isOpen || !isClient) return null;
 
@@ -75,6 +93,20 @@ export function MobileTradesSheet({ isOpen, onClose, latestPrices }: MobileTrade
           >
             <X className="h-4 w-4 text-gray-400" />
           </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-2.5 pt-2.5">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search symbol..."
+              className="w-full pl-9 pr-3 py-2 bg-[#252542] border border-[#3d3d5c] rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+            />
+          </div>
         </div>
 
         {/* Tabs */}
@@ -116,9 +148,9 @@ export function MobileTradesSheet({ isOpen, onClose, latestPrices }: MobileTrade
         {/* Content */}
         <div className="flex-1 overflow-y-auto pb-safe">
           {activeTab === 'opened' ? (
-            <MobileOpenedTrades trades={activeTrades} latestPrices={latestPrices} />
+            <MobileOpenedTrades trades={filteredActiveTrades} latestPrices={latestPrices} searchQuery={searchQuery} />
           ) : (
-            <MobileClosedTrades trades={closedTrades} />
+            <MobileClosedTrades trades={filteredClosedTrades} searchQuery={searchQuery} />
           )}
         </div>
       </div>
@@ -126,15 +158,15 @@ export function MobileTradesSheet({ isOpen, onClose, latestPrices }: MobileTrade
   );
 }
 
-function MobileOpenedTrades({ trades, latestPrices }: { trades: Trade[]; latestPrices: Map<string, any> }) {
+function MobileOpenedTrades({ trades, latestPrices, searchQuery }: { trades: Trade[]; latestPrices: Map<string, any>; searchQuery: string }) {
   if (trades.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-gray-500">
         <div className="w-16 h-16 rounded-full bg-[#252542] flex items-center justify-center mb-3">
           <Clock className="h-8 w-8 opacity-50" />
         </div>
-        <p className="text-sm font-medium text-gray-400">No open trades</p>
-        <p className="text-xs text-gray-500 mt-1">Place a trade to see it here</p>
+        <p className="text-sm font-medium text-gray-400">{searchQuery ? 'No matches' : 'No open trades'}</p>
+        <p className="text-xs text-gray-500 mt-1">{searchQuery ? 'Try a different symbol' : 'Place a trade to see it here'}</p>
       </div>
     );
   }
@@ -307,15 +339,15 @@ function MobileOpenedTradeCard({ trade, currentPrice }: { trade: Trade; currentP
   );
 }
 
-function MobileClosedTrades({ trades }: { trades: Trade[] }) {
+function MobileClosedTrades({ trades, searchQuery }: { trades: Trade[]; searchQuery: string }) {
   if (trades.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-gray-500">
         <div className="w-16 h-16 rounded-full bg-[#252542] flex items-center justify-center mb-3">
           <History className="h-8 w-8 opacity-50" />
         </div>
-        <p className="text-sm font-medium text-gray-400">No trade history</p>
-        <p className="text-xs text-gray-500 mt-1">Completed trades appear here</p>
+        <p className="text-sm font-medium text-gray-400">{searchQuery ? 'No matches' : 'No trade history'}</p>
+        <p className="text-xs text-gray-500 mt-1">{searchQuery ? 'Try a different symbol' : 'Completed trades appear here'}</p>
       </div>
     );
   }

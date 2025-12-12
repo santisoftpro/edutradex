@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Users,
   Settings,
@@ -13,6 +13,7 @@ import {
   Infinity,
   ChevronDown,
   X,
+  Search,
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -28,6 +29,7 @@ export function MyFollowing({ onRefreshStats }: MyFollowingProps) {
   const [simulatedFollowing, setSimulatedFollowing] = useState<SimulatedLeaderFollowingInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const loadFollowing = useCallback(async () => {
     setIsLoading(true);
@@ -115,6 +117,26 @@ export function MyFollowing({ onRefreshStats }: MyFollowingProps) {
     }
   };
 
+  const totalFollowing = following.length + simulatedFollowing.length;
+
+  const filteredFollowing = useMemo(() => {
+    if (!searchQuery.trim()) return following;
+    const query = searchQuery.toLowerCase().trim();
+    return following.filter((f) =>
+      f.leader.displayName.toLowerCase().includes(query)
+    );
+  }, [following, searchQuery]);
+
+  const filteredSimulatedFollowing = useMemo(() => {
+    if (!searchQuery.trim()) return simulatedFollowing;
+    const query = searchQuery.toLowerCase().trim();
+    return simulatedFollowing.filter((f) =>
+      f.simulatedLeader.displayName.toLowerCase().includes(query)
+    );
+  }, [simulatedFollowing, searchQuery]);
+
+  const hasResults = filteredFollowing.length > 0 || filteredSimulatedFollowing.length > 0;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -122,8 +144,6 @@ export function MyFollowing({ onRefreshStats }: MyFollowingProps) {
       </div>
     );
   }
-
-  const totalFollowing = following.length + simulatedFollowing.length;
 
   if (totalFollowing === 0) {
     return (
@@ -137,29 +157,50 @@ export function MyFollowing({ onRefreshStats }: MyFollowingProps) {
 
   return (
     <div className="space-y-3">
-      {following.map((follow) => (
-        <FollowingCard
-          key={follow.id}
-          follow={follow}
-          isEditing={editingId === follow.id}
-          onEdit={() => setEditingId(editingId === follow.id ? null : follow.id)}
-          onUnfollow={() => handleUnfollow(follow.leaderId, follow.leader.displayName)}
-          onToggleActive={() => handleToggleActive(follow.leaderId, follow.isActive)}
-          onUpdateSettings={(settings) => handleUpdateSettings(follow.leaderId, settings)}
+      {/* Search Input */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search followed leaders..."
+          className="w-full pl-10 pr-4 py-2.5 bg-slate-800/50 border border-slate-700/50 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-slate-600"
         />
-      ))}
+      </div>
 
-      {simulatedFollowing.map((follow) => (
-        <SimulatedFollowingCard
-          key={follow.id}
-          follow={follow}
-          isEditing={editingId === `sim-${follow.id}`}
-          onEdit={() => setEditingId(editingId === `sim-${follow.id}` ? null : `sim-${follow.id}`)}
-          onUnfollow={() => handleUnfollowSimulated(follow.simulatedLeaderId, follow.simulatedLeader.displayName)}
-          onToggleActive={() => handleToggleSimulatedActive(follow.simulatedLeaderId, follow.isActive)}
-          onUpdateSettings={(settings) => handleUpdateSimulatedSettings(follow.simulatedLeaderId, settings)}
-        />
-      ))}
+      {!hasResults ? (
+        <div className="text-center py-12">
+          <Users className="h-10 w-10 text-slate-600 mx-auto" />
+          <p className="text-slate-400 mt-3 text-sm">No leaders match your search</p>
+        </div>
+      ) : (
+        <>
+          {filteredFollowing.map((follow) => (
+            <FollowingCard
+              key={follow.id}
+              follow={follow}
+              isEditing={editingId === follow.id}
+              onEdit={() => setEditingId(editingId === follow.id ? null : follow.id)}
+              onUnfollow={() => handleUnfollow(follow.leaderId, follow.leader.displayName)}
+              onToggleActive={() => handleToggleActive(follow.leaderId, follow.isActive)}
+              onUpdateSettings={(settings) => handleUpdateSettings(follow.leaderId, settings)}
+            />
+          ))}
+
+          {filteredSimulatedFollowing.map((follow) => (
+            <SimulatedFollowingCard
+              key={follow.id}
+              follow={follow}
+              isEditing={editingId === `sim-${follow.id}`}
+              onEdit={() => setEditingId(editingId === `sim-${follow.id}` ? null : `sim-${follow.id}`)}
+              onUnfollow={() => handleUnfollowSimulated(follow.simulatedLeaderId, follow.simulatedLeader.displayName)}
+              onToggleActive={() => handleToggleSimulatedActive(follow.simulatedLeaderId, follow.isActive)}
+              onUpdateSettings={(settings) => handleUpdateSimulatedSettings(follow.simulatedLeaderId, settings)}
+            />
+          ))}
+        </>
+      )}
     </div>
   );
 }

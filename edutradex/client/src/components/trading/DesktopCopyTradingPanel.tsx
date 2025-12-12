@@ -15,6 +15,7 @@ import {
   Percent,
   DollarSign,
   Infinity,
+  Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -54,6 +55,7 @@ export function DesktopCopyTradingPanel({ isOpen, onClose }: DesktopCopyTradingP
   const [realLeaders, setRealLeaders] = useState<CopyTradingLeader[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sortBy, setSortBy] = useState<SortOption>('totalProfit');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [selectedLeader, setSelectedLeader] = useState<CopyTradingLeader | null>(null);
   const [showFollowModal, setShowFollowModal] = useState(false);
@@ -160,6 +162,14 @@ export function DesktopCopyTradingPanel({ isOpen, onClose }: DesktopCopyTradingP
     return combined;
   }, [realLeaders, simulatedLeaders, animatedStats, fakeActivityEnabled, sortBy, followingSimulatedIds]);
 
+  const filteredLeaders = useMemo(() => {
+    if (!searchQuery.trim()) return allLeaders;
+    const query = searchQuery.toLowerCase().trim();
+    return allLeaders.filter((leader) =>
+      leader.displayName.toLowerCase().includes(query)
+    );
+  }, [allLeaders, searchQuery]);
+
   const handleFollowClick = (leader: DisplayLeader) => {
     if (leader.isSimulated) {
       const simLeader = simulatedLeaders.find((l) => l.id === leader.id);
@@ -252,9 +262,21 @@ export function DesktopCopyTradingPanel({ isOpen, onClose }: DesktopCopyTradingP
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
           {activeTab === 'discover' && (
             <div className="p-3 space-y-3">
+              {/* Search Input */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search leaders..."
+                  className="w-full pl-8 pr-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-600"
+                />
+              </div>
+
               {/* Sort Pills */}
               <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
                 {sortOptions.map((option) => (
@@ -278,14 +300,14 @@ export function DesktopCopyTradingPanel({ isOpen, onClose }: DesktopCopyTradingP
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
                 </div>
-              ) : allLeaders.length === 0 ? (
+              ) : filteredLeaders.length === 0 ? (
                 <div className="text-center py-12">
                   <Users className="h-10 w-10 text-slate-700 mx-auto" />
-                  <p className="text-slate-500 text-sm mt-2">No leaders found</p>
+                  <p className="text-slate-500 text-sm mt-2">{searchQuery ? 'No matches found' : 'No leaders found'}</p>
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {allLeaders.slice(0, 15).map((leader, index) => (
+                  {filteredLeaders.slice(0, 15).map((leader, index) => (
                     <LeaderRow
                       key={leader.id}
                       leader={leader}
@@ -387,6 +409,7 @@ function FollowingTab({ onRefresh }: { onRefresh: () => void }) {
   const [simulatedFollowing, setSimulatedFollowing] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     loadFollowing();
@@ -407,6 +430,24 @@ function FollowingTab({ onRefresh }: { onRefresh: () => void }) {
       setIsLoading(false);
     }
   };
+
+  const filteredFollowing = useMemo(() => {
+    if (!searchQuery.trim()) return following;
+    const query = searchQuery.toLowerCase().trim();
+    return following.filter((f: any) =>
+      f.leader.displayName.toLowerCase().includes(query)
+    );
+  }, [following, searchQuery]);
+
+  const filteredSimulatedFollowing = useMemo(() => {
+    if (!searchQuery.trim()) return simulatedFollowing;
+    const query = searchQuery.toLowerCase().trim();
+    return simulatedFollowing.filter((f: any) =>
+      f.simulatedLeader.displayName.toLowerCase().includes(query)
+    );
+  }, [simulatedFollowing, searchQuery]);
+
+  const hasResults = filteredFollowing.length > 0 || filteredSimulatedFollowing.length > 0;
 
   const handleUnfollow = async (leaderId: string, isSimulated: boolean, displayName: string) => {
     if (!confirm(`Unfollow ${displayName}?`)) return;
@@ -453,6 +494,8 @@ function FollowingTab({ onRefresh }: { onRefresh: () => void }) {
     }
   };
 
+  const totalFollowing = following.length + simulatedFollowing.length;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -460,8 +503,6 @@ function FollowingTab({ onRefresh }: { onRefresh: () => void }) {
       </div>
     );
   }
-
-  const totalFollowing = following.length + simulatedFollowing.length;
 
   if (totalFollowing === 0) {
     return (
@@ -475,53 +516,74 @@ function FollowingTab({ onRefresh }: { onRefresh: () => void }) {
 
   return (
     <div className="p-3 space-y-2">
-      {following.map((follow: any) => (
-        <FollowingCard
-          key={follow.id}
-          id={follow.id}
-          leaderId={follow.leaderId}
-          displayName={follow.leader.displayName}
-          winRate={follow.leader.winRate}
-          isActive={follow.isActive}
-          isSimulated={false}
-          copyMode={follow.copyMode}
-          percentageAmount={follow.percentageAmount}
-          fixedAmount={follow.fixedAmount}
-          dailyLossLimit={follow.dailyLossLimit}
-          dailyProfitLimit={follow.dailyProfitLimit}
-          maxDailyTrades={follow.maxDailyTrades}
-          unlimitedTrades={follow.unlimitedTrades}
-          isEditing={editingId === follow.id}
-          onEdit={() => setEditingId(editingId === follow.id ? null : follow.id)}
-          onUnfollow={() => handleUnfollow(follow.leaderId, false, follow.leader.displayName)}
-          onToggleActive={() => handleToggleActive(follow.leaderId, false, follow.isActive)}
-          onUpdateSettings={(settings) => handleUpdateSettings(follow.leaderId, false, settings)}
+      {/* Search Input */}
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search followed leaders..."
+          className="w-full pl-8 pr-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-600"
         />
-      ))}
+      </div>
 
-      {simulatedFollowing.map((follow: any) => (
-        <FollowingCard
-          key={follow.id}
-          id={follow.id}
-          leaderId={follow.simulatedLeaderId}
-          displayName={follow.simulatedLeader.displayName}
-          winRate={follow.simulatedLeader.winRate}
-          isActive={follow.isActive}
-          isSimulated={true}
-          copyMode={follow.copyMode}
-          percentageAmount={follow.percentageAmount}
-          fixedAmount={follow.fixedAmount}
-          dailyLossLimit={follow.dailyLossLimit}
-          dailyProfitLimit={follow.dailyProfitLimit}
-          maxDailyTrades={follow.maxDailyTrades}
-          unlimitedTrades={follow.unlimitedTrades}
-          isEditing={editingId === `sim-${follow.id}`}
-          onEdit={() => setEditingId(editingId === `sim-${follow.id}` ? null : `sim-${follow.id}`)}
-          onUnfollow={() => handleUnfollow(follow.simulatedLeaderId, true, follow.simulatedLeader.displayName)}
-          onToggleActive={() => handleToggleActive(follow.simulatedLeaderId, true, follow.isActive)}
-          onUpdateSettings={(settings) => handleUpdateSettings(follow.simulatedLeaderId, true, settings)}
-        />
-      ))}
+      {!hasResults ? (
+        <div className="text-center py-8">
+          <Star className="h-8 w-8 text-slate-700 mx-auto" />
+          <p className="text-slate-500 text-sm mt-2">No matches found</p>
+        </div>
+      ) : (
+        <>
+          {filteredFollowing.map((follow: any) => (
+            <FollowingCard
+              key={follow.id}
+              id={follow.id}
+              leaderId={follow.leaderId}
+              displayName={follow.leader.displayName}
+              winRate={follow.leader.winRate}
+              isActive={follow.isActive}
+              isSimulated={false}
+              copyMode={follow.copyMode}
+              percentageAmount={follow.percentageAmount}
+              fixedAmount={follow.fixedAmount}
+              dailyLossLimit={follow.dailyLossLimit}
+              dailyProfitLimit={follow.dailyProfitLimit}
+              maxDailyTrades={follow.maxDailyTrades}
+              unlimitedTrades={follow.unlimitedTrades}
+              isEditing={editingId === follow.id}
+              onEdit={() => setEditingId(editingId === follow.id ? null : follow.id)}
+              onUnfollow={() => handleUnfollow(follow.leaderId, false, follow.leader.displayName)}
+              onToggleActive={() => handleToggleActive(follow.leaderId, false, follow.isActive)}
+              onUpdateSettings={(settings) => handleUpdateSettings(follow.leaderId, false, settings)}
+            />
+          ))}
+
+          {filteredSimulatedFollowing.map((follow: any) => (
+            <FollowingCard
+              key={follow.id}
+              id={follow.id}
+              leaderId={follow.simulatedLeaderId}
+              displayName={follow.simulatedLeader.displayName}
+              winRate={follow.simulatedLeader.winRate}
+              isActive={follow.isActive}
+              isSimulated={true}
+              copyMode={follow.copyMode}
+              percentageAmount={follow.percentageAmount}
+              fixedAmount={follow.fixedAmount}
+              dailyLossLimit={follow.dailyLossLimit}
+              dailyProfitLimit={follow.dailyProfitLimit}
+              maxDailyTrades={follow.maxDailyTrades}
+              unlimitedTrades={follow.unlimitedTrades}
+              isEditing={editingId === `sim-${follow.id}`}
+              onEdit={() => setEditingId(editingId === `sim-${follow.id}` ? null : `sim-${follow.id}`)}
+              onUnfollow={() => handleUnfollow(follow.simulatedLeaderId, true, follow.simulatedLeader.displayName)}
+              onToggleActive={() => handleToggleActive(follow.simulatedLeaderId, true, follow.isActive)}
+              onUpdateSettings={(settings) => handleUpdateSettings(follow.simulatedLeaderId, true, settings)}
+            />
+          ))}
+        </>
+      )}
     </div>
   );
 }
