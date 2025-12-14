@@ -9,8 +9,8 @@ interface ReferralPageProps {
 export async function generateMetadata({ params }: ReferralPageProps): Promise<Metadata> {
   const { code } = await params;
 
-  const title = 'Join OptigoBroker & Earn 10% Bonus on Profits!';
-  const description = `You've been invited to join OptigoBroker! Sign up with referral code ${code} and start trading crypto, forex, and stocks. Earn commissions on profitable trades.`;
+  const title = '💰 Earn 10% for Every Referral | Join OptigoBroker Now!';
+  const description = `🚀 You're invited! Sign up with code ${code} and get instant access to Forex, Crypto & Stocks trading. Start earning today with OptigoBroker's powerful platform. 📈`;
 
   // Base URL - update this for production
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://optigobroker.com';
@@ -19,37 +19,62 @@ export async function generateMetadata({ params }: ReferralPageProps): Promise<M
   return {
     title,
     description,
-    keywords: ['trading', 'forex', 'crypto', 'stocks', 'binary options', 'referral', 'bonus', 'commission'],
+    keywords: [
+      'trading platform',
+      'forex trading',
+      'crypto trading',
+      'stock trading',
+      'binary options',
+      'referral program',
+      'affiliate bonus',
+      'earn commission',
+      'optigobroker',
+      'online trading',
+      'trading referral',
+      'make money online',
+    ],
     authors: [{ name: 'OptigoBroker' }],
     openGraph: {
       type: 'website',
       locale: 'en_US',
       url: `${baseUrl}/ref/${code}`,
       siteName: 'OptigoBroker',
-      title,
-      description,
+      title: '🎁 Earn 10% Commission for Every Referral!',
+      description: `Join OptigoBroker with referral code ${code}. Access 200+ markets including Forex, Crypto, Stocks & Commodities. Start trading with instant execution and 24/7 support!`,
       images: [
         {
           url: ogImageUrl,
           width: 1200,
           height: 630,
-          alt: 'Join OptigoBroker - Earn 10% Referral Bonus',
+          alt: 'OptigoBroker Referral - Earn 10% for Every Referral',
+          type: 'image/png',
         },
       ],
     },
     twitter: {
       card: 'summary_large_image',
-      title,
-      description,
+      title: '💰 Earn 10% Commission | OptigoBroker Referral',
+      description: `Get started with trading! Use code ${code} to join OptigoBroker - Trade Forex, Crypto & Stocks with up to 98% payouts. 🚀`,
       images: [ogImageUrl],
       creator: '@optigobroker',
+      site: '@optigobroker',
     },
     robots: {
       index: true,
       follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        'max-video-preview': -1,
+        'max-image-preview': 'large',
+        'max-snippet': -1,
+      },
     },
     alternates: {
       canonical: `${baseUrl}/ref/${code}`,
+    },
+    verification: {
+      google: 'your-google-verification-code',
     },
   };
 }
