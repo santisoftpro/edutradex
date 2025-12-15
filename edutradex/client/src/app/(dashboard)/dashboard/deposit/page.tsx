@@ -153,6 +153,7 @@ export default function DepositPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [lastSubmittedDepositId, setLastSubmittedDepositId] = useState<string | null>(null);
 
   // Form state
   const [amount, setAmount] = useState('');
@@ -240,22 +241,28 @@ export default function DepositPage() {
 
     setIsSubmitting(true);
     try {
+      let depositResult;
       if (selectedMethod.type === 'MOBILE_MONEY') {
         if (!phoneNumber || phoneNumber.length < 10) {
           toast.error('Please enter a valid phone number');
           setIsSubmitting(false);
           return;
         }
-        await api.createMobileMoneyDeposit({
+        depositResult = await api.createMobileMoneyDeposit({
           amount: amountNum,
           phoneNumber,
           mobileProvider: selectedMethod.mobileProvider as any,
         });
       } else {
-        await api.createCryptoDeposit({
+        depositResult = await api.createCryptoDeposit({
           amount: amountNum,
           cryptoCurrency: selectedMethod.cryptoCurrency as any,
         });
+      }
+
+      // Store the deposit ID to track its status
+      if (depositResult?.id) {
+        setLastSubmittedDepositId(depositResult.id);
       }
 
       setStep(3);
@@ -276,6 +283,7 @@ export default function DepositPage() {
     setAmount('');
     setPhoneNumber('');
     setShowQR(false);
+    setLastSubmittedDepositId(null);
   };
 
   const categories: { id: PaymentCategory; label: string; icon: React.ReactNode }[] = [
@@ -589,30 +597,83 @@ export default function DepositPage() {
             )}
 
             {/* Step 3: Confirmation */}
-            {step === 3 && (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 sm:p-6 text-center">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                  <Loader2 className="h-7 w-7 sm:h-8 sm:w-8 text-amber-400 animate-spin" />
+            {step === 3 && (() => {
+              // Find the last submitted deposit to check its status
+              const currentDeposit = lastSubmittedDepositId
+                ? deposits.find(d => d.id === lastSubmittedDepositId)
+                : deposits[0]; // Fallback to most recent deposit
+
+              const isApproved = currentDeposit?.status === 'APPROVED';
+              const isRejected = currentDeposit?.status === 'REJECTED';
+
+              return (
+                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 sm:p-6 text-center">
+                  {isApproved ? (
+                    <>
+                      {/* Approved State */}
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                        <CheckCircle className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-400" />
+                      </div>
+                      <h2 className="text-base sm:text-lg font-bold text-white mb-1">Deposit Completed!</h2>
+                      <p className="text-slate-400 text-xs sm:text-sm mb-2">
+                        Your deposit has been approved and credited to your account.
+                      </p>
+                      <div className="bg-emerald-900/20 border border-emerald-900/30 rounded-lg p-2.5 sm:p-3 mb-3 sm:mb-4">
+                        <p className="text-slate-300 text-xs sm:text-sm font-medium">Amount Credited</p>
+                        <p className="text-emerald-400 text-base sm:text-lg font-bold">{formatCurrency(currentDeposit.amount)}</p>
+                      </div>
+                      {currentDeposit.adminNote && (
+                        <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-2.5 sm:p-3 mb-3 sm:mb-4">
+                          <p className="text-slate-300 text-xs font-medium mb-1">Admin Note:</p>
+                          <p className="text-slate-400 text-xs">{currentDeposit.adminNote}</p>
+                        </div>
+                      )}
+                    </>
+                  ) : isRejected ? (
+                    <>
+                      {/* Rejected State */}
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                        <XCircle className="h-7 w-7 sm:h-8 sm:w-8 text-red-400" />
+                      </div>
+                      <h2 className="text-base sm:text-lg font-bold text-white mb-1">Deposit Rejected</h2>
+                      <p className="text-slate-400 text-xs sm:text-sm mb-2">
+                        Unfortunately, your deposit request was not approved.
+                      </p>
+                      {currentDeposit.adminNote && (
+                        <div className="bg-red-900/20 border border-red-900/30 rounded-lg p-2.5 sm:p-3 mb-3 sm:mb-4">
+                          <p className="text-slate-300 text-xs font-medium mb-1">Reason:</p>
+                          <p className="text-red-300 text-xs">{currentDeposit.adminNote}</p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {/* Pending State */}
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                        <Loader2 className="h-7 w-7 sm:h-8 sm:w-8 text-amber-400 animate-spin" />
+                      </div>
+                      <h2 className="text-base sm:text-lg font-bold text-white mb-1">Deposit Pending</h2>
+                      <p className="text-slate-400 text-xs sm:text-sm mb-2">
+                        Your deposit request has been submitted and is awaiting approval.
+                      </p>
+                      <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-2.5 sm:p-3 mb-3 sm:mb-4">
+                        <p className="text-slate-300 text-xs sm:text-sm font-medium">Estimated Processing Time</p>
+                        <p className="text-amber-400 text-base sm:text-lg font-bold">5 minutes - 4 hours</p>
+                      </div>
+                      <p className="text-slate-500 text-[10px] sm:text-xs mb-4 sm:mb-6">
+                        You will be notified in real-time when it's processed.
+                      </p>
+                    </>
+                  )}
+                  <button
+                    onClick={handleReset}
+                    className="px-5 sm:px-6 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-all"
+                  >
+                    Make Another Deposit
+                  </button>
                 </div>
-                <h2 className="text-base sm:text-lg font-bold text-white mb-1">Deposit Pending</h2>
-                <p className="text-slate-400 text-xs sm:text-sm mb-2">
-                  Your deposit request has been submitted and is awaiting approval.
-                </p>
-                <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-2.5 sm:p-3 mb-3 sm:mb-4">
-                  <p className="text-slate-300 text-xs sm:text-sm font-medium">Estimated Processing Time</p>
-                  <p className="text-amber-400 text-base sm:text-lg font-bold">5 minutes - 4 hours</p>
-                </div>
-                <p className="text-slate-500 text-[10px] sm:text-xs mb-4 sm:mb-6">
-                  You will be notified in real-time when it's processed.
-                </p>
-                <button
-                  onClick={handleReset}
-                  className="px-5 sm:px-6 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-all"
-                >
-                  Make Another Deposit
-                </button>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Recent Deposits Sidebar */}

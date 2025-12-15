@@ -9,11 +9,23 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://optigobroker.com'),
   title: 'OptigoBroker - Online Trading Platform',
   description: 'Trade Forex and OTC markets with OptigoBroker. Professional trading platform.',
   icons: {
     icon: '/logo.png',
     apple: '/logo.png',
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    siteName: 'OptigoBroker',
+    title: 'OptigoBroker - Online Trading Platform',
+    description: 'Trade Forex and OTC markets with OptigoBroker. Professional trading platform.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    site: '@optigobroker',
   },
   robots: {
     index: true,

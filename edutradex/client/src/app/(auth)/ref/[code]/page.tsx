@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: ReferralPageProps): Promise<M
   const description = `🚀 You're invited! Sign up with code ${code} and get instant access to Forex, Crypto & Stocks trading. Start earning today with OptigoBroker's powerful platform. 📈`;
 
   // Base URL - update this for production
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://optigobroker.com';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://optigobroker.com';
   const ogImageUrl = `${baseUrl}/og-referral.png`;
 
   return {
