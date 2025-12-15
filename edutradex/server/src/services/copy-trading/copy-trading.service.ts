@@ -647,14 +647,27 @@ export class CopyTradingService {
       updates.push(`"dailyProfitLimit" = $${paramIndex++}`);
       params.push(settings.dailyProfitLimit);
     }
-    if (settings.maxDailyTrades !== undefined) {
-      updates.push(`"maxDailyTrades" = $${paramIndex++}`);
-      params.push(settings.maxDailyTrades);
-    }
+
+    // Handle unlimited trades toggle - when enabled, maxDailyTrades must be null
     if (settings.unlimitedTrades !== undefined) {
       updates.push(`"unlimitedTrades" = $${paramIndex++}`);
       params.push(settings.unlimitedTrades);
+
+      if (settings.unlimitedTrades) {
+        // When unlimited is enabled, force maxDailyTrades to null
+        updates.push(`"maxDailyTrades" = $${paramIndex++}`);
+        params.push(null);
+      } else if (settings.maxDailyTrades !== undefined) {
+        // When unlimited is disabled, use the provided maxDailyTrades value
+        updates.push(`"maxDailyTrades" = $${paramIndex++}`);
+        params.push(settings.maxDailyTrades);
+      }
+    } else if (settings.maxDailyTrades !== undefined) {
+      // If unlimitedTrades is not being updated, just update maxDailyTrades if provided
+      updates.push(`"maxDailyTrades" = $${paramIndex++}`);
+      params.push(settings.maxDailyTrades);
     }
+
     if (settings.isActive !== undefined) {
       updates.push(`"isActive" = $${paramIndex++}`);
       params.push(settings.isActive);
