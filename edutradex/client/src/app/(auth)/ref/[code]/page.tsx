@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { redirect } from 'next/navigation';
+import { RedirectToRegister } from './redirect-client';
 
 interface ReferralPageProps {
   params: Promise<{ code: string }>;
@@ -82,6 +82,7 @@ export async function generateMetadata({ params }: ReferralPageProps): Promise<M
 export default async function ReferralPage({ params }: ReferralPageProps) {
   const { code } = await params;
 
-  // Redirect to register page with the referral code
-  redirect(`/register?ref=${code}`);
+  // Render page with metadata, then redirect client-side
+  // This allows crawlers to read the OG tags before redirect happens
+  return <RedirectToRegister code={code} />;
 }
