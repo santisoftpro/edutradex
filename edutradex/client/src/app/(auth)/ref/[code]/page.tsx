@@ -9,8 +9,8 @@ interface ReferralPageProps {
 export async function generateMetadata({ params }: ReferralPageProps): Promise<Metadata> {
   const { code } = await params;
 
-  const title = '💰 Earn 10% for Every Referral | Join OptigoBroker Now!';
-  const description = `🚀 You're invited! Sign up with code ${code} and get instant access to Forex, Crypto & Stocks trading. Start earning today with OptigoBroker's powerful platform. 📈`;
+  const title = 'OptigoBroker! Online Trading Platform';
+  const description = `Start your investment journey with OptigoBroker. Explore new worlds of trading including Forex, Crypto, Stocks & Commodities. Join now and trade with confidence!`;
 
   // Base URL - update this for production
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://optigobroker.com';
