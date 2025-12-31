@@ -100,6 +100,11 @@ function mapApiTradeToTrade(apiTrade: ApiTrade): Trade {
 
 // Helper to get user-specific storage key
 function getUserStorageKey(): string {
+  // Check if we're in a browser environment
+  if (typeof window === 'undefined') {
+    return 'trade-storage';
+  }
+
   // Get userId from auth store (if available) to make storage user-specific
   try {
     const authData = localStorage.getItem('auth-storage');

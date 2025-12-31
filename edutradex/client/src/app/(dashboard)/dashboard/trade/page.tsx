@@ -14,6 +14,7 @@ import { MobileTradingPanel } from '@/components/trading/MobileTradingPanel';
 import { MobileTradesSheet } from '@/components/trading/MobileTradesSheet';
 import { MobileChartSettingsSheet } from '@/components/trading/MobileChartSettingsSheet';
 import { MobileCopyTradingSheet } from '@/components/trading/MobileCopyTradingSheet';
+import { FavoritePairsBar } from '@/components/trading/FavoritePairsBar';
 import { useAuthStore } from '@/store/auth.store';
 import { useTradeStore } from '@/store/trade.store';
 import { useChartStore } from '@/store/chart.store';
@@ -27,7 +28,7 @@ const SELECTED_DURATION_KEY = 'optigobroker-selected-duration';
 export default function TradePage() {
   const { user, syncBalanceFromServer, updateBalance, isHydrated } = useAuthStore();
   const { placeTrade, syncFromApi, activeTrades } = useTradeStore();
-  const { isConnected, latestPrices, priceHistory, subscribe, unsubscribe, subscribeAll } = useWebSocket();
+  const { isConnected, latestPrices, subscribe, unsubscribe, subscribeAll } = useWebSocket();
   const [selectedAsset, setSelectedAsset] = useState('EUR/USD');
   const [currentPrice, setCurrentPrice] = useState<PriceTick | null>(null);
   const [isTradesPanelOpen, setIsTradesPanelOpen] = useState(false);
@@ -228,6 +229,11 @@ export default function TradePage() {
           currentPrice={currentPrice}
           livePrices={latestPrices}
         />
+        <FavoritePairsBar
+          selectedAsset={selectedAsset}
+          onSelectAsset={handleSelectAsset}
+          livePrices={latestPrices}
+        />
       </div>
 
       {/* ===== MOBILE LAYOUT ===== */}
@@ -259,7 +265,6 @@ export default function TradePage() {
             ref={priceChartRef}
             symbol={selectedAsset}
             currentPrice={currentPrice}
-            priceHistory={priceHistory.get(selectedAsset) || []}
             onDrawingsChange={setDrawnLinesCount}
           />
           <ActiveTrades latestPrices={latestPrices} />

@@ -5,6 +5,7 @@ import {
   createChart,
   IChartApi,
   ISeriesApi,
+  IPriceLine,
   Time,
   ColorType,
   CrosshairMode,
@@ -14,6 +15,7 @@ import {
   AreaSeries,
   BarSeries,
   MouseEventParams,
+  SeriesType,
 } from 'lightweight-charts';
 import { ChevronDown, BarChart3, X, Check, TrendingUp, Minus, GitBranch, Trash2, CandlestickChart, LineChart, AreaChart, BarChart, Undo2, PenTool } from 'lucide-react';
 import { PriceTick, api, OHLCBar } from '@/lib/api';
@@ -26,11 +28,11 @@ import {
   CandleData as IndicatorCandleData,
 } from '@/lib/indicators';
 import { useChartStore } from '@/store/chart.store';
+import { useTradeStore } from '@/store/trade.store';
 
 interface PriceChartProps {
   symbol: string;
   currentPrice: PriceTick | null;
-  priceHistory: PriceTick[];
   onDrawingsChange?: (count: number) => void;
 }
 
@@ -255,14 +257,10 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
   const rsiChartRef = useRef<IChartApi | null>(null);
   const macdChartRef = useRef<IChartApi | null>(null);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'> | any>>(new Map());
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rsiSeriesRef = useRef<ISeriesApi<'Line'> | any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const macdSeriesRef = useRef<{ macd: ISeriesApi<'Line'>; signal: ISeriesApi<'Line'>; histogram: ISeriesApi<'Histogram'> } | any>(null);
+  const candlestickSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
+  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
+  const rsiSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const macdSeriesRef = useRef<{ macd: ISeriesApi<'Line'>; signal: ISeriesApi<'Line'>; histogram: ISeriesApi<'Histogram'> } | null>(null);
 
   const currentCandleRef = useRef<CandleData | null>(null);
   const candlesRef = useRef<CandleData[]>([]);
@@ -282,9 +280,6 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
     toggleVolume,
     drawingTool,
     setDrawingTool,
-    drawnLines: storeDrawnLines,
-    addDrawnLine,
-    clearDrawings,
   } = useChartStore();
 
   // Local UI state
@@ -298,18 +293,34 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
   const [showDrawingMenu, setShowDrawingMenu] = useState(false);
   const drawingPointsRef = useRef<{ time: Time; value: number }[]>([]);
 
+  // Professional chart features state
+  const [candleCountdown, setCandleCountdown] = useState<number>(0);
+  const [priceDirection, setPriceDirection] = useState<'up' | 'down' | 'none'>('none');
+  const [isPulsing, setIsPulsing] = useState(false);
+  const [flashClass, setFlashClass] = useState<string>('');
+  const [isClient, setIsClient] = useState(false);
+  const prevPriceRef = useRef<number>(0);
+
+  // Trade markers refs
+  const tradePriceLinesRef = useRef<Map<string, { entry: IPriceLine | undefined; target: IPriceLine | undefined }>>(new Map());
+
+  // Hydration check - prevent SSR mismatch
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Get active trades for the current symbol (only after hydration)
+  const allActiveTrades = useTradeStore((state) => state.activeTrades);
+  const activeTrades = isClient ? allActiveTrades.filter((t) => t.symbol === symbol) : [];
+
   // Volume series ref
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mainSeriesRef = useRef<ISeriesApi<any> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const mainSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
   const volumeDataRef = useRef<{ time: Time; value: number; color: string }[]>([]);
 
   // Drawing tools refs
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const drawnSeriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map());
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const horizontalLinesRef = useRef<Map<string, { priceLine: any; price: number }>>(new Map());
+  const drawnSeriesRef = useRef<Map<string, ISeriesApi<SeriesType>[]>>(new Map());
+  const horizontalLinesRef = useRef<Map<string, { priceLine: IPriceLine; price: number }>>(new Map());
   const drawingStartRef = useRef<{ time: Time; value: number } | null>(null);
 
   // Expose undo/clear methods to parent via ref
@@ -487,8 +498,8 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
         fontFamily: 'Inter, system-ui, sans-serif',
       },
       grid: {
-        vertLines: { color: '#1e1e2e', style: 1 },
-        horzLines: { color: '#1e1e2e', style: 1 },
+        vertLines: { color: '#151520', style: 2 },
+        horzLines: { color: '#151520', style: 2 },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
@@ -896,8 +907,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
     }
 
     // Create new series based on chart type
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let newSeries: ISeriesApi<any>;
+    let newSeries: ISeriesApi<SeriesType>;
 
     try {
       switch (chartType) {
@@ -1411,6 +1421,129 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
     lastPriceRef.current = price;
   }, [currentPrice, getCandleTime, symbol, candleInterval, chartType, updateIndicators]);
 
+  // ============================================
+  // PROFESSIONAL CHART FEATURES
+  // ============================================
+
+  // Candle Countdown Timer Effect
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = Math.floor(Date.now() / 1000);
+      const remaining = candleInterval - (now % candleInterval);
+      setCandleCountdown(remaining);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [candleInterval]);
+
+  // Price Direction Detection & Animation Effect
+  useEffect(() => {
+    if (!currentPrice) return;
+
+    const price = currentPrice.price;
+    const prevPrice = prevPriceRef.current;
+
+    if (prevPrice !== 0 && price !== prevPrice) {
+      // Determine direction
+      const direction = price > prevPrice ? 'up' : 'down';
+      setPriceDirection(direction);
+
+      // Trigger pulse animation
+      setIsPulsing(true);
+      const pulseTimeout = setTimeout(() => setIsPulsing(false), 400);
+
+      // Trigger flash animation
+      setFlashClass(direction === 'up' ? 'animate-flash-up' : 'animate-flash-down');
+      const flashTimeout = setTimeout(() => setFlashClass(''), 250);
+
+      prevPriceRef.current = price;
+
+      return () => {
+        clearTimeout(pulseTimeout);
+        clearTimeout(flashTimeout);
+      };
+    } else if (prevPrice === 0) {
+      prevPriceRef.current = price;
+    }
+  }, [currentPrice]);
+
+  // Trade Entry Markers Effect
+  useEffect(() => {
+    if (!mainSeriesRef.current || !isClient) return;
+
+    // Filter out any invalid trades and get current trade IDs
+    const validTrades = activeTrades.filter(t => t && t.id && typeof t.entryPrice === 'number');
+    const currentTradeIds = new Set(validTrades.map(t => t.id));
+
+    // Remove lines for completed/removed trades
+    tradePriceLinesRef.current.forEach((lines, tradeId) => {
+      if (!currentTradeIds.has(tradeId)) {
+        try {
+          if (lines.entry) mainSeriesRef.current?.removePriceLine(lines.entry);
+          if (lines.target) mainSeriesRef.current?.removePriceLine(lines.target);
+        } catch {
+          // Line already removed
+        }
+        tradePriceLinesRef.current.delete(tradeId);
+      }
+    });
+
+    // Add lines for new trades
+    validTrades.forEach(trade => {
+      if (!tradePriceLinesRef.current.has(trade.id) && trade.entryPrice > 0) {
+        try {
+          const isUp = trade.direction === 'UP';
+          const entryColor = isUp ? '#22c55e' : '#ef4444';
+          const targetColor = isUp ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+
+          // Entry price line
+          const entryLine = mainSeriesRef.current?.createPriceLine({
+            price: trade.entryPrice,
+            color: entryColor,
+            lineWidth: 2,
+            lineStyle: 2, // Dashed
+            axisLabelVisible: true,
+            title: `${isUp ? '▲' : '▼'} $${trade.amount}`,
+          });
+
+          // Target price line (small offset to show direction)
+          const targetOffset = trade.entryPrice * 0.0003;
+          const targetPrice = isUp
+            ? trade.entryPrice + targetOffset
+            : trade.entryPrice - targetOffset;
+
+          const targetLine = mainSeriesRef.current?.createPriceLine({
+            price: targetPrice,
+            color: targetColor,
+            lineWidth: 1,
+            lineStyle: 3, // Dotted
+            axisLabelVisible: false,
+            title: '',
+          });
+
+          if (entryLine || targetLine) {
+            tradePriceLinesRef.current.set(trade.id, {
+              entry: entryLine,
+              target: targetLine,
+            });
+          }
+        } catch {
+          // Failed to create price lines - series might not support it
+        }
+      }
+    });
+  }, [activeTrades, symbol, isClient]);
+
+  // Format countdown display
+  const formatCountdown = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="h-full w-full flex flex-col bg-[#0f0f1a] relative">
       {/* OHLC Info Panel - Top Right */}
@@ -1443,282 +1576,36 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
         </div>
       )}
 
-      {/* Mobile Controls - Top Left - Hidden since settings accessed via 3-dot menu */}
-      <div className="hidden absolute top-2 left-2 z-10 flex items-center gap-2">
-        {/* Timeframe Dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => setShowTimeframeMenu(!showTimeframeMenu)}
-            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-xl text-white text-sm font-semibold shadow-lg hover:border-emerald-500/50 transition-all"
-          >
-            <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {selectedTimeframe.label}
-            <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${showTimeframeMenu ? 'rotate-180' : ''}`} />
-          </button>
+      {/* ============================================
+          PROFESSIONAL CHART UI ELEMENTS
+          ============================================ */}
 
-          {showTimeframeMenu && (
-            <>
-              <div className="fixed inset-0 z-[15]" onClick={() => setShowTimeframeMenu(false)} />
-              <div className="absolute top-full left-0 mt-2 w-64 bg-gradient-to-b from-[#1e1e38] to-[#151528] border border-[#3d3d5c] rounded-xl shadow-2xl z-20 overflow-hidden backdrop-blur-xl">
-                {/* Seconds */}
-                <div className="p-2 border-b border-[#2d2d44]">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-2">Seconds</span>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {TIMEFRAME_GROUPS.seconds.map((tf) => (
-                      <button
-                        key={tf.label}
-                        onClick={() => { setSelectedTimeframe(tf); setShowTimeframeMenu(false); }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                          selectedTimeframe.label === tf.label
-                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                            : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
-                        }`}
-                      >
-                        {tf.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* Minutes */}
-                <div className="p-2 border-b border-[#2d2d44]">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-2">Minutes</span>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {TIMEFRAME_GROUPS.minutes.map((tf) => (
-                      <button
-                        key={tf.label}
-                        onClick={() => { setSelectedTimeframe(tf); setShowTimeframeMenu(false); }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                          selectedTimeframe.label === tf.label
-                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                            : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
-                        }`}
-                      >
-                        {tf.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* Hours */}
-                <div className="p-2 border-b border-[#2d2d44]">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-2">Hours</span>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {TIMEFRAME_GROUPS.hours.map((tf) => (
-                      <button
-                        key={tf.label}
-                        onClick={() => { setSelectedTimeframe(tf); setShowTimeframeMenu(false); }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                          selectedTimeframe.label === tf.label
-                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                            : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
-                        }`}
-                      >
-                        {tf.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* Days */}
-                <div className="p-2">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-2">Days</span>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {TIMEFRAME_GROUPS.days.map((tf) => (
-                      <button
-                        key={tf.label}
-                        onClick={() => { setSelectedTimeframe(tf); setShowTimeframeMenu(false); }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                          selectedTimeframe.label === tf.label
-                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                            : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
-                        }`}
-                      >
-                        {tf.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Indicator Button */}
-        <button
-          onClick={() => setShowMobileIndicatorSheet(true)}
-          className="relative flex items-center justify-center w-10 h-10 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-xl shadow-lg hover:border-blue-500/50 transition-all"
-        >
-          <BarChart3 className="h-5 w-5 text-gray-400" />
-          {activeIndicatorCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] px-1 bg-gradient-to-r from-emerald-500 to-emerald-400 text-white text-[10px] rounded-full flex items-center justify-center font-bold shadow-lg shadow-emerald-500/40">
-              {activeIndicatorCount}
-            </span>
-          )}
-        </button>
-
-        {/* Chart Type Button (Mobile) */}
-        <button
-          onClick={() => setShowChartTypeMenu(!showChartTypeMenu)}
-          className="flex items-center justify-center w-10 h-10 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-xl shadow-lg hover:border-purple-500/50 transition-all"
-        >
-          {getChartTypeIcon(chartType)}
-        </button>
-
-        {/* Volume Toggle (Mobile) */}
-        <button
-          onClick={toggleVolume}
-          className={`flex items-center justify-center w-10 h-10 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border rounded-xl shadow-lg transition-all ${
-            showVolume ? 'border-cyan-500/50 text-cyan-400' : 'border-[#3d3d5c] text-gray-400'
-          }`}
-        >
-          <BarChart className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* Mobile Drawing Tools - Bottom - Hidden since settings accessed via 3-dot menu */}
-      <div className="hidden absolute bottom-10 left-2 z-10">
-        <div className="relative">
-          <button
-            onClick={() => setShowDrawingMenu(!showDrawingMenu)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all text-sm font-medium shadow-lg ${
-              drawingTool !== 'none'
-                ? 'bg-orange-500/30 text-orange-400 border border-orange-500/50'
-                : 'bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] text-gray-400'
-            }`}
-          >
-            <PenTool className="w-5 h-5" />
-            {drawnLines.length > 0 && (
-              <span className="px-1.5 py-0.5 bg-orange-500/30 text-orange-400 rounded text-xs font-bold">
-                {drawnLines.length}
+      {/* Candle Countdown Timer */}
+      {currentPrice && (
+        <div className="absolute right-[90px] top-1/2 -translate-y-[60px] z-20">
+          <div className={`px-2.5 py-1.5 bg-gradient-to-r from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-lg shadow-lg ${candleCountdown <= 5 ? 'animate-countdown-pulse border-orange-500/50' : ''}`}>
+            <div className="flex items-center gap-1.5">
+              <svg className={`w-3 h-3 ${candleCountdown <= 5 ? 'text-orange-400' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className={`text-xs font-mono font-bold ${candleCountdown <= 5 ? 'text-orange-400' : 'text-gray-300'}`}>
+                {formatCountdown(candleCountdown)}
               </span>
-            )}
-            <ChevronDown className={`w-4 h-4 transition-transform ${showDrawingMenu ? 'rotate-180' : ''}`} />
-          </button>
-
-          {/* Mobile Dropdown Menu */}
-          {showDrawingMenu && (
-            <>
-              <div className="fixed inset-0 z-[15]" onClick={() => setShowDrawingMenu(false)} />
-              <div className="absolute left-0 bottom-full mb-2 w-56 bg-[#1a1a2e] border border-[#3d3d5c] rounded-xl shadow-2xl z-[20] overflow-hidden">
-                {/* Drawing Tools Section */}
-                <div className="p-2">
-                  <p className="px-2 py-1 text-[10px] font-bold text-purple-400 uppercase tracking-wider">Drawing Tools</p>
-
-                  <button
-                    onClick={() => {
-                      setDrawingTool(drawingTool === 'trendline' ? 'none' : 'trendline');
-                      setShowDrawingMenu(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
-                      drawingTool === 'trendline'
-                        ? 'bg-orange-500/20 text-orange-400'
-                        : 'text-gray-300 active:bg-[#252542]'
-                    }`}
-                  >
-                    <TrendingUp className="w-5 h-5" />
-                    <div className="flex-1 text-left">
-                      <div className="text-sm font-medium">Trend Line</div>
-                      <div className="text-[10px] text-gray-500">Click 2 points</div>
-                    </div>
-                    {drawingTool === 'trendline' && <Check className="w-5 h-5 text-orange-400" />}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setDrawingTool(drawingTool === 'horizontal' ? 'none' : 'horizontal');
-                      setShowDrawingMenu(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
-                      drawingTool === 'horizontal'
-                        ? 'bg-orange-500/20 text-orange-400'
-                        : 'text-gray-300 active:bg-[#252542]'
-                    }`}
-                  >
-                    <Minus className="w-5 h-5" />
-                    <div className="flex-1 text-left">
-                      <div className="text-sm font-medium">Horizontal Line</div>
-                      <div className="text-[10px] text-gray-500">Click to place</div>
-                    </div>
-                    {drawingTool === 'horizontal' && <Check className="w-5 h-5 text-orange-400" />}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setDrawingTool(drawingTool === 'fibonacci' ? 'none' : 'fibonacci');
-                      setShowDrawingMenu(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all ${
-                      drawingTool === 'fibonacci'
-                        ? 'bg-orange-500/20 text-orange-400'
-                        : 'text-gray-300 active:bg-[#252542]'
-                    }`}
-                  >
-                    <GitBranch className="w-5 h-5" />
-                    <div className="flex-1 text-left">
-                      <div className="text-sm font-medium">Fibonacci</div>
-                      <div className="text-[10px] text-gray-500">Click high & low</div>
-                    </div>
-                    {drawingTool === 'fibonacci' && <Check className="w-5 h-5 text-orange-400" />}
-                  </button>
-                </div>
-
-                {/* Actions Section */}
-                {drawnLines.length > 0 && (
-                  <>
-                    <div className="border-t border-[#3d3d5c]" />
-                    <div className="p-2">
-                      <p className="px-2 py-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                        {drawnLines.length} Drawing{drawnLines.length > 1 ? 's' : ''}
-                      </p>
-
-                      <button
-                        onClick={() => {
-                          const lastLine = drawnLines[drawnLines.length - 1];
-                          if (lastLine) {
-                            if (lastLine.type === 'horizontal') {
-                              const lineData = horizontalLinesRef.current.get(lastLine.id);
-                              if (lineData) {
-                                try { mainSeriesRef.current?.removePriceLine(lineData.priceLine); } catch (e) { /* ignore */ }
-                                horizontalLinesRef.current.delete(lastLine.id);
-                              }
-                            } else {
-                              const series = drawnSeriesRef.current.get(lastLine.id);
-                              if (series) {
-                                series.forEach(s => {
-                                  try { chartRef.current?.removeSeries(s); } catch (e) { /* ignore */ }
-                                });
-                                drawnSeriesRef.current.delete(lastLine.id);
-                              }
-                            }
-                            setDrawnLines(prev => prev.slice(0, -1));
-                          }
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-yellow-400 active:bg-yellow-500/10"
-                      >
-                        <Undo2 className="w-5 h-5" />
-                        <span className="text-sm font-medium">Undo Last</span>
-                      </button>
-
-                      {drawnLines.length > 1 && (
-                        <button
-                          onClick={() => {
-                            setDrawnLines([]);
-                            setShowDrawingMenu(false);
-                          }}
-                          className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-red-400 active:bg-red-500/10"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                          <span className="text-sm font-medium">Clear All</span>
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            </>
-          )}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+
+
+      {/* Gradient Overlay for Visual Depth */}
+      <div
+        className="absolute inset-0 pointer-events-none z-[1]"
+        style={{
+          background: 'linear-gradient(180deg, rgba(34, 197, 94, 0.02) 0%, transparent 30%, transparent 70%, rgba(239, 68, 68, 0.02) 100%)',
+          mixBlendMode: 'overlay',
+        }}
+      />
 
       {/* Mobile Chart Type Menu */}
       {showChartTypeMenu && (
@@ -1834,7 +1721,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
 
           {showTimeframeMenu && (
             <>
-              <div className="fixed inset-0 z-[5]" onClick={() => setShowTimeframeMenu(false)} />
+              <div className="fixed inset-0 z-[10]" onClick={() => setShowTimeframeMenu(false)} />
               <div className="absolute top-full left-0 mt-2 w-72 bg-gradient-to-b from-[#1e1e38] to-[#151528] border border-[#3d3d5c] rounded-xl shadow-2xl z-20 overflow-hidden backdrop-blur-xl">
                 {/* Header */}
                 <div className="px-3 py-2 border-b border-[#2d2d44] bg-[#1a1a2e]/50">
@@ -2011,7 +1898,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
 
           {showChartTypeMenu && (
             <>
-              <div className="fixed inset-0 z-[5]" onClick={() => setShowChartTypeMenu(false)} />
+              <div className="fixed inset-0 z-[10]" onClick={() => setShowChartTypeMenu(false)} />
               <div className="absolute top-full left-0 mt-2 w-44 bg-gradient-to-b from-[#1e1e38] to-[#151528] border border-[#3d3d5c] rounded-xl shadow-2xl z-20 overflow-hidden">
                 <div className="px-3 py-2 border-b border-[#2d2d44] bg-[#1a1a2e]/50">
                   <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Chart Type</span>
@@ -2078,7 +1965,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
           {/* Dropdown Menu */}
           {showDrawingMenu && (
             <>
-              <div className="fixed inset-0 z-[15]" onClick={() => setShowDrawingMenu(false)} />
+              <div className="fixed inset-0 z-[10]" onClick={() => setShowDrawingMenu(false)} />
               <div className="absolute right-0 top-full mt-2 w-56 bg-[#1a1a2e] border border-[#3d3d5c] rounded-xl shadow-2xl z-[20] overflow-hidden">
                 {/* Drawing Tools Section */}
                 <div className="p-2">
@@ -2206,11 +2093,6 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
         </div>
       </div>
 
-      {/* Close menus when clicking outside */}
-      {(showIndicatorMenu || showChartTypeMenu || showDrawingMenu) && (
-        <div className="fixed inset-0 z-[5]" onClick={() => { setShowIndicatorMenu(false); setShowChartTypeMenu(false); setShowDrawingMenu(false); }} />
-      )}
-
       {/* Drawing Mode Indicator */}
       {drawingTool !== 'none' && (
         <div className="absolute top-14 left-2 z-10 px-3 py-1.5 bg-orange-500/20 border border-orange-500/50 rounded-lg text-orange-400 text-xs font-semibold flex items-center gap-2">
@@ -2228,11 +2110,36 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
       )}
 
       {/* Main Chart Container */}
-      <div
-        ref={chartContainerRef}
-        className="w-full"
-        style={{ flex: hasRSI || hasMACD ? '1 1 60%' : '1 1 100%', minHeight: 0 }}
-      />
+      <div className="relative flex-1" style={{ flex: hasRSI || hasMACD ? '1 1 60%' : '1 1 100%', minHeight: 0 }}>
+        <div
+          ref={chartContainerRef}
+          className="absolute inset-0"
+        />
+        
+        {/* Floating Price Badge */}
+        {currentPrice && isClient && (
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
+            <div className={`
+              px-3 py-2 rounded-lg backdrop-blur-sm border shadow-lg transition-all duration-150
+              ${priceDirection === 'up' 
+                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' 
+                : priceDirection === 'down'
+                ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                : 'bg-[#1a1a2e]/80 border-[#2d2d44] text-white'}
+              ${isPulsing ? 'scale-105' : 'scale-100'}
+            `}>
+              <div className="text-lg font-bold font-mono">
+                {formatPrice(currentPrice.price)}
+              </div>
+              <div className={`text-xs font-medium ${
+                (currentPrice.changePercent ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+              }`}>
+                {(currentPrice.changePercent ?? 0) >= 0 ? '+' : ''}{(currentPrice.changePercent ?? 0).toFixed(2)}%
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* RSI Panel */}
       {hasRSI && (

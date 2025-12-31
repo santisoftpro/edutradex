@@ -404,6 +404,49 @@ class EmailService {
       html
     );
   }
+
+  // Send security alert notification
+  async sendSecurityAlert(
+    email: string,
+    userName: string,
+    alertTitle: string,
+    alertDescription: string
+  ): Promise<boolean> {
+    const html = emailTemplates.securityAlert(userName, alertTitle, alertDescription);
+    return this.sendEmail(email, `Security Alert: ${alertTitle} - OptigoBroker`, html);
+  }
+
+  // Send new device login notification
+  async sendNewDeviceLogin(
+    email: string,
+    userName: string,
+    deviceType: string,
+    browser: string,
+    location: string,
+    ipAddress: string,
+    timestamp: Date
+  ): Promise<boolean> {
+    const html = emailTemplates.newDeviceLogin(
+      userName,
+      deviceType,
+      browser,
+      location,
+      ipAddress,
+      timestamp
+    );
+    return this.sendEmail(email, 'New Device Login Detected - OptigoBroker', html);
+  }
+
+  // Send account locked notification
+  async sendAccountLocked(
+    email: string,
+    userName: string,
+    lockDuration: number,
+    reason: string
+  ): Promise<boolean> {
+    const html = emailTemplates.accountLocked(userName, lockDuration, reason);
+    return this.sendEmail(email, 'Account Security Alert - OptigoBroker', html);
+  }
 }
 
 export const emailService = new EmailService();

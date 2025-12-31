@@ -1380,6 +1380,213 @@ class ApiClient {
     const response = await this.post<ApiResponse<KYCSubmission>>(`/kyc/admin/${id}/reject`, { reason, adminNote });
     return response.data;
   }
+
+  // OTC Market API Methods (Admin)
+  async getOTCStats(): Promise<OTCStats> {
+    const response = await this.get<ApiResponse<OTCStats>>('/admin/otc/stats');
+    return response.data;
+  }
+
+  async getOTCConfigs(options?: {
+    marketType?: 'FOREX' | 'CRYPTO';
+    isEnabled?: boolean;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResponse<OTCConfig>> {
+    const params = new URLSearchParams();
+    if (options?.marketType) params.append('marketType', options.marketType);
+    if (options?.isEnabled !== undefined) params.append('isEnabled', options.isEnabled.toString());
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    const queryStr = params.toString();
+    const response = await this.get<ApiResponse<OTCConfig[]> & { pagination: PaginatedResponse<OTCConfig>['pagination'] }>(
+      `/admin/otc/configs${queryStr ? `?${queryStr}` : ''}`
+    );
+    return {
+      data: response.data,
+      pagination: response.pagination || { page: 1, limit: 50, total: response.data.length, totalPages: 1 },
+    };
+  }
+
+  async getOTCConfigById(id: string): Promise<OTCConfig> {
+    const response = await this.get<ApiResponse<OTCConfig>>(`/admin/otc/configs/${id}`);
+    return response.data;
+  }
+
+  async createOTCConfig(data: CreateOTCConfigInput): Promise<OTCConfig> {
+    const response = await this.post<ApiResponse<OTCConfig>>('/admin/otc/configs', data);
+    return response.data;
+  }
+
+  async updateOTCConfig(id: string, data: UpdateOTCConfigInput): Promise<OTCConfig> {
+    const response = await this.patch<ApiResponse<OTCConfig>>(`/admin/otc/configs/${id}`, data);
+    return response.data;
+  }
+
+  async deleteOTCConfig(id: string): Promise<void> {
+    await this.delete(`/admin/otc/configs/${id}`);
+  }
+
+  async getOTCExposures(): Promise<OTCExposure[]> {
+    const response = await this.get<ApiResponse<OTCExposure[]>>('/admin/otc/exposures');
+    return response.data;
+  }
+
+  async getOTCExposureBySymbol(symbol: string): Promise<OTCExposure | null> {
+    const response = await this.get<ApiResponse<OTCExposure>>(`/admin/otc/exposures/${encodeURIComponent(symbol)}`);
+    return response.data;
+  }
+
+  async resetOTCExposure(symbol: string): Promise<void> {
+    await this.post(`/admin/otc/exposures/${encodeURIComponent(symbol)}/reset`);
+  }
+
+  async getOTCActivityLog(options?: {
+    symbol?: string;
+    actionType?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResponse<OTCActivityLog>> {
+    const params = new URLSearchParams();
+    if (options?.symbol) params.append('symbol', options.symbol);
+    if (options?.actionType) params.append('actionType', options.actionType);
+    if (options?.from) params.append('from', options.from);
+    if (options?.to) params.append('to', options.to);
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    const queryStr = params.toString();
+    const response = await this.get<ApiResponse<OTCActivityLog[]> & { pagination: PaginatedResponse<OTCActivityLog>['pagination'] }>(
+      `/admin/otc/activity${queryStr ? `?${queryStr}` : ''}`
+    );
+    return {
+      data: response.data,
+      pagination: response.pagination || { page: 1, limit: 50, total: response.data.length, totalPages: 1 },
+    };
+  }
+
+  async bulkToggleOTCConfigs(ids: string[], enabled: boolean): Promise<{ affected: number }> {
+    const response = await this.post<ApiResponse<{ affected: number }>>('/admin/otc/configs/bulk/toggle-enabled', { ids, enabled });
+    return response.data;
+  }
+
+  async bulkToggleOTCRisk(ids: string[], riskEnabled: boolean): Promise<{ affected: number }> {
+    const response = await this.post<ApiResponse<{ affected: number }>>('/admin/otc/configs/bulk/toggle-risk', { ids, riskEnabled });
+    return response.data;
+  }
+
+  // ============= OTC Manual Controls =============
+
+  async getManualControl(symbol: string): Promise<ManualControl> {
+    const response = await this.get<ApiResponse<ManualControl>>(`/admin/otc/controls/${encodeURIComponent(symbol)}`);
+    return response.data;
+  }
+
+  async getAllManualControls(): Promise<ManualControl[]> {
+    const response = await this.get<ApiResponse<ManualControl[]>>('/admin/otc/controls');
+    return response.data;
+  }
+
+  async setDirectionBias(symbol: string, bias: number, strength: number, durationMinutes?: number, reason?: string): Promise<void> {
+    await this.post(`/admin/otc/controls/${encodeURIComponent(symbol)}/direction`, { bias, strength, durationMinutes, reason });
+  }
+
+  async clearDirectionBias(symbol: string): Promise<void> {
+    await this.delete(`/admin/otc/controls/${encodeURIComponent(symbol)}/direction`);
+  }
+
+  async setVolatilityMultiplier(symbol: string, multiplier: number, durationMinutes?: number, reason?: string): Promise<void> {
+    await this.post(`/admin/otc/controls/${encodeURIComponent(symbol)}/volatility`, { multiplier, durationMinutes, reason });
+  }
+
+  async clearVolatilityMultiplier(symbol: string): Promise<void> {
+    await this.delete(`/admin/otc/controls/${encodeURIComponent(symbol)}/volatility`);
+  }
+
+  async setPriceOverride(symbol: string, price: number, expiryMinutes: number, reason?: string): Promise<void> {
+    await this.post(`/admin/otc/controls/${encodeURIComponent(symbol)}/price-override`, { price, expiryMinutes, reason });
+  }
+
+  async clearPriceOverride(symbol: string): Promise<void> {
+    await this.delete(`/admin/otc/controls/${encodeURIComponent(symbol)}/price-override`);
+  }
+
+  async getActiveOTCTrades(symbol?: string): Promise<ActiveTradeInfo[]> {
+    const query = symbol ? `?symbol=${encodeURIComponent(symbol)}` : '';
+    const response = await this.get<ApiResponse<ActiveTradeInfo[]>>(`/admin/otc/trades/active${query}`);
+    return response.data;
+  }
+
+  async forceTradeOutcome(tradeId: string, outcome: 'WIN' | 'LOSE', reason?: string): Promise<void> {
+    await this.post(`/admin/otc/trades/${tradeId}/force`, { outcome, reason });
+  }
+
+  async getAllUserTargets(): Promise<UserTargeting[]> {
+    const response = await this.get<ApiResponse<UserTargeting[]>>('/admin/otc/users/targets');
+    return response.data;
+  }
+
+  async getUserTargeting(userId: string): Promise<UserTargeting | null> {
+    const response = await this.get<ApiResponse<UserTargeting | null>>(`/admin/otc/users/${userId}/target`);
+    return response.data;
+  }
+
+  async setUserTargeting(userId: string, config: UserTargetingInput): Promise<void> {
+    await this.post(`/admin/otc/users/${userId}/target`, config);
+  }
+
+  async removeUserTargeting(userId: string, symbol?: string): Promise<void> {
+    const query = symbol ? `?symbol=${encodeURIComponent(symbol)}` : '';
+    await this.delete(`/admin/otc/users/${userId}/target${query}`);
+  }
+
+  async getInterventionLog(params: InterventionLogParams): Promise<PaginatedResponse<ManualIntervention>> {
+    const queryParts: string[] = [];
+    if (params.actionType) queryParts.push(`actionType=${params.actionType}`);
+    if (params.targetType) queryParts.push(`targetType=${params.targetType}`);
+    if (params.targetId) queryParts.push(`targetId=${params.targetId}`);
+    if (params.from) queryParts.push(`from=${params.from.toISOString()}`);
+    if (params.to) queryParts.push(`to=${params.to.toISOString()}`);
+    if (params.page) queryParts.push(`page=${params.page}`);
+    if (params.limit) queryParts.push(`limit=${params.limit}`);
+    const queryStr = queryParts.join('&');
+
+    const response = await this.get<ApiResponse<ManualIntervention[]> & { pagination: PaginatedResponse<ManualIntervention>['pagination'] }>(
+      `/admin/otc/interventions${queryStr ? `?${queryStr}` : ''}`
+    );
+    return {
+      data: response.data,
+      pagination: response.pagination || { page: 1, limit: 50, total: response.data.length, totalPages: 1 },
+    };
+  }
+
+  // ============= OTC HISTORY SEEDING =============
+
+  async seedOTCHistory(symbol: string, options?: { count?: number; resolution?: number; clearExisting?: boolean }): Promise<SeedResult> {
+    const response = await this.post<ApiResponse<SeedResult>>(`/admin/otc/history/seed/${encodeURIComponent(symbol)}`, options || {});
+    return response.data;
+  }
+
+  async seedAllOTCHistory(options?: { count?: number; resolution?: number; clearExisting?: boolean }): Promise<SeedAllResult> {
+    const response = await this.post<ApiResponse<SeedAllResult>>('/admin/otc/history/seed-all', options || {});
+    return response.data;
+  }
+
+  async seedOTCHistoryByType(marketType: 'FOREX' | 'CRYPTO', options?: { count?: number; resolution?: number; clearExisting?: boolean }): Promise<SeedAllResult> {
+    const response = await this.post<ApiResponse<SeedAllResult>>(`/admin/otc/history/seed-type/${marketType}`, options || {});
+    return response.data;
+  }
+
+  async getOTCHistoryStats(symbol: string): Promise<{ symbol: string; count: number; oldest: string | null; newest: string | null }> {
+    const response = await this.get<ApiResponse<{ symbol: string; count: number; oldest: string | null; newest: string | null }>>(`/admin/otc/history/stats/${encodeURIComponent(symbol)}`);
+    return response.data;
+  }
+
+  async hasOTCSeededHistory(symbol: string): Promise<boolean> {
+    const response = await this.get<ApiResponse<{ symbol: string; hasSeededHistory: boolean }>>(`/admin/otc/history/has/${encodeURIComponent(symbol)}`);
+    return response.data.hasSeededHistory;
+  }
 }
 
 // Add types for copy trading
@@ -1517,4 +1724,465 @@ export interface ReferralAdminStats {
   }>;
 }
 
+// OTC Market Types
+export interface OTCConfig {
+  id: string;
+  symbol: string;
+  baseSymbol: string;
+  marketType: 'FOREX' | 'CRYPTO';
+  name: string;
+  pipSize: number;
+  isEnabled: boolean;
+  riskEnabled: boolean;
+  is24Hours: boolean;
+  baseVolatility: number;
+  volatilityMultiplier: number;
+  meanReversionStrength: number;
+  maxDeviationPercent: number;
+  priceOffsetPips: number;
+  momentumFactor: number;
+  garchAlpha: number;
+  garchBeta: number;
+  garchOmega: number;
+  exposureThreshold: number;
+  minInterventionRate: number;
+  maxInterventionRate: number;
+  spreadMultiplier: number;
+  payoutPercent: number;
+  minTradeAmount: number;
+  maxTradeAmount: number;
+  anchoringDurationMins: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OTCExposure {
+  id: string;
+  symbol: string;
+  totalUpAmount: number;
+  totalDownAmount: number;
+  activeUpTrades: number;
+  activeDownTrades: number;
+  netExposure: number;
+  exposureRatio: number;
+  brokerRiskAmount: number;
+  totalInterventions: number;
+  successfulInterventions: number;
+  totalTradesProcessed: number;
+  lastUpdated: string;
+}
+
+export interface OTCActivityLog {
+  id: string;
+  symbol: string;
+  eventType: string;
+  details: Record<string, unknown>;
+  userId: string | null;
+  timestamp: string;
+}
+
+export interface OTCStats {
+  totalConfigs: number;
+  enabledConfigs: number;
+  forexConfigs: number;
+  cryptoConfigs: number;
+  totalExposure: number;
+  interventionsToday: number;
+}
+
+// ============= OTC Manual Control Types =============
+
+export type ManualActionType = 'PRICE_BIAS' | 'VOLATILITY' | 'PRICE_OVERRIDE' | 'TRADE_FORCE' | 'USER_TARGET';
+export type ManualTargetType = 'SYMBOL' | 'TRADE' | 'USER';
+
+export interface ManualControl {
+  symbol: string;
+  directionBias: number;
+  directionStrength: number;
+  directionBiasExpiry: string | null;
+  volatilityMultiplier: number;
+  volatilityExpiry: string | null;
+  priceOverride: number | null;
+  priceOverrideExpiry: string | null;
+  isActive: boolean;
+  updatedAt: string;
+  updatedBy: string | null;
+}
+
+export interface UserTargeting {
+  id: string;
+  userId: string;
+  symbol: string | null;
+  targetWinRate: number | null;
+  forceNextWin: number;
+  forceNextLose: number;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManualIntervention {
+  id: string;
+  adminId: string;
+  actionType: ManualActionType;
+  targetType: ManualTargetType;
+  targetId: string;
+  previousValue: Record<string, unknown> | null;
+  newValue: Record<string, unknown>;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface ActiveTradeInfo {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  symbol: string;
+  direction: 'UP' | 'DOWN';
+  amount: number;
+  entryPrice: number;
+  currentPrice: number;
+  expiresAt: string;
+  timeLeftMs: number;
+  accountType: string;
+}
+
+export interface UserTargetingInput {
+  symbol?: string;
+  targetWinRate?: number;
+  forceNextWin?: number;
+  forceNextLose?: number;
+  reason?: string;
+}
+
+export interface InterventionLogParams {
+  actionType?: ManualActionType;
+  targetType?: ManualTargetType;
+  targetId?: string;
+  from?: Date;
+  to?: Date;
+  page?: number;
+  limit?: number;
+}
+
+export interface CreateOTCConfigInput {
+  symbol: string;
+  baseSymbol: string;
+  marketType: 'FOREX' | 'CRYPTO';
+  name: string;
+  pipSize: number;
+  isEnabled?: boolean;
+  riskEnabled?: boolean;
+  is24Hours?: boolean;
+  baseVolatility?: number;
+  volatilityMultiplier?: number;
+  meanReversionStrength?: number;
+  maxDeviationPercent?: number;
+  priceOffsetPips?: number;
+  momentumFactor?: number;
+  garchAlpha?: number;
+  garchBeta?: number;
+  garchOmega?: number;
+  exposureThreshold?: number;
+  minInterventionRate?: number;
+  maxInterventionRate?: number;
+  spreadMultiplier?: number;
+  payoutPercent?: number;
+  minTradeAmount?: number;
+  maxTradeAmount?: number;
+  anchoringDurationMins?: number;
+}
+
+export type UpdateOTCConfigInput = Partial<Omit<CreateOTCConfigInput, 'symbol' | 'baseSymbol' | 'marketType'>>;
+
+// OTC History Seeding Types
+export interface SeedResult {
+  symbol: string;
+  baseSymbol: string;
+  candlesSeeded: number;
+  oldestCandle: string | null;
+  newestCandle: string | null;
+  source: 'BINANCE' | 'DERIV' | 'NONE';
+}
+
+export interface SeedAllResult {
+  totalSeeded: number;
+  successful: number;
+  total: number;
+  marketType?: 'FOREX' | 'CRYPTO';
+  results: SeedResult[];
+}
+
+// ============= SuperAdmin Types =============
+
+export interface SuperAdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: 'ADMIN' | 'SUPERADMIN';
+  isActive: boolean;
+  isProtected: boolean;
+  lastLoginAt: string | null;
+  lastLoginIp: string | null;
+  loginCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SuperAdminUserDetail extends SuperAdminUser {
+  actionsCount: number;
+  actionsThisMonth: number;
+  lastAction: string | null;
+  activeSessions: AdminSession[];
+  recentActions: {
+    id: string;
+    actionType: string;
+    description: string;
+    createdAt: string;
+  }[];
+}
+
+export interface AdminSession {
+  id: string;
+  adminId: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  loginAt: string;
+  logoutAt: string | null;
+  isActive: boolean;
+}
+
+export interface SuperAdminStats {
+  totalAdmins: number;
+  activeAdmins: number;
+  inactiveAdmins: number;
+  superAdmins: number;
+  actionsToday: number;
+  actionsThisWeek: number;
+  actionsThisMonth: number;
+  recentLogins: {
+    adminId: string;
+    adminName: string;
+    adminEmail: string;
+    loginAt: string;
+    ipAddress: string | null;
+  }[];
+  topAdminsByActivity: {
+    adminId: string;
+    adminName: string;
+    count: number;
+  }[];
+}
+
+export interface AuditLog {
+  id: string;
+  adminId: string;
+  adminName?: string;
+  adminEmail?: string;
+  actionType: string;
+  targetType: string | null;
+  targetId: string | null;
+  description: string;
+  previousValue: Record<string, unknown> | null;
+  newValue: Record<string, unknown> | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface AuditLogSummary {
+  totalActions: number;
+  actionsToday: number;
+  actionsThisWeek: number;
+  actionsThisMonth: number;
+  actionsByType: { actionType: string; count: number }[];
+  topAdmins: { adminId: string; adminName: string; count: number }[];
+  recentLogins: {
+    adminId: string;
+    adminName: string;
+    loginAt: string;
+    ipAddress: string | null;
+  }[];
+}
+
+export interface CreateAdminInput {
+  email: string;
+  name: string;
+  password?: string;
+}
+
+export interface UpdateAdminInput {
+  name?: string;
+  email?: string;
+}
+
 export const api = new ApiClient();
+
+// Add SuperAdmin API methods to ApiClient prototype
+Object.assign(ApiClient.prototype, {
+  // SuperAdmin Dashboard
+  async getSuperAdminStats(): Promise<SuperAdminStats> {
+    const response = await api.get<ApiResponse<SuperAdminStats>>('/superadmin/stats');
+    return response.data;
+  },
+
+  // Admin Management
+  async getSuperAdminAdmins(options?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    role?: 'ADMIN' | 'SUPERADMIN' | '';
+    isActive?: boolean | '';
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<PaginatedResponse<SuperAdminUser>> {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.search) params.append('search', options.search);
+    if (options?.role) params.append('role', options.role);
+    if (options?.isActive !== undefined && options.isActive !== '') params.append('isActive', options.isActive.toString());
+    if (options?.sortBy) params.append('sortBy', options.sortBy);
+    if (options?.sortOrder) params.append('sortOrder', options.sortOrder);
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<SuperAdminUser[]> & { pagination: PaginatedResponse<SuperAdminUser>['pagination'] }>(
+      `/superadmin/admins${queryStr ? `?${queryStr}` : ''}`
+    );
+    return {
+      data: response.data,
+      pagination: response.pagination || { page: 1, limit: 20, total: response.data.length, totalPages: 1 },
+    };
+  },
+
+  async getSuperAdminAdminDetail(adminId: string): Promise<SuperAdminUserDetail> {
+    const response = await api.get<ApiResponse<SuperAdminUserDetail>>(`/superadmin/admins/${adminId}`);
+    return response.data;
+  },
+
+  async createSuperAdminAdmin(data: CreateAdminInput & { adminPassword: string }): Promise<{ admin: SuperAdminUser; tempPassword?: string }> {
+    const response = await api.post<ApiResponse<{ admin: SuperAdminUser; tempPassword?: string }>>('/superadmin/admins', data);
+    return response.data;
+  },
+
+  async updateSuperAdminAdmin(adminId: string, data: UpdateAdminInput): Promise<SuperAdminUser> {
+    const response = await api.patch<ApiResponse<SuperAdminUser>>(`/superadmin/admins/${adminId}`, data);
+    return response.data;
+  },
+
+  async resetAdminPassword(adminId: string, adminPassword: string): Promise<{ tempPassword: string }> {
+    const response = await api.post<ApiResponse<{ tempPassword: string }>>(`/superadmin/admins/${adminId}/reset-password`, { adminPassword });
+    return response.data;
+  },
+
+  async activateSuperAdminAdmin(adminId: string): Promise<SuperAdminUser> {
+    const response = await api.post<ApiResponse<SuperAdminUser>>(`/superadmin/admins/${adminId}/activate`);
+    return response.data;
+  },
+
+  async deactivateSuperAdminAdmin(adminId: string, adminPassword: string): Promise<SuperAdminUser> {
+    const response = await api.post<ApiResponse<SuperAdminUser>>(`/superadmin/admins/${adminId}/deactivate`, { adminPassword });
+    return response.data;
+  },
+
+  async deleteSuperAdminAdmin(adminId: string, adminPassword: string): Promise<void> {
+    await api.delete(`/superadmin/admins/${adminId}`, { data: { adminPassword } });
+  },
+
+  // Session Management
+  async getAdminSessions(adminId: string): Promise<AdminSession[]> {
+    const response = await api.get<ApiResponse<AdminSession[]>>(`/superadmin/admins/${adminId}/sessions`);
+    return response.data;
+  },
+
+  async terminateAdminSession(sessionId: string): Promise<void> {
+    await api.delete(`/superadmin/sessions/${sessionId}`);
+  },
+
+  // Audit Logs
+  async getAuditLogs(options?: {
+    page?: number;
+    limit?: number;
+    adminId?: string;
+    actionType?: string;
+    targetType?: string;
+    targetId?: string;
+    from?: string;
+    to?: string;
+    search?: string;
+  }): Promise<PaginatedResponse<AuditLog>> {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.adminId) params.append('adminId', options.adminId);
+    if (options?.actionType) params.append('actionType', options.actionType);
+    if (options?.targetType) params.append('targetType', options.targetType);
+    if (options?.targetId) params.append('targetId', options.targetId);
+    if (options?.from) params.append('from', options.from);
+    if (options?.to) params.append('to', options.to);
+    if (options?.search) params.append('search', options.search);
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<AuditLog[]> & { pagination: PaginatedResponse<AuditLog>['pagination'] }>(
+      `/superadmin/audit-logs${queryStr ? `?${queryStr}` : ''}`
+    );
+    return {
+      data: response.data,
+      pagination: response.pagination || { page: 1, limit: 20, total: response.data.length, totalPages: 1 },
+    };
+  },
+
+  async getAuditLogSummary(): Promise<AuditLogSummary> {
+    const response = await api.get<ApiResponse<AuditLogSummary>>('/superadmin/audit-logs/summary');
+    return response.data;
+  },
+
+  async exportAuditLogs(options?: {
+    adminId?: string;
+    actionType?: string;
+    targetType?: string;
+    from?: string;
+    to?: string;
+  }): Promise<string> {
+    const params = new URLSearchParams();
+    if (options?.adminId) params.append('adminId', options.adminId);
+    if (options?.actionType) params.append('actionType', options.actionType);
+    if (options?.targetType) params.append('targetType', options.targetType);
+    if (options?.from) params.append('from', options.from);
+    if (options?.to) params.append('to', options.to);
+    const queryStr = params.toString();
+
+    const response = await fetch(`${API_URL}/superadmin/audit-logs/export${queryStr ? `?${queryStr}` : ''}`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('auth-token') || ''}`,
+      },
+    });
+    return response.text();
+  },
+
+  // ============= User Impersonation =============
+  async impersonateUser(userId: string, adminPassword: string): Promise<{
+    user: User;
+    token: string;
+    originalAdminId: string;
+  }> {
+    const response = await api.post<ApiResponse<{
+      user: User;
+      token: string;
+      originalAdminId: string;
+    }>>(`/admin/users/${userId}/impersonate`, { adminPassword });
+    return response.data;
+  },
+
+  async endImpersonation(adminId: string): Promise<{
+    user: User;
+    token: string;
+  }> {
+    const response = await api.post<ApiResponse<{
+      user: User;
+      token: string;
+    }>>('/admin/impersonation/end', { adminId });
+    return response.data;
+  },
+});

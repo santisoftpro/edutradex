@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { authService, AuthServiceError } from '../services/auth/auth.service.js';
 import { authMiddleware } from '../middleware/auth.middleware.js';
 import { validateBody } from '../middleware/validate.middleware.js';
+import { loginRateLimiter, passwordResetRateLimiter } from '../middleware/rate-limit.middleware.js';
+import { ipService } from '../services/security/ip.service.js';
 import {
   registerSchema,
   loginSchema,
@@ -20,6 +22,15 @@ import { logger } from '../utils/logger.js';
 
 const router = Router();
 
+// Extended request interface for device fingerprint
+interface AuthRequestBody extends RegisterInput {
+  deviceFingerprint?: string;
+}
+
+interface LoginRequestBody extends LoginInput {
+  deviceFingerprint?: string;
+}
+
 /**
  * POST /api/auth/register
  * Register a new user
@@ -27,9 +38,19 @@ const router = Router();
 router.post(
   '/register',
   validateBody(registerSchema),
-  async (req: Request<object, object, RegisterInput>, res: Response): Promise<void> => {
+  async (req: Request<object, object, AuthRequestBody>, res: Response): Promise<void> => {
     try {
-      const result = await authService.register(req.body);
+      // Extract real IP address (handles proxies/load balancers)
+      const ipAddress = ipService.extractIp(req);
+      const userAgent = req.headers['user-agent'];
+      const deviceFingerprint = req.body.deviceFingerprint;
+
+      const result = await authService.register(
+        req.body,
+        ipAddress,
+        userAgent,
+        deviceFingerprint
+      );
 
       res.status(201).json({
         success: true,
@@ -60,10 +81,21 @@ router.post(
  */
 router.post(
   '/login',
+  loginRateLimiter,
   validateBody(loginSchema),
-  async (req: Request<object, object, LoginInput>, res: Response): Promise<void> => {
+  async (req: Request<object, object, LoginRequestBody>, res: Response): Promise<void> => {
     try {
-      const result = await authService.login(req.body);
+      // Extract real IP address (handles proxies/load balancers)
+      const ipAddress = ipService.extractIp(req);
+      const userAgent = req.headers['user-agent'];
+      const deviceFingerprint = req.body.deviceFingerprint;
+
+      const result = await authService.login(
+        req.body,
+        ipAddress,
+        userAgent,
+        deviceFingerprint
+      );
 
       res.json({
         success: true,
@@ -373,6 +405,7 @@ router.post(
  */
 router.post(
   '/forgot-password',
+  passwordResetRateLimiter,
   validateBody(forgotPasswordSchema),
   async (req: Request<object, object, ForgotPasswordInput>, res: Response): Promise<void> => {
     try {

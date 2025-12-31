@@ -370,6 +370,22 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
                 placeholder="https://cryptologos.cc/logos/..."
                 className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
               />
+              {/* Icon Preview */}
+              {iconUrl && (
+                <div className="mt-2 flex items-center gap-3">
+                  <div className={cn('w-12 h-12 rounded-lg flex items-center justify-center', iconBg)}>
+                    <img
+                      src={iconUrl}
+                      alt="Icon preview"
+                      className="w-8 h-8 object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs text-slate-400">Current icon preview</span>
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-400 mb-1">Display Order</label>

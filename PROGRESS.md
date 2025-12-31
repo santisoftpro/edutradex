@@ -1,7 +1,7 @@
 # EduTradeX Development Progress
 
 ## Project Overview
-- **Project Name:** EduTradeX - Demo Forex & OTC Trading Platform
+- **Project Name:** EduTradeX - Forex & OTC Trading Platform
 - **Location:** `C:/Users/santi/OneDrive/Documents/Programming/Gady/edutradex/`
 - **Started:** December 2024
 

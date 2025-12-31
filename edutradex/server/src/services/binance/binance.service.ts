@@ -76,8 +76,35 @@ class BinanceService {
   private callbacks = new Set<PriceUpdateCallback>();
   private isAvailable = false;
   private latestPrices = new Map<string, BinanceTick>();
+  private lastMessageTime = 0;
+  private healthCheckInterval: NodeJS.Timeout | null = null;
 
   constructor() {
+    this.connect();
+    this.startHealthCheck();
+  }
+
+  private startHealthCheck(): void {
+    // Check every 30 seconds if we've received data recently
+    this.healthCheckInterval = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastMessage = now - this.lastMessageTime;
+
+      // If no message for 60 seconds and we think we're connected, reconnect
+      if (this.isAvailable && timeSinceLastMessage > 60000) {
+        logger.warn(`[Binance] No data received for ${Math.round(timeSinceLastMessage / 1000)}s, reconnecting...`);
+        this.forceReconnect();
+      }
+    }, 30000);
+  }
+
+  private forceReconnect(): void {
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    this.isAvailable = false;
+    this.reconnectAttempts = 0;
     this.connect();
   }
 
@@ -107,6 +134,7 @@ class BinanceService {
         this.isConnecting = false;
         this.isAvailable = true;
         this.reconnectAttempts = 0;
+        this.lastMessageTime = Date.now(); // Reset health check timer
       });
 
       this.ws.on('message', (data: WebSocket.Data) => {
@@ -149,6 +177,9 @@ class BinanceService {
   }
 
   private handleMessage(message: any): void {
+    // Update last message time for health check
+    this.lastMessageTime = Date.now();
+
     if (!message.data || !message.stream) return;
 
     const tickerData = message.data;
@@ -213,6 +244,11 @@ class BinanceService {
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
+    }
+
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
     }
 
     if (this.ws) {

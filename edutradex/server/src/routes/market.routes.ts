@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { marketService } from '../services/market/market.service.js';
+import { otcMarketService } from '../services/otc/otc-market.service.js';
 
 const router = Router();
 
@@ -93,8 +94,15 @@ router.get('/bars/:symbol', async (req: Request, res: Response) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 500, 1000);
 
   try {
-    // Use real historical data from Binance for crypto symbols
-    const bars = await marketService.getRealHistoricalBars(decodedSymbol, resolution, limit);
+    let bars;
+
+    // Check if this is an OTC symbol - fetch from OTC database
+    if (otcMarketService.isOTCSymbol(decodedSymbol)) {
+      bars = await otcMarketService.getHistoricalBars(decodedSymbol, resolution, limit);
+    } else {
+      // Use real historical data from Binance/Deriv for regular symbols
+      bars = await marketService.getRealHistoricalBars(decodedSymbol, resolution, limit);
+    }
 
     if (bars.length === 0) {
       res.status(404).json({

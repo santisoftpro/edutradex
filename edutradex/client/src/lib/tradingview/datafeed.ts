@@ -122,60 +122,84 @@ class TradingViewDatafeed {
     // Update all subscribers for this symbol
     Object.entries(this.subscribers).forEach(([uid, sub]) => {
       if (sub.symbolInfo.name === symbol) {
-        const bar: Bar = {
-          time: new Date(tick.timestamp).getTime(),
-          open: tick.price,
-          high: tick.price,
-          low: tick.price,
-          close: tick.price,
-          volume: 0
-        };
+        // Convert timestamp to seconds (to match historical bar format)
+        const tickTimeSeconds = Math.floor(new Date(tick.timestamp).getTime() / 1000);
+        const price = tick.price;
+
+        // Get resolution in seconds
+        const resolutionSeconds = this.parseResolution(sub.resolution);
+
+        // Align tick time to bar boundary
+        const barTime = Math.floor(tickTimeSeconds / resolutionSeconds) * resolutionSeconds;
 
         // Update or create the current bar
         if (sub.lastBar) {
-          const resolution = this.parseResolution(sub.resolution);
-          const barTime = Math.floor(bar.time / resolution) * resolution;
-          const lastBarTime = Math.floor(sub.lastBar.time / resolution) * resolution;
+          const lastBarTime = sub.lastBar.time;
 
           if (barTime === lastBarTime) {
-            // Update existing bar
-            sub.lastBar.high = Math.max(sub.lastBar.high, bar.close);
-            sub.lastBar.low = Math.min(sub.lastBar.low, bar.close);
-            sub.lastBar.close = bar.close;
+            // Update existing bar - only update high/low/close
+            sub.lastBar.high = Math.max(sub.lastBar.high, price);
+            sub.lastBar.low = Math.min(sub.lastBar.low, price);
+            sub.lastBar.close = price;
             sub.lastBar.volume = (sub.lastBar.volume || 0) + 1;
 
             sub.callback({ ...sub.lastBar });
-          } else {
-            // New bar
+          } else if (barTime > lastBarTime) {
+            // New bar - use previous close as open for continuity
+            // Check for unrealistic gaps based on asset type
+            const gapPercent = Math.abs(price - sub.lastBar.close) / sub.lastBar.close * 100;
+            const isCrypto = symbol.includes('BTC') || symbol.includes('ETH') || symbol.includes('SOL');
+            const isOTC = symbol.startsWith('OTC_');
+            // OTC and crypto allow larger gaps (1%), forex strict (0.1%)
+            const maxGapPercent = (isCrypto || isOTC) ? 1.0 : 0.1;
+
+            let openPrice = sub.lastBar.close;
+
+            // If gap is too large, use current price as open (prevents giant candles)
+            if (gapPercent > maxGapPercent) {
+              console.warn(`[Datafeed] Large gap detected for ${symbol}: ${gapPercent.toFixed(2)}%, using current price as open`);
+              openPrice = price;
+            }
+
             const newBar: Bar = {
               time: barTime,
-              open: bar.close,
-              high: bar.close,
-              low: bar.close,
-              close: bar.close,
+              open: openPrice,
+              high: Math.max(openPrice, price),
+              low: Math.min(openPrice, price),
+              close: price,
               volume: 1
             };
             sub.lastBar = newBar;
             sub.callback(newBar);
           }
+          // Ignore ticks older than lastBar (barTime < lastBarTime)
         } else {
-          sub.lastBar = bar;
-          sub.callback(bar);
+          // First tick - create initial bar
+          const newBar: Bar = {
+            time: barTime,
+            open: price,
+            high: price,
+            low: price,
+            close: price,
+            volume: 1
+          };
+          sub.lastBar = newBar;
+          sub.callback(newBar);
         }
       }
     });
   }
 
   private parseResolution(resolution: string): number {
-    // Convert TradingView resolution to milliseconds
+    // Convert TradingView resolution to SECONDS (to match historical bar format)
     if (resolution.endsWith('S')) {
-      return parseInt(resolution) * 1000; // seconds
+      return parseInt(resolution); // already seconds
     } else if (resolution === 'D') {
-      return 24 * 60 * 60 * 1000; // day
+      return 24 * 60 * 60; // day in seconds
     } else if (resolution === 'W') {
-      return 7 * 24 * 60 * 60 * 1000; // week
+      return 7 * 24 * 60 * 60; // week in seconds
     } else {
-      return parseInt(resolution) * 60 * 1000; // minutes
+      return parseInt(resolution) * 60; // minutes to seconds
     }
   }
 
@@ -295,9 +319,40 @@ class TradingViewDatafeed {
       });
 
       if (response.success && response.data.length > 0) {
-        const bars = response.data.filter(bar =>
+        let bars = response.data.filter(bar =>
           bar.time >= periodParams.from && bar.time <= periodParams.to
         );
+
+        // Ensure bars are sorted by time ascending
+        bars = bars.sort((a, b) => a.time - b.time);
+
+        // IMPORTANT: Store the last bar for real-time continuity
+        // This ensures live ticks continue from the correct price level
+        if (bars.length > 0) {
+          const lastBar = bars[bars.length - 1];
+
+          // Calculate current bar time boundary
+          const now = Math.floor(Date.now() / 1000);
+          const currentBarTime = Math.floor(now / resolutionSeconds) * resolutionSeconds;
+
+          // If the last historical bar is the current bar, use it directly
+          // Otherwise, we need to handle the transition
+          Object.values(this.subscribers).forEach(sub => {
+            if (sub.symbolInfo.name === symbolInfo.name && sub.resolution === resolution) {
+              // Clone the last bar to avoid mutation issues
+              sub.lastBar = {
+                time: lastBar.time,
+                open: lastBar.open,
+                high: lastBar.high,
+                low: lastBar.low,
+                close: lastBar.close,
+                volume: lastBar.volume || 0
+              };
+
+              console.log(`[Datafeed] Set lastBar for ${symbolInfo.name}: time=${lastBar.time}, close=${lastBar.close}`);
+            }
+          });
+        }
 
         onResult(bars, { noData: bars.length === 0 });
       } else {

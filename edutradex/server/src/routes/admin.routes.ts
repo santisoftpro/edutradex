@@ -1,6 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authMiddleware, adminMiddleware } from '../middleware/auth.middleware.js';
+import { impersonationRateLimiter } from '../middleware/rate-limit.middleware.js';
+import { requirePasswordMiddleware } from '../middleware/superadmin-auth.middleware.js';
 import { adminService, AdminServiceError } from '../services/admin/admin.service.js';
+import { authService, AuthServiceError } from '../services/auth/auth.service.js';
 import {
   adminCopyTradingService,
   AdminCopyTradingServiceError,
@@ -21,6 +24,31 @@ import {
   adminUpdateLeaderStatsSchema,
   adminLeaderFollowersSchema,
 } from '../validators/copy-trading.validators.js';
+import {
+  otcAdminService,
+  OTCAdminServiceError,
+  manualControlService,
+  otcHistorySeeder,
+} from '../services/otc/index.js';
+import { marketService } from '../services/market/market.service.js';
+import {
+  getOTCConfigsQuerySchema,
+  otcConfigIdSchema,
+  otcSymbolSchema,
+  createOTCConfigSchema,
+  updateOTCConfigSchema,
+  getOTCPriceHistorySchema,
+  getOTCActivityLogSchema,
+  setDirectionBiasSchema,
+  setVolatilitySchema,
+  setPriceOverrideSchema,
+  forceTradeOutcomeSchema,
+  setUserTargetingSchema,
+  getInterventionLogSchema,
+  getActiveTradesSchema,
+  userIdParamSchema,
+  tradeIdParamSchema,
+} from '../validators/otc.validators.js';
 
 const router = Router();
 
@@ -205,6 +233,94 @@ router.delete(
       });
     } catch (error) {
       if (error instanceof AdminServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// ============= User Impersonation =============
+
+router.post(
+  '/users/:userId/impersonate',
+  impersonationRateLimiter,
+  requirePasswordMiddleware, // Requires password confirmation for security
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const adminId = req.user!.id;
+      const adminRole = req.userRole!;
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+
+      const result = await authService.impersonateUser(
+        userId,
+        adminId,
+        adminRole,
+        ipAddress,
+        userAgent
+      );
+
+      res.json({
+        success: true,
+        message: `Now impersonating user ${result.user.email}`,
+        data: {
+          user: result.user,
+          token: result.token,
+          originalAdminId: result.originalAdminId,
+        },
+      });
+    } catch (error) {
+      if (error instanceof AuthServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+router.post(
+  '/impersonation/end',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { adminId } = req.body;
+
+      if (!adminId) {
+        res.status(400).json({
+          success: false,
+          error: 'adminId is required to end impersonation',
+        });
+        return;
+      }
+
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+
+      // Extract current token for blacklisting
+      const authHeader = req.headers.authorization;
+      const currentToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+
+      const result = await authService.endImpersonation(adminId, ipAddress, userAgent, currentToken);
+
+      res.json({
+        success: true,
+        message: 'Impersonation ended, returned to admin account',
+        data: {
+          user: result.user,
+          token: result.token,
+        },
+      });
+    } catch (error) {
+      if (error instanceof AuthServiceError) {
         res.status(error.statusCode).json({
           success: false,
           error: error.message,
@@ -1016,6 +1132,973 @@ router.put(
         success: true,
         message: `Fake activity ${enabled ? 'enabled' : 'disabled'}`,
         data: { enabled },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= OTC Market Management =============
+
+// Get OTC system stats
+router.get(
+  '/otc/stats',
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const stats = await otcAdminService.getOTCStats();
+
+      res.json({
+        success: true,
+        data: stats,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get all OTC configs
+router.get(
+  '/otc/configs',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = getOTCConfigsQuerySchema.safeParse(req.query);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid query parameters',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const result = await otcAdminService.getAllConfigs(parsed.data);
+
+      res.json({
+        success: true,
+        data: result.configs,
+        pagination: {
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get single OTC config by ID
+router.get(
+  '/otc/configs/:id',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = otcConfigIdSchema.safeParse({ params: req.params });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid config ID',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const config = await otcAdminService.getConfigById(parsed.data.params.id);
+
+      if (!config) {
+        res.status(404).json({
+          success: false,
+          error: 'OTC config not found',
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: config,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Create new OTC config
+router.post(
+  '/otc/configs',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = createOTCConfigSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request body',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const config = await otcAdminService.createConfig(parsed.data, req.user?.id);
+
+      res.status(201).json({
+        success: true,
+        message: 'OTC config created successfully',
+        data: config,
+      });
+    } catch (error) {
+      if (error instanceof OTCAdminServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Update OTC config
+router.patch(
+  '/otc/configs/:id',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const idParsed = otcConfigIdSchema.safeParse({ params: req.params });
+      const bodyParsed = updateOTCConfigSchema.safeParse(req.body);
+
+      if (!idParsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid config ID',
+          details: idParsed.error.issues,
+        });
+        return;
+      }
+
+      if (!bodyParsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request body',
+          details: bodyParsed.error.issues,
+        });
+        return;
+      }
+
+      const config = await otcAdminService.updateConfig(
+        idParsed.data.params.id,
+        bodyParsed.data,
+        req.user?.id
+      );
+
+      res.json({
+        success: true,
+        message: 'OTC config updated successfully',
+        data: config,
+      });
+    } catch (error) {
+      if (error instanceof OTCAdminServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Delete OTC config
+router.delete(
+  '/otc/configs/:id',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = otcConfigIdSchema.safeParse({ params: req.params });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid config ID',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      await otcAdminService.deleteConfig(parsed.data.params.id, req.user?.id);
+
+      res.json({
+        success: true,
+        message: 'OTC config deleted successfully',
+      });
+    } catch (error) {
+      if (error instanceof OTCAdminServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Get all OTC exposures
+router.get(
+  '/otc/exposures',
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const exposures = await otcAdminService.getAllExposures();
+
+      res.json({
+        success: true,
+        data: exposures,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get exposure for specific symbol
+router.get(
+  '/otc/exposures/:symbol',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = otcSymbolSchema.safeParse({ params: req.params });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid symbol',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const decodedSymbol = decodeURIComponent(parsed.data.params.symbol);
+      const exposure = await otcAdminService.getSymbolExposure(decodedSymbol);
+
+      res.json({
+        success: true,
+        data: exposure,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Reset exposure for a symbol
+router.post(
+  '/otc/exposures/:symbol/reset',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = otcSymbolSchema.safeParse({ params: req.params });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid symbol',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const decodedSymbol = decodeURIComponent(parsed.data.params.symbol);
+      await otcAdminService.resetExposure(decodedSymbol, req.user?.id);
+
+      res.json({
+        success: true,
+        message: 'Exposure reset successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get price history for a symbol
+router.get(
+  '/otc/prices/:symbol',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = getOTCPriceHistorySchema.safeParse({
+        params: req.params,
+        query: req.query,
+      });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const decodedSymbol = decodeURIComponent(parsed.data.params.symbol);
+      const history = await otcAdminService.getPriceHistory(decodedSymbol, parsed.data.query);
+
+      res.json({
+        success: true,
+        data: history,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get activity log
+router.get(
+  '/otc/activity',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = getOTCActivityLogSchema.safeParse({ query: req.query });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid query parameters',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const result = await otcAdminService.getActivityLog(parsed.data.query);
+
+      res.json({
+        success: true,
+        data: result.logs,
+        pagination: {
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Bulk toggle enabled status
+router.post(
+  '/otc/configs/bulk/toggle-enabled',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { ids, enabled } = req.body;
+
+      if (!Array.isArray(ids) || typeof enabled !== 'boolean') {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request body. "ids" must be an array and "enabled" must be a boolean.',
+        });
+        return;
+      }
+
+      const count = await otcAdminService.bulkToggleEnabled(ids, enabled, req.user?.id);
+
+      res.json({
+        success: true,
+        message: `${count} config(s) ${enabled ? 'enabled' : 'disabled'}`,
+        data: { affected: count },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Bulk toggle risk engine
+router.post(
+  '/otc/configs/bulk/toggle-risk',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { ids, riskEnabled } = req.body;
+
+      if (!Array.isArray(ids) || typeof riskEnabled !== 'boolean') {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request body. "ids" must be an array and "riskEnabled" must be a boolean.',
+        });
+        return;
+      }
+
+      const count = await otcAdminService.bulkToggleRisk(ids, riskEnabled, req.user?.id);
+
+      res.json({
+        success: true,
+        message: `Risk engine ${riskEnabled ? 'enabled' : 'disabled'} for ${count} config(s)`,
+        data: { affected: count },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= OTC MANUAL CONTROLS =============
+
+// Get manual control state for a symbol
+router.get(
+  '/otc/controls/:symbol',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      const control = manualControlService.getManualControl(symbol);
+
+      res.json({
+        success: true,
+        data: control || {
+          symbol,
+          directionBias: 0,
+          directionStrength: 0,
+          volatilityMultiplier: 1.0,
+          priceOverride: null,
+          priceOverrideExpiry: null,
+          isActive: true,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get all manual controls
+router.get(
+  '/otc/controls',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const controls = manualControlService.getAllManualControls();
+
+      res.json({
+        success: true,
+        data: controls,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Set direction bias for a symbol
+router.post(
+  '/otc/controls/:symbol/direction',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      const parsed = setDirectionBiasSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const { bias, strength, durationMinutes, reason } = parsed.data;
+      await manualControlService.setDirectionBias(symbol, bias, strength, req.user!.id, durationMinutes, reason);
+
+      const durationText = durationMinutes ? ` for ${durationMinutes} minutes` : ' (permanent)';
+      res.json({
+        success: true,
+        message: `Direction bias set to ${bias} at ${(strength * 100).toFixed(0)}% strength${durationText}`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Set volatility multiplier for a symbol
+router.post(
+  '/otc/controls/:symbol/volatility',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      const parsed = setVolatilitySchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const { multiplier, durationMinutes, reason } = parsed.data;
+      await manualControlService.setVolatilityMultiplier(symbol, multiplier, req.user!.id, durationMinutes, reason);
+
+      const durationText = durationMinutes ? ` for ${durationMinutes} minutes` : ' (permanent)';
+      res.json({
+        success: true,
+        message: `Volatility multiplier set to ${multiplier}x${durationText}`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Set price override for a symbol
+router.post(
+  '/otc/controls/:symbol/price-override',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      const parsed = setPriceOverrideSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const { price, expiryMinutes, reason } = parsed.data;
+      await manualControlService.setPriceOverride(symbol, price, expiryMinutes, req.user!.id, reason);
+
+      res.json({
+        success: true,
+        message: `Price override set to ${price} for ${expiryMinutes} minutes`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Clear price override for a symbol
+router.delete(
+  '/otc/controls/:symbol/price-override',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      await manualControlService.clearPriceOverride(symbol, req.user!.id);
+
+      res.json({
+        success: true,
+        message: 'Price override cleared',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Clear direction bias for a symbol
+router.delete(
+  '/otc/controls/:symbol/direction',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      await manualControlService.clearDirectionBias(symbol, req.user!.id);
+
+      res.json({
+        success: true,
+        message: 'Direction bias cleared',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Clear volatility multiplier for a symbol
+router.delete(
+  '/otc/controls/:symbol/volatility',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      await manualControlService.clearVolatilityMultiplier(symbol, req.user!.id);
+
+      res.json({
+        success: true,
+        message: 'Volatility multiplier reset to 1.0x',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Reset ALL controls for a symbol (convenience endpoint)
+router.delete(
+  '/otc/controls/:symbol',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      await manualControlService.resetAllControls(symbol, req.user!.id);
+
+      res.json({
+        success: true,
+        message: `All controls reset to default for ${symbol}`,
+        data: {
+          directionBias: 0,
+          directionStrength: 0,
+          volatilityMultiplier: 1.0,
+          priceOverride: null,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get active OTC trades
+router.get(
+  '/otc/trades/active',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = getActiveTradesSchema.safeParse({ query: req.query });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const { symbol } = parsed.data.query;
+      const trades = await manualControlService.getActiveTrades(symbol);
+
+      res.json({
+        success: true,
+        data: trades,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Force trade outcome
+router.post(
+  '/otc/trades/:tradeId/force',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { tradeId } = req.params;
+      const parsed = forceTradeOutcomeSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const { outcome, reason } = parsed.data;
+      await manualControlService.forceTradeOutcome(tradeId, outcome, req.user!.id, reason);
+
+      res.json({
+        success: true,
+        message: `Trade ${tradeId} forced to ${outcome}`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get all user targets
+router.get(
+  '/otc/users/targets',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const targets = await manualControlService.getAllUserTargets();
+
+      res.json({
+        success: true,
+        data: targets,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get targeting for a specific user
+router.get(
+  '/otc/users/:userId/target',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const target = manualControlService.getUserTargeting(userId);
+
+      res.json({
+        success: true,
+        data: target,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Set user targeting
+router.post(
+  '/otc/users/:userId/target',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const parsed = setUserTargetingSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      await manualControlService.setUserTargeting(userId, parsed.data, req.user!.id);
+
+      res.json({
+        success: true,
+        message: 'User targeting set successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Remove user targeting
+router.delete(
+  '/otc/users/:userId/target',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const { symbol } = req.query as { symbol?: string };
+
+      await manualControlService.removeUserTargeting(userId, symbol || null, req.user!.id);
+
+      res.json({
+        success: true,
+        message: 'User targeting removed',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get intervention log
+router.get(
+  '/otc/interventions',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = getInterventionLogSchema.safeParse({ query: req.query });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const { actionType, targetType, targetId, from, to, page, limit } = parsed.data.query;
+
+      const result = await manualControlService.getInterventionLog({
+        actionType: actionType as any,
+        targetType: targetType as any,
+        targetId,
+        from,
+        to,
+        page,
+        limit,
+      });
+
+      res.json({
+        success: true,
+        data: result.logs,
+        pagination: {
+          page,
+          limit,
+          total: result.total,
+          totalPages: Math.ceil(result.total / limit),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= OTC HISTORY SEEDING =============
+
+// Seed history for a single OTC symbol
+router.post(
+  '/otc/history/seed/:symbol',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      const { count, resolution, clearExisting } = req.body;
+
+      const result = await otcHistorySeeder.seedSymbol(symbol, {
+        count: count || 500,
+        resolution: resolution || 60,
+        clearExisting: clearExisting !== false,
+      });
+
+      // Clear the historical bars cache for this symbol so new data is used
+      marketService.clearHistoricalCache(symbol);
+
+      res.json({
+        success: true,
+        message: `Seeded ${result.candlesSeeded} candles for ${symbol}`,
+        data: result,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(400).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Seed history for all enabled OTC symbols
+router.post(
+  '/otc/history/seed-all',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { count, resolution, clearExisting } = req.body;
+
+      const results = await otcHistorySeeder.seedAllSymbols({
+        count: count || 500,
+        resolution: resolution || 60,
+        clearExisting: clearExisting !== false,
+      });
+
+      const totalSeeded = results.reduce((sum, r) => sum + r.candlesSeeded, 0);
+      const successful = results.filter(r => r.candlesSeeded > 0).length;
+
+      // Clear all OTC historical bars cache so new data is used
+      marketService.clearHistoricalCache();
+
+      res.json({
+        success: true,
+        message: `Seeded ${totalSeeded} candles across ${successful}/${results.length} symbols`,
+        data: {
+          totalSeeded,
+          successful,
+          total: results.length,
+          results,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Seed history by market type (FOREX or CRYPTO)
+router.post(
+  '/otc/history/seed-type/:marketType',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const marketType = req.params.marketType.toUpperCase() as 'FOREX' | 'CRYPTO';
+
+      if (marketType !== 'FOREX' && marketType !== 'CRYPTO') {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid market type. Must be FOREX or CRYPTO.',
+        });
+        return;
+      }
+
+      const { count, resolution, clearExisting } = req.body;
+
+      const results = await otcHistorySeeder.seedByMarketType(marketType, {
+        count: count || 500,
+        resolution: resolution || 60,
+        clearExisting: clearExisting !== false,
+      });
+
+      const totalSeeded = results.reduce((sum, r) => sum + r.candlesSeeded, 0);
+      const successful = results.filter(r => r.candlesSeeded > 0).length;
+
+      // Clear all OTC historical bars cache so new data is used
+      marketService.clearHistoricalCache();
+
+      res.json({
+        success: true,
+        message: `Seeded ${totalSeeded} candles for ${successful}/${results.length} ${marketType} symbols`,
+        data: {
+          marketType,
+          totalSeeded,
+          successful,
+          total: results.length,
+          results,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get seeded history stats for a symbol
+router.get(
+  '/otc/history/stats/:symbol',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      const stats = await otcHistorySeeder.getSeededHistoryStats(symbol);
+
+      res.json({
+        success: true,
+        data: {
+          symbol,
+          ...stats,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Check if symbol has seeded history
+router.get(
+  '/otc/history/has/:symbol',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      const hasHistory = await otcHistorySeeder.hasSeededHistory(symbol);
+
+      res.json({
+        success: true,
+        data: {
+          symbol,
+          hasSeededHistory: hasHistory,
+        },
       });
     } catch (error) {
       next(error);

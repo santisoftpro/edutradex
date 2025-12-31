@@ -3,6 +3,7 @@ import authRoutes from './auth.routes.js';
 import tradeRoutes from './trade.routes.js';
 import marketRoutes from './market.routes.js';
 import adminRoutes from './admin.routes.js';
+import superadminRoutes from './superadmin.routes.js';
 import depositRoutes from './deposit.routes.js';
 import spreadRoutes from './spread.routes.js';
 import withdrawalRoutes from './withdrawal.routes.js';
@@ -14,6 +15,7 @@ import kycRoutes from './kyc.routes.js';
 import settingsRoutes from './settings.routes.js';
 import supportRoutes from './support.routes.js';
 import simulatedLeaderRoutes from './simulated-leader.routes.js';
+import securityRoutes from './security.routes.js';
 
 const router = Router();
 
@@ -22,9 +24,11 @@ router.use('/auth', authRoutes);
 router.use('/trades', tradeRoutes);
 router.use('/market', marketRoutes);
 router.use('/admin', adminRoutes);
+router.use('/superadmin', superadminRoutes);
 router.use('/deposits', depositRoutes);
 router.use('/withdrawals', withdrawalRoutes);
 router.use('/admin/spreads', spreadRoutes);
+router.use('/admin/security', securityRoutes);
 router.use('/payment-methods', paymentMethodRoutes);
 router.use('/copy-trading', copyTradingRoutes);
 router.use('/referral', referralRoutes);

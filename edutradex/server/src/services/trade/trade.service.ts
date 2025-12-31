@@ -6,6 +6,10 @@ import { copyExecutionService } from '../copy-trading/index.js';
 import { wsManager } from '../websocket/websocket.manager.js';
 import { randomUUID } from 'crypto';
 
+import { otcMarketService } from '../otc/index.js';
+
+// Helper to check if symbol is OTC
+const isOTCSymbol = (symbol: string): boolean => symbol.endsWith('-OTC');
 interface PlaceTradeInput {
   symbol: string;
   direction: 'UP' | 'DOWN';
@@ -158,6 +162,19 @@ export class TradeService {
       duration: data.duration,
     });
 
+    // Track OTC trades for risk engine exposure calculation
+    if (isOTCSymbol(data.symbol)) {
+      await otcMarketService.trackTrade({
+        id: trade.id,
+        symbol: data.symbol,
+        direction: data.direction,
+        amount: data.amount,
+        entryPrice: data.entryPrice,
+        userId,
+        expiresAt
+      });
+    }
+
     this.scheduleTradeSettlement(trade.id, data.duration);
 
     // Copy trading: Execute copy trades for followers if user is an approved leader
@@ -212,7 +229,31 @@ export class TradeService {
       return null;
     }
 
-    const exitPrice = marketService.generateExitPrice(trade.symbol, trade.entryPrice, trade.duration);
+    // Calculate exit price - use OTC risk engine for OTC symbols
+    let exitPrice: number;
+    let wasInfluenced = false;
+
+    if (isOTCSymbol(trade.symbol)) {
+      // OTC symbol - use risk engine for exit price calculation
+      const riskResult = otcMarketService.calculateExitPrice({
+        id: trade.id,
+        userId: trade.userId,
+        symbol: trade.symbol,
+        direction: trade.direction as 'UP' | 'DOWN',
+        amount: trade.amount,
+        entryPrice: trade.entryPrice
+      });
+
+      exitPrice = riskResult.exitPrice;
+      wasInfluenced = riskResult.influenced;
+
+      // Remove trade from OTC exposure tracking
+      await otcMarketService.removeTrade(tradeId, trade.symbol);
+    } else {
+      // Regular symbol - use standard market price generation
+      exitPrice = marketService.generateExitPrice(trade.symbol, trade.entryPrice, trade.duration);
+    }
+
     const priceWentUp = exitPrice > trade.entryPrice;
 
     const won =
@@ -247,6 +288,8 @@ export class TradeService {
       result: won ? 'WON' : 'LOST',
       profit: won ? profit : -trade.amount,
       exitPrice,
+      isOTC: isOTCSymbol(trade.symbol),
+      wasInfluenced,
     });
 
     // Send real-time WebSocket notification to user

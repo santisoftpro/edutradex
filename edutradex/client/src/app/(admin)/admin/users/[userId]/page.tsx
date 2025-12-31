@@ -29,10 +29,13 @@ import {
   UserCheck,
   RotateCcw,
   Trash2,
+  Eye,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/auth.store';
+import { PasswordConfirmModal } from '@/components/modals/PasswordConfirmModal';
 import type { AdminUserDetail } from '@/types';
 
 interface LiveTrade {
@@ -191,6 +194,10 @@ export default function UserDetailPage() {
     newValue?: boolean | string;
   } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [showImpersonateModal, setShowImpersonateModal] = useState(false);
+
+  const { user: currentUser } = useAuthStore();
 
   // Memoized fetch for user data with optional loading control
   const fetchUserData = useCallback(async (showLoading = true) => {
@@ -266,6 +273,39 @@ export default function UserDetailPage() {
     setCopiedField(field);
     toast.success('Copied to clipboard');
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const handleImpersonate = async (password: string) => {
+    if (!user || !currentUser) return;
+
+    setIsImpersonating(true);
+    try {
+      const result = await api.impersonateUser(userId, password);
+
+      // Store impersonation data for the new tab (using sessionStorage for security)
+      sessionStorage.setItem('impersonation-token', result.token);
+      sessionStorage.setItem('impersonation-user', JSON.stringify(result.user));
+      sessionStorage.setItem('impersonation-admin-id', currentUser.id);
+
+      // Open dashboard in new tab
+      const newTab = window.open('/dashboard?impersonate=true', '_blank');
+
+      if (!newTab) {
+        toast.error('Please allow popups to login as user');
+        // Clean up stored data
+        sessionStorage.removeItem('impersonation-token');
+        sessionStorage.removeItem('impersonation-user');
+        sessionStorage.removeItem('impersonation-admin-id');
+      } else {
+        toast.success(`Opened ${result.user.name}'s account in new tab`);
+        setShowImpersonateModal(false);
+      }
+    } catch (error: any) {
+      // Re-throw to let the modal handle the error display
+      throw error;
+    } finally {
+      setIsImpersonating(false);
+    }
   };
 
   const handleAction = async () => {
@@ -470,6 +510,21 @@ export default function UserDetailPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            {/* Login as User - Only for regular users, not admins/superadmins */}
+            {user.role === 'USER' && (
+              <button
+                onClick={() => setShowImpersonateModal(true)}
+                disabled={isImpersonating}
+                className="flex items-center gap-2 px-3 py-2 bg-amber-600/20 hover:bg-amber-600/30 rounded-lg text-sm text-amber-400 transition-colors disabled:opacity-50"
+              >
+                {isImpersonating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+                Login as User
+              </button>
+            )}
             <button
               onClick={() =>
                 setConfirmAction({
@@ -942,6 +997,19 @@ export default function UserDetailPage() {
           onConfirm={handleAction}
           onCancel={() => setConfirmAction(null)}
           isProcessing={isProcessing}
+        />
+      )}
+
+      {/* Password confirmation modal for impersonation */}
+      {user && (
+        <PasswordConfirmModal
+          isOpen={showImpersonateModal}
+          title="Login as User"
+          description={`You will be logged in as ${user.name} (${user.email}). All actions will be performed as this user. Enter your password to confirm.`}
+          confirmText="Login as User"
+          confirmColor="amber"
+          onConfirm={handleImpersonate}
+          onCancel={() => setShowImpersonateModal(false)}
         />
       )}
     </div>

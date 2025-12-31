@@ -7,12 +7,19 @@ import { logger } from '../../utils/logger.js';
 import type { RegisterInput, LoginInput } from '../../validators/auth.validators.js';
 import { referralService } from '../referral/referral.service.js';
 import { emailService } from '../email/email.service.js';
+import { auditService } from '../audit/audit.service.js';
+import { tokenBlacklistService } from './token-blacklist.service.js';
+import { securityService, LoginContext } from '../security/security.service.js';
+import { ipService } from '../security/ip.service.js';
+import { deviceService, DeviceInfo } from '../security/device.service.js';
 import { randomUUID } from 'crypto';
 
 interface JwtPayload {
   userId: string;
   email: string;
   role: string;
+  isImpersonation?: boolean;
+  impersonatedBy?: string;
 }
 
 interface UserPublic {
@@ -60,7 +67,12 @@ export class AuthService {
   // OWASP recommends minimum 10 rounds for bcrypt
   private readonly SALT_ROUNDS = 10;
 
-  async register(data: RegisterInput): Promise<AuthResult> {
+  async register(
+    data: RegisterInput,
+    ipAddress?: string,
+    userAgent?: string,
+    deviceFingerprint?: string
+  ): Promise<AuthResult> {
     // Check if email exists
     const existingUser = await queryOne<{ id: string }>(
       'SELECT id FROM "User" WHERE email = $1',
@@ -71,18 +83,44 @@ export class AuthService {
       throw new AuthServiceError('Email already registered', 409);
     }
 
+    // Check if device fingerprint is blocked
+    if (deviceFingerprint) {
+      const isBlocked = await deviceService.isInBlocklist(deviceFingerprint);
+      if (isBlocked) {
+        logger.warn('Registration blocked - device in blocklist', { email: data.email, deviceFingerprint });
+        throw new AuthServiceError('Registration not allowed from this device', 403);
+      }
+    }
+
+    // Check if IP is blocked
+    if (ipAddress) {
+      const isIpBlocked = await ipService.isIpBlocked(ipAddress);
+      if (isIpBlocked) {
+        logger.warn('Registration blocked - IP in blocklist', { email: data.email, ipAddress });
+        throw new AuthServiceError('Registration not allowed from this location', 403);
+      }
+    }
+
+    // Get geolocation for registration
+    let registrationCountry: string | undefined;
+    if (ipAddress) {
+      const geoLocation = await ipService.getGeoLocation(ipAddress);
+      registrationCountry = geoLocation?.country;
+    }
+
     const hashedPassword = await bcrypt.hash(data.password, this.SALT_ROUNDS);
     const userId = randomUUID();
     const referralCode = referralService.generateReferralCode('temp', data.name);
     const now = new Date();
 
-    // Insert new user
+    // Insert new user with registration tracking data
     const user = await queryOne<UserRow>(
       `INSERT INTO "User" (
         id, email, password, name, role, "liveBalance", "demoBalance",
         "activeAccountType", "isActive", "emailVerified", "referralCode",
-        "createdAt", "updatedAt"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        "registrationIp", "registrationCountry", "registrationUserAgent",
+        "lastKnownCountry", "createdAt", "updatedAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING id, email, name, role, "liveBalance", "demoBalance", "activeAccountType", "emailVerified"`,
       [
         userId,
@@ -96,6 +134,10 @@ export class AuthService {
         true,
         false,
         referralCode,
+        ipAddress,
+        registrationCountry,
+        userAgent,
+        registrationCountry,
         now,
         now
       ]
@@ -103,6 +145,68 @@ export class AuthService {
 
     if (!user) {
       throw new AuthServiceError('Failed to create user', 500);
+    }
+
+    // Check for multi-account by device fingerprint
+    if (deviceFingerprint) {
+      const linkedAccounts = await deviceService.checkMultiAccountByFingerprint(
+        deviceFingerprint,
+        userId
+      );
+
+      if (linkedAccounts.length > 0) {
+        logger.warn('Multi-account detected during registration', {
+          userId,
+          linkedAccounts,
+          deviceFingerprint,
+        });
+
+        // Create security alert for multi-account
+        await securityService.createSecurityAlert({
+          userId,
+          alertType: 'MULTI_ACCOUNT_REGISTRATION',
+          severity: 'HIGH',
+          title: 'New account from shared device',
+          description: `Registration detected from a device linked to ${linkedAccounts.length} other account(s).`,
+          metadata: { linkedAccounts, deviceFingerprint, ipAddress },
+        });
+      }
+
+      // Register the device for this user
+      const deviceInfo: DeviceInfo = {
+        fingerprint: deviceFingerprint,
+        deviceType: deviceService.parseDeviceType(userAgent),
+        ...deviceService.parseBrowserInfo(userAgent),
+        ...deviceService.parseOsInfo(userAgent),
+      };
+
+      await deviceService.getOrCreateDevice(
+        userId,
+        deviceInfo,
+        ipAddress || 'unknown',
+        registrationCountry
+      );
+    }
+
+    // Check for multi-account by IP
+    if (ipAddress) {
+      const linkedByIp = await ipService.checkSharedIp(ipAddress, userId);
+      if (linkedByIp.length > 0) {
+        logger.warn('Multi-account by IP detected during registration', {
+          userId,
+          linkedAccounts: linkedByIp,
+          ipAddress,
+        });
+
+        await securityService.createSecurityAlert({
+          userId,
+          alertType: 'MULTI_ACCOUNT_IP',
+          severity: 'MEDIUM',
+          title: 'New account from shared IP',
+          description: `Registration detected from an IP address linked to ${linkedByIp.length} other account(s).`,
+          metadata: { linkedAccounts: linkedByIp, ipAddress },
+        });
+      }
     }
 
     // Process referral if provided
@@ -121,7 +225,12 @@ export class AuthService {
       role: user.role,
     });
 
-    logger.info('User registered successfully', { userId: user.id, email: user.email });
+    logger.info('User registered successfully', {
+      userId: user.id,
+      email: user.email,
+      ip: ipAddress,
+      country: registrationCountry,
+    });
 
     // Send welcome email
     emailService.sendWelcomeEmail(user.email, user.name)
@@ -142,7 +251,57 @@ export class AuthService {
     };
   }
 
-  async login(data: LoginInput): Promise<AuthResult> {
+  async login(
+    data: LoginInput,
+    ipAddress?: string,
+    userAgent?: string,
+    deviceFingerprint?: string
+  ): Promise<AuthResult & { securityInfo?: { isNewDevice: boolean; isNewLocation: boolean; requiresVerification: boolean } }> {
+    const loginContext: LoginContext = {
+      email: data.email,
+      ipAddress: ipAddress || 'unknown',
+      userAgent,
+      deviceFingerprint,
+    };
+
+    // Check velocity limits (credential stuffing protection)
+    const velocityCheck = await securityService.checkVelocityLimits(
+      data.email,
+      ipAddress || 'unknown'
+    );
+    if (velocityCheck.blocked) {
+      await securityService.recordLoginAttempt(loginContext, false, undefined, 'VELOCITY_LIMIT');
+      throw new AuthServiceError(velocityCheck.reason || 'Too many attempts', 429);
+    }
+
+    // Check if account is locked
+    const lockStatus = await securityService.checkAccountLock(data.email);
+    if (lockStatus.isLocked) {
+      const minutesRemaining = lockStatus.lockedUntil
+        ? Math.ceil((lockStatus.lockedUntil.getTime() - Date.now()) / 60000)
+        : 0;
+
+      // Record failed attempt due to lock
+      await securityService.recordLoginAttempt(loginContext, false, undefined, 'ACCOUNT_LOCKED');
+
+      throw new AuthServiceError(
+        `Account is locked. Try again in ${minutesRemaining} minutes.`,
+        423 // Locked status code
+      );
+    }
+
+    // Check if IP is blocked
+    if (ipAddress && await ipService.isIpBlocked(ipAddress)) {
+      await securityService.recordLoginAttempt(loginContext, false, undefined, 'IP_BLOCKED');
+      throw new AuthServiceError('Access denied from this location', 403);
+    }
+
+    // Check if device is blocked
+    if (deviceFingerprint && await deviceService.isInBlocklist(deviceFingerprint)) {
+      await securityService.recordLoginAttempt(loginContext, false, undefined, 'DEVICE_BLOCKED');
+      throw new AuthServiceError('Access denied from this device', 403);
+    }
+
     const user = await queryOne<UserRow>(
       `SELECT id, email, password, name, role, "liveBalance", "demoBalance",
               "activeAccountType", "isActive", "emailVerified"
@@ -151,17 +310,70 @@ export class AuthService {
     );
 
     if (!user) {
+      // Record failed attempt for non-existent user
+      await securityService.recordLoginAttempt(loginContext, false, undefined, 'USER_NOT_FOUND');
       throw new AuthServiceError('Invalid email or password', 401);
     }
 
     if (!user.isActive) {
+      await securityService.recordLoginAttempt(loginContext, false, user.id, 'ACCOUNT_DEACTIVATED');
       throw new AuthServiceError('Account is deactivated', 403);
     }
 
     const isPasswordValid = await bcrypt.compare(data.password, user.password);
 
     if (!isPasswordValid) {
-      throw new AuthServiceError('Invalid email or password', 401);
+      // Handle failed login - increment counter, potentially lock
+      const failResult = await securityService.handleFailedLogin(data.email);
+
+      // Record failed attempt
+      await securityService.recordLoginAttempt(loginContext, false, user.id, 'INVALID_CREDENTIALS');
+
+      if (failResult.locked) {
+        const minutesRemaining = failResult.lockedUntil
+          ? Math.ceil((failResult.lockedUntil.getTime() - Date.now()) / 60000)
+          : 0;
+        throw new AuthServiceError(
+          `Too many failed attempts. Account locked for ${minutesRemaining} minutes.`,
+          423
+        );
+      }
+
+      throw new AuthServiceError(
+        `Invalid email or password. ${failResult.attemptsRemaining} attempts remaining.`,
+        401
+      );
+    }
+
+    // Update login context with device info for successful login
+    if (deviceFingerprint) {
+      loginContext.deviceInfo = {
+        fingerprint: deviceFingerprint,
+        deviceType: deviceService.parseDeviceType(userAgent),
+        ...deviceService.parseBrowserInfo(userAgent),
+        ...deviceService.parseOsInfo(userAgent),
+      };
+    }
+
+    // Record successful login attempt and get security assessment
+    const loginResult = await securityService.recordLoginAttempt(
+      loginContext,
+      true,
+      user.id
+    );
+
+    // Reset failed login counter
+    await securityService.handleSuccessfulLogin(user.id);
+
+    // Update last known country
+    if (ipAddress) {
+      const geoLocation = await ipService.getGeoLocation(ipAddress);
+      if (geoLocation?.country) {
+        await query(
+          `UPDATE "User" SET "lastKnownCountry" = $1, "updatedAt" = NOW() WHERE id = $2`,
+          [geoLocation.country, user.id]
+        );
+      }
     }
 
     const token = this.generateToken({
@@ -170,7 +382,22 @@ export class AuthService {
       role: user.role,
     });
 
-    logger.info('User logged in successfully', { userId: user.id });
+    logger.info('User logged in successfully', {
+      userId: user.id,
+      ip: ipAddress,
+      riskScore: loginResult.riskScore,
+      isNewDevice: loginResult.isNewDevice,
+      isNewLocation: loginResult.isNewLocation,
+    });
+
+    // Log admin login and create session
+    if (user.role === 'ADMIN' || user.role === 'SUPERADMIN') {
+      await auditService.logLogin(user.id, ipAddress, userAgent);
+
+      // Calculate token expiry based on role
+      const expiresAt = this.getTokenExpiry(user.role);
+      await auditService.createSession(user.id, token, expiresAt, ipAddress, userAgent);
+    }
 
     return {
       user: {
@@ -184,6 +411,11 @@ export class AuthService {
         emailVerified: user.emailVerified,
       },
       token,
+      securityInfo: {
+        isNewDevice: loginResult.isNewDevice,
+        isNewLocation: loginResult.isNewLocation,
+        requiresVerification: loginResult.requiresVerification,
+      },
     };
   }
 
@@ -279,9 +511,24 @@ export class AuthService {
   }
 
   private generateToken(payload: JwtPayload): string {
+    // SUPERADMIN gets shorter session (1 hour) for enhanced security
+    // Regular ADMIN and USER get standard expiry (7 days)
+    const expiresIn = payload.role === 'SUPERADMIN' ? '1h' : config.jwt.expiresIn;
+
     return jwt.sign(payload, config.jwt.secret, {
-      expiresIn: config.jwt.expiresIn as StringValue,
+      expiresIn: expiresIn as StringValue,
     });
+  }
+
+  /**
+   * Get token expiry date based on role
+   */
+  getTokenExpiry(role: string): Date {
+    const now = Date.now();
+    if (role === 'SUPERADMIN') {
+      return new Date(now + 60 * 60 * 1000); // 1 hour
+    }
+    return new Date(now + 7 * 24 * 60 * 60 * 1000); // 7 days
   }
 
   async sendVerificationCode(userId: string): Promise<boolean> {
@@ -471,6 +718,164 @@ export class AuthService {
   async verifyResetToken(token: string): Promise<boolean> {
     const email = await emailService.verifyResetToken(token);
     return email !== null;
+  }
+
+  /**
+   * Impersonate a user (Admin/SuperAdmin only)
+   * Creates a special token that allows admin to access user's account
+   */
+  async impersonateUser(
+    targetUserId: string,
+    adminId: string,
+    adminRole: string,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<{ user: UserPublic; token: string; originalAdminId: string }> {
+    // Only ADMIN or SUPERADMIN can impersonate
+    if (adminRole !== 'ADMIN' && adminRole !== 'SUPERADMIN') {
+      throw new AuthServiceError('Unauthorized to impersonate users', 403);
+    }
+
+    // Get the target user
+    const targetUser = await queryOne<UserRow>(
+      `SELECT id, email, password, name, role, "liveBalance", "demoBalance",
+              "activeAccountType", "isActive", "emailVerified"
+       FROM "User" WHERE id = $1`,
+      [targetUserId]
+    );
+
+    if (!targetUser) {
+      throw new AuthServiceError('User not found', 404);
+    }
+
+    // Cannot impersonate other admins (only SuperAdmin can impersonate admins)
+    if (targetUser.role === 'ADMIN' && adminRole !== 'SUPERADMIN') {
+      throw new AuthServiceError('Only SuperAdmin can impersonate admin accounts', 403);
+    }
+
+    // Cannot impersonate SuperAdmin
+    if (targetUser.role === 'SUPERADMIN') {
+      throw new AuthServiceError('Cannot impersonate SuperAdmin accounts', 403);
+    }
+
+    // Generate impersonation token with special claims
+    const token = this.generateToken({
+      userId: targetUser.id,
+      email: targetUser.email,
+      role: targetUser.role,
+      isImpersonation: true,
+      impersonatedBy: adminId,
+    });
+
+    // Log the impersonation action
+    await auditService.logAction({
+      adminId,
+      actionType: 'USER_IMPERSONATE',
+      targetType: 'USER',
+      targetId: targetUserId,
+      description: `Started impersonating user ${targetUser.name} (${targetUser.email})`,
+      metadata: { targetUserRole: targetUser.role },
+      ipAddress,
+      userAgent,
+    });
+
+    logger.info('Admin started impersonating user', {
+      adminId,
+      targetUserId,
+      targetEmail: targetUser.email,
+    });
+
+    return {
+      user: {
+        id: targetUser.id,
+        email: targetUser.email,
+        name: targetUser.name,
+        role: targetUser.role,
+        liveBalance: Number(targetUser.liveBalance),
+        demoBalance: Number(targetUser.demoBalance),
+        activeAccountType: targetUser.activeAccountType as 'LIVE' | 'DEMO',
+        emailVerified: targetUser.emailVerified,
+      },
+      token,
+      originalAdminId: adminId,
+    };
+  }
+
+  /**
+   * End impersonation and get admin token back
+   * Also blacklists the impersonation token to prevent reuse
+   */
+  async endImpersonation(
+    adminId: string,
+    ipAddress?: string,
+    userAgent?: string,
+    currentToken?: string
+  ): Promise<AuthResult> {
+    const admin = await queryOne<UserRow>(
+      `SELECT id, email, password, name, role, "liveBalance", "demoBalance",
+              "activeAccountType", "isActive", "emailVerified"
+       FROM "User" WHERE id = $1 AND role IN ('ADMIN', 'SUPERADMIN')`,
+      [adminId]
+    );
+
+    if (!admin) {
+      throw new AuthServiceError('Admin not found', 404);
+    }
+
+    if (!admin.isActive) {
+      throw new AuthServiceError('Admin account is deactivated', 403);
+    }
+
+    // Blacklist the impersonation token if provided
+    if (currentToken) {
+      try {
+        // Calculate token expiry (7 days from when it was issued, which we don't know exactly)
+        // Use a conservative 7 days from now to ensure coverage
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        await tokenBlacklistService.blacklistToken(
+          currentToken,
+          adminId,
+          'IMPERSONATION_ENDED',
+          expiresAt
+        );
+      } catch (error) {
+        // Log but don't fail - ending impersonation is more important
+        logger.error('Failed to blacklist impersonation token', { adminId, error });
+      }
+    }
+
+    const token = this.generateToken({
+      userId: admin.id,
+      email: admin.email,
+      role: admin.role,
+    });
+
+    // Log end of impersonation
+    await auditService.logAction({
+      adminId,
+      actionType: 'USER_IMPERSONATE_END',
+      targetType: 'USER',
+      targetId: adminId,
+      description: 'Ended user impersonation session',
+      ipAddress,
+      userAgent,
+    });
+
+    logger.info('Admin ended impersonation', { adminId });
+
+    return {
+      user: {
+        id: admin.id,
+        email: admin.email,
+        name: admin.name,
+        role: admin.role,
+        liveBalance: Number(admin.liveBalance),
+        demoBalance: Number(admin.demoBalance),
+        activeAccountType: admin.activeAccountType as 'LIVE' | 'DEMO',
+        emailVerified: admin.emailVerified,
+      },
+      token,
+    };
   }
 }
 

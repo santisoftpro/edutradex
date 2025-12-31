@@ -2,7 +2,18 @@
   "permissions": {
     "allow": [
       "Bash(ls:*)",
-      "Bash(npx prisma:*)"
+      "Bash(npx prisma:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkNDE1Y2EyYS1mYTEyLTRhYTktOWIyNC1hYmE0YmI3MTI4NWUiLCJlbWFpbCI6ImFkbWludGVzdEB0ZXN0LmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc2NjcwODExNSwiZXhwIjoxNzY3MzEyOTE1fQ.yso21Rgq1VVy6QhsHe83-jjK69nKYySBL3BDjo47AoM\")",
+      "Bash(__NEW_LINE__ echo \"=== Setting NEW Direction Bias: +100 UP, 100% strength \\(maximum\\), 10 min ===\")",
+      "Bash(curl:*)",
+      "Bash(__NEW_LINE__ echo \"\")",
+      "Bash(ADMIN_ID=\"d415ca2a-fa12-4aa9-9b24-aba4bb71285e\")",
+      "Bash(__NEW_LINE__ echo \"=== STEP 1: Set User Targeting - Force Next 1 WIN ===\")",
+      "Bash(__NEW_LINE__ echo \"=== Remove existing targeting ===\")",
+      "Bash(TRADE_ID=\"0983d1ac-8b22-4a35-9d4f-63b2496da611\")",
+      "Bash(__NEW_LINE__ echo \"Trade ID: $TRADE_ID\")",
+      "Bash(npx tsc:*)",
+      "Bash(npx tsx:*)"
     ],
     "deny": [],
     "ask": []

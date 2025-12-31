@@ -23,6 +23,11 @@ interface DrawnLine {
   points: { time: number; value: number }[];
 }
 
+export interface FavoritePair {
+  symbol: string;
+  payout: number;
+}
+
 const DEFAULT_INDICATORS: IndicatorConfig[] = [
   { id: 'sma20', name: 'SMA (20)', type: 'overlay', enabled: false, color: '#f59e0b' },
   { id: 'ema9', name: 'EMA (9)', type: 'overlay', enabled: false, color: '#8b5cf6' },
@@ -58,6 +63,11 @@ interface ChartState {
   addDrawnLine: (line: DrawnLine) => void;
   undoDrawing: () => DrawnLine | undefined;
   clearDrawings: () => void;
+
+  // Favorite pairs
+  favoritePairs: FavoritePair[];
+  addFavoritePair: (pair: FavoritePair) => void;
+  removeFavoritePair: (symbol: string) => void;
 
   // UI state
   showMobileControls: boolean;
@@ -105,6 +115,20 @@ export const useChartStore = create<ChartState>()(
       },
       clearDrawings: () => set({ drawnLines: [], drawingTool: 'none' }),
 
+      // Favorite pairs
+      favoritePairs: [],
+      addFavoritePair: (pair) =>
+        set((state) => {
+          if (state.favoritePairs.some((p) => p.symbol === pair.symbol)) {
+            return state;
+          }
+          return { favoritePairs: [...state.favoritePairs, pair] };
+        }),
+      removeFavoritePair: (symbol) =>
+        set((state) => ({
+          favoritePairs: state.favoritePairs.filter((p) => p.symbol !== symbol),
+        })),
+
       // UI state
       showMobileControls: true,
       setShowMobileControls: (show) => set({ showMobileControls: show }),
@@ -116,6 +140,7 @@ export const useChartStore = create<ChartState>()(
         chartType: state.chartType,
         indicators: state.indicators,
         showVolume: state.showVolume,
+        favoritePairs: state.favoritePairs,
       }),
     }
   )

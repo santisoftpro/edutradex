@@ -16,6 +16,7 @@ import { wsManager } from './services/websocket/websocket.manager.js';
 import { emailService } from './services/email/email.service.js';
 import { commissionScheduler } from './services/scheduler/commission.scheduler.js';
 import { tradeSettlementScheduler } from './services/scheduler/trade.scheduler.js';
+import { otcMarketService } from './services/otc/otc-market.service.js';
 
 // Constants
 const REQUEST_BODY_LIMIT = '10mb';
@@ -273,6 +274,9 @@ async function gracefulShutdown(signal: string): Promise<void> {
   commissionScheduler.stop();
   tradeSettlementScheduler.stop();
 
+  // Stop OTC market service
+  otcMarketService.stop();
+
   // Close WebSocket server
   wss.close(() => {
     logger.info('WebSocket server closed');
@@ -353,6 +357,15 @@ async function startServer(): Promise<void> {
 
     // Start trade settlement scheduler (runs every 5 seconds to catch expired trades)
     tradeSettlementScheduler.start();
+
+    // Initialize and start OTC market service
+    try {
+      await otcMarketService.initialize();
+      otcMarketService.start();
+      logger.info('OTC Market Service initialized and started');
+    } catch (error) {
+      logger.warn('OTC Market Service initialization failed - OTC trading will be unavailable', { error });
+    }
 
     // Start HTTP server
     server.listen(config.port, () => {

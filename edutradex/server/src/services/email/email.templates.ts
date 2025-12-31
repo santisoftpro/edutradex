@@ -407,4 +407,115 @@ export const emailTemplates = {
       <p>If you did not request this withdrawal, please secure your account immediately and contact support.</p>
     `);
   },
+
+  securityAlert: (userName: string, alertTitle: string, alertDescription: string): string => {
+    return wrapTemplate(`
+      <h2>Security Alert</h2>
+      <p>Hello ${userName},</p>
+      <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #ef4444; padding: 20px; margin: 20px 0; border-radius: 8px;">
+        <h3 style="margin: 0 0 10px 0; color: #dc2626;">${alertTitle}</h3>
+        <p style="margin: 0; color: #7f1d1d;">${alertDescription}</p>
+      </div>
+      <div class="warning">
+        <strong>What should you do?</strong>
+        <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+          <li>If this activity was not initiated by you, secure your account immediately</li>
+          <li>Change your password if you suspect unauthorized access</li>
+          <li>Review your recent account activity in your dashboard</li>
+          <li>Contact support if you need assistance</li>
+        </ul>
+      </div>
+      <p>If you recognize this activity, you can safely ignore this email.</p>
+      <p>Stay safe!<br><strong>The OptigoBroker Security Team</strong></p>
+    `);
+  },
+
+  newDeviceLogin: (
+    userName: string,
+    deviceType: string,
+    browser: string,
+    location: string,
+    ipAddress: string,
+    timestamp: Date
+  ): string => {
+    const formattedTime = timestamp.toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    });
+
+    return wrapTemplate(`
+      <h2>New Device Login Detected</h2>
+      <p>Hello ${userName},</p>
+      <div class="info">
+        <strong>A new device was used to access your account</strong>
+      </div>
+      <div style="padding: 20px; background-color: #f8f9fa; border-radius: 8px; margin: 20px 0;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 8px 0; color: #666; width: 100px;">Device:</td>
+            <td style="padding: 8px 0; font-weight: 600;">${deviceType}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #666;">Browser:</td>
+            <td style="padding: 8px 0;">${browser}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #666;">Location:</td>
+            <td style="padding: 8px 0;">${location}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #666;">IP Address:</td>
+            <td style="padding: 8px 0; font-family: monospace;">${ipAddress}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #666;">Time:</td>
+            <td style="padding: 8px 0;">${formattedTime}</td>
+          </tr>
+        </table>
+      </div>
+      <div class="warning">
+        <strong>Was this you?</strong>
+        <p style="margin: 10px 0 0 0;">If you don't recognize this login, your account may be compromised. Please:</p>
+        <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+          <li>Change your password immediately</li>
+          <li>Enable two-factor authentication</li>
+          <li>Review your account activity</li>
+          <li>Contact support for assistance</li>
+        </ul>
+      </div>
+      <p>Stay safe!<br><strong>The OptigoBroker Security Team</strong></p>
+    `);
+  },
+
+  accountLocked: (userName: string, lockDuration: number, reason: string): string => {
+    return wrapTemplate(`
+      <h2>Account Temporarily Locked</h2>
+      <p>Hello ${userName},</p>
+      <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #ef4444; padding: 20px; margin: 20px 0; border-radius: 8px;">
+        <h3 style="margin: 0 0 10px 0; color: #dc2626;">Your Account Has Been Locked</h3>
+        <p style="margin: 0; color: #7f1d1d;">Duration: <strong>${lockDuration} minutes</strong></p>
+        <p style="margin: 10px 0 0 0; color: #7f1d1d;">Reason: ${reason}</p>
+      </div>
+      <div class="info">
+        <strong>Why did this happen?</strong>
+        <p style="margin: 10px 0 0 0;">Your account was locked as a security precaution due to suspicious activity or too many failed login attempts.</p>
+      </div>
+      <div class="warning">
+        <strong>What should you do?</strong>
+        <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+          <li>Wait for the lock period to expire</li>
+          <li>If you forgot your password, use the "Forgot Password" feature</li>
+          <li>If you believe this is an error, contact our support team</li>
+          <li>Consider enabling two-factor authentication for added security</li>
+        </ul>
+      </div>
+      <p>Your account will be automatically unlocked after the lock period expires.</p>
+      <p>Stay safe!<br><strong>The OptigoBroker Security Team</strong></p>
+    `);
+  },
 };

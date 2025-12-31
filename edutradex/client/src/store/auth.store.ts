@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { api } from '@/lib/api';
+import { getDeviceFingerprint } from '@/lib/fingerprint';
 import type { User, AuthResponse, AccountType } from '@/types';
 
 // Throttle state for preventing rapid API calls
@@ -20,6 +21,8 @@ interface AuthActions {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string, referralCode?: string) => Promise<void>;
   logout: () => void;
+  setUser: (user: User) => void;
+  setToken: (token: string) => void;
   updateBalance: (newBalance: number) => void;
   updateLiveBalance: (newBalance: number) => void;
   updateDemoBalance: (newBalance: number) => void;
@@ -51,9 +54,18 @@ export const useAuthStore = create<AuthStore>()(
       login: async (email: string, password: string) => {
         set({ isLoading: true });
         try {
+          // Get device fingerprint for security tracking
+          let deviceFingerprint: string | undefined;
+          try {
+            deviceFingerprint = await getDeviceFingerprint();
+          } catch (e) {
+            console.warn('Failed to generate device fingerprint:', e);
+          }
+
           const response = await api.post<AuthResponse>('/auth/login', {
             email,
             password,
+            deviceFingerprint,
           });
 
           const { user, token } = response.data;
@@ -75,10 +87,19 @@ export const useAuthStore = create<AuthStore>()(
       register: async (email: string, password: string, name: string, referralCode?: string) => {
         set({ isLoading: true });
         try {
+          // Get device fingerprint for security tracking
+          let deviceFingerprint: string | undefined;
+          try {
+            deviceFingerprint = await getDeviceFingerprint();
+          } catch (e) {
+            console.warn('Failed to generate device fingerprint:', e);
+          }
+
           const response = await api.post<AuthResponse>('/auth/register', {
             email,
             password,
             name,
+            deviceFingerprint,
             ...(referralCode && { referralCode }),
           });
 
@@ -121,6 +142,17 @@ export const useAuthStore = create<AuthStore>()(
           token: null,
           isAuthenticated: false,
         });
+      },
+
+      // Set user directly (used for impersonation)
+      setUser: (user: User) => {
+        set({ user, isAuthenticated: true });
+      },
+
+      // Set token directly (used for impersonation)
+      setToken: (token: string) => {
+        api.setToken(token);
+        set({ token });
       },
 
       // NOTE: This is for optimistic UI updates only. Always call syncBalanceFromServer() after trades.

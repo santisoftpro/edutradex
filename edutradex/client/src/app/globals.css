@@ -1,19 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ExpertOption Color Palette */
+  --background: #182031;
+  --foreground: #F5F5F5;
 
-  /* Primary Color - Blue */
-  --primary: #0630ba;
-  --primary-light: #0535ed;
-  --primary-dark: #041f8a;
-  --primary-hover: #0535ed;
+  /* Primary Color - Cyan Blue */
+  --primary: #2f96f0;
+  --primary-light: #63b7fb;
+  --primary-dark: #1a7fd4;
+  --primary-hover: #3ba3f7;
 
-  /* Secondary Color */
-  --secondary: #0535ed;
-  --secondary-light: #3366ff;
-  --secondary-dark: #0428b8;
+  /* Secondary Color - Navy */
+  --secondary: #202e5a;
+  --secondary-light: #2e3e72;
+  --secondary-dark: #151b27;
+
+  /* Status Colors */
+  --success: #32a88a;
+  --error: #d7276b;
+  --warning: #fab81e;
+
+  /* Background Gradients */
+  --bg-main: #202e5a;
+  --bg-darker: #182031;
+  --bg-darkest: #151b27;
 }
 
 @theme inline {
@@ -23,21 +34,33 @@
   --color-primary-light: var(--primary-light);
   --color-primary-dark: var(--primary-dark);
   --color-secondary: var(--secondary);
+  --color-success: var(--success);
+  --color-error: var(--error);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #111111;
-    --foreground: #ededed;
+    --background: #182031;
+    --foreground: #F5F5F5;
   }
 }
 
 body {
-  background: var(--background);
+  background-color: #272e4a;
+  background-image: radial-gradient(240% 100% at 75% 0%, #2e3e72 0%, #182031 30%, #151b27 100%);
+  background-position: top;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, Roboto, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+@media only screen and (max-width: 550px) {
+  body {
+    background-image: radial-gradient(200% 92% at 50% 0, #212f5c 0%, #182031 110%, #151b27 100%);
+  }
 }
 
 /* Utility for vertical text */
@@ -172,4 +195,97 @@ div[style*="position: absolute"][style*="z-index"][style*="bottom: 4px"] {
 div[style*="position: absolute"][style*="inset: 0"][style*="overflow: hidden"][style*="pointer-events: none"] > div:last-child,
 div[style*="position: absolute"][style*="inset: 0px"][style*="pointer-events: none"] > div:last-child {
   display: none !important;
+}
+
+/* ============================================
+   PROFESSIONAL CHART ANIMATIONS
+   ============================================ */
+
+/* Price Badge Pulse Animation - Green (Up) */
+@keyframes price-pulse-up {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+/* Price Badge Pulse Animation - Red (Down) */
+@keyframes price-pulse-down {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+.animate-price-pulse-up {
+  animation: price-pulse-up 0.4s ease-out;
+}
+
+.animate-price-pulse-down {
+  animation: price-pulse-down 0.4s ease-out;
+}
+
+/* Price Flash Animation - Background flash on price update */
+@keyframes flash-green {
+  0% {
+    background-color: rgba(34, 197, 94, 0.35);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes flash-red {
+  0% {
+    background-color: rgba(239, 68, 68, 0.35);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.animate-flash-up {
+  animation: flash-green 0.25s ease-out;
+}
+
+.animate-flash-down {
+  animation: flash-red 0.25s ease-out;
+}
+
+/* Countdown Timer Pulse - subtle glow effect */
+@keyframes countdown-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-countdown-pulse {
+  animation: countdown-pulse 1s ease-in-out infinite;
+}
+
+/* Price badge glow effect */
+.price-badge-glow-up {
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.4), 0 0 4px rgba(34, 197, 94, 0.6);
+}
+
+.price-badge-glow-down {
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.4), 0 0 4px rgba(239, 68, 68, 0.6);
+}
+
+/* Smooth number transition */
+.price-transition {
+  transition: color 0.15s ease-out;
 }

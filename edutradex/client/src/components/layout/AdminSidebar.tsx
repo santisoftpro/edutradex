@@ -18,9 +18,12 @@ import {
   Copy,
   FileCheck,
   MessageSquare,
+  Activity,
+  Crown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth.store';
 
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
@@ -32,17 +35,21 @@ const navItems = [
   { href: '/admin/payment-methods', label: 'Payment Methods', icon: CreditCard },
   { href: '/admin/copy-trading', label: 'Copy Trading', icon: Copy, badgeKey: 'pendingLeaders' },
   { href: '/admin/markets', label: 'Markets', icon: TrendingUp },
+  { href: '/admin/otc', label: 'OTC Markets', icon: Activity },
   { href: '/admin/spreads', label: 'Spreads', icon: Percent },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const { user } = useAuthStore();
   const [pendingDeposits, setPendingDeposits] = useState(0);
   const [pendingWithdrawals, setPendingWithdrawals] = useState(0);
   const [pendingLeaders, setPendingLeaders] = useState(0);
   const [pendingKYC, setPendingKYC] = useState(0);
   const [openTickets, setOpenTickets] = useState(0);
+
+  const isSuperAdmin = user?.role === 'SUPERADMIN';
 
   useEffect(() => {
     const fetchPendingCounts = async () => {
@@ -130,6 +137,16 @@ export function AdminSidebar() {
       </nav>
 
       <div className="py-6 px-4 border-t border-slate-700">
+        {isSuperAdmin && (
+          <Link
+            href="/superadmin"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-amber-400 hover:bg-amber-900/30 transition-colors mb-2"
+          >
+            <Crown className="h-5 w-5" />
+            <span className="font-medium">SuperAdmin</span>
+          </Link>
+        )}
+
         <Link
           href="/dashboard"
           className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth/auth.service.js';
+import { tokenBlacklistService } from '../services/auth/token-blacklist.service.js';
 import { logger } from '../utils/logger.js';
 
 export interface AuthenticatedUser {
@@ -55,7 +56,29 @@ export async function authMiddleware(
       return;
     }
 
+    // Check if token is blacklisted (revoked)
+    const isBlacklisted = await tokenBlacklistService.isTokenBlacklisted(token);
+    if (isBlacklisted) {
+      logger.debug('Blocked blacklisted token attempt');
+      res.status(401).json({
+        success: false,
+        error: 'Token has been revoked',
+      });
+      return;
+    }
+
     const decoded = authService.verifyToken(token);
+
+    // Also check if all user tokens are blacklisted (password change, security breach)
+    const allTokensBlacklisted = await tokenBlacklistService.areAllUserTokensBlacklisted(decoded.userId);
+    if (allTokensBlacklisted) {
+      logger.debug('Blocked user with all tokens blacklisted', { userId: decoded.userId });
+      res.status(401).json({
+        success: false,
+        error: 'Session expired. Please log in again.',
+      });
+      return;
+    }
 
     const user = await authService.getUserById(decoded.userId);
 
@@ -88,10 +111,27 @@ export function adminMiddleware(
   res: Response,
   next: NextFunction
 ): void {
-  if (req.userRole !== 'ADMIN') {
+  // Allow both ADMIN and SUPERADMIN roles
+  if (req.userRole !== 'ADMIN' && req.userRole !== 'SUPERADMIN') {
     res.status(403).json({
       success: false,
       error: 'Admin access required',
+    });
+    return;
+  }
+
+  next();
+}
+
+export function superAdminMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  if (req.userRole !== 'SUPERADMIN') {
+    res.status(403).json({
+      success: false,
+      error: 'SuperAdmin access required',
     });
     return;
   }

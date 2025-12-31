@@ -933,6 +933,53 @@ class MarketService {
       logger.info('[Market] Cleared all historical bars cache');
     }
   }
+
+  /**
+   * Register an OTC asset in the market service
+   */
+  registerOTCAsset(asset: {
+    symbol: string;
+    baseSymbol: string;
+    name: string;
+    marketType: 'FOREX' | 'CRYPTO';
+    pipSize: number;
+    basePrice: number;
+  }): void {
+    const marketAsset: MarketAsset = {
+      symbol: asset.symbol,
+      name: asset.name,
+      marketType: asset.marketType.toLowerCase() as 'forex' | 'crypto',
+      basePrice: asset.basePrice,
+      pipSize: asset.pipSize,
+      isActive: true,
+      payoutPercent: 85
+    };
+    this.assets.set(asset.symbol, marketAsset);
+    this.priceHistory.set(asset.symbol, { symbol: asset.symbol, prices: [] });
+    logger.debug('[Market] Registered OTC asset: ' + asset.symbol);
+  }
+
+  /**
+   * Update OTC price for chart data
+   */
+  updateOTCPrice(tick: {
+    symbol: string;
+    price: number;
+    bid: number;
+    ask: number;
+    timestamp: Date;
+    change?: number;
+    changePercent?: number;
+  }): void {
+    const history = this.priceHistory.get(tick.symbol);
+    if (history) {
+      history.prices.push({ price: tick.price, timestamp: tick.timestamp });
+      if (history.prices.length > 1000) {
+        history.prices = history.prices.slice(-1000);
+      }
+    }
+  }
+
 }
 
 export const marketService = new MarketService();

@@ -28,6 +28,12 @@ export const registerSchema = z.object({
     .max(20, 'Referral code must be less than 20 characters')
     .optional()
     .transform((val) => val?.trim().toUpperCase()),
+
+  // Device fingerprint for security tracking
+  deviceFingerprint: z
+    .string()
+    .max(256, 'Device fingerprint too long')
+    .optional(),
 });
 
 export const loginSchema = z.object({
@@ -40,6 +46,12 @@ export const loginSchema = z.object({
   password: z
     .string()
     .min(1, 'Password is required'),
+
+  // Device fingerprint for security tracking
+  deviceFingerprint: z
+    .string()
+    .max(256, 'Device fingerprint too long')
+    .optional(),
 });
 
 export const resetBalanceSchema = z.object({

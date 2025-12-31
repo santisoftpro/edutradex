@@ -34,7 +34,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
     return null;
   }
 
-  if (user?.role !== 'ADMIN') {
+  if (user?.role !== 'ADMIN' && user?.role !== 'SUPERADMIN') {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center max-w-md p-8">

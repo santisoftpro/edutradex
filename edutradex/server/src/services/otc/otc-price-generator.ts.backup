@@ -1,0 +1,1156 @@
+/**
+ * OTC Price Generator Service - Professional Edition v3
+ *
+ * CRITICAL FIX: Uses PIP-BASED movement instead of percentage volatility
+ *
+ * Movement Reference (matching PocketOption):
+ * - Normal tick: 1-3 pips movement
+ * - Impulse tick: 3-8 pips movement
+ * - Maximum tick: 10-15 pips movement
+ *
+ * Examples:
+ * - BTC/USD (pipSize 0.01): Normal $0.01-$0.03, Max $0.15
+ * - EUR/USD (pipSize 0.0001): Normal 0.0001-0.0003, Max 0.0015
+ *
+ * Professional OTC features matching PocketOption/Quotex:
+ * - Impulse-Consolidation cycles
+ * - Volatility events
+ * - Session-based volatility
+ * - Micro-gap generation
+ * - Candlestick pattern formation
+ * - Trader sentiment (crowd fading)
+ * - Round number psychology
+ * - False breakout generation
+ * - Variable tick timing
+ * - Candle sequence control
+ * - Price magnet zones
+ */
+
+import { logger } from '../../utils/logger.js';
+import {
+  OTCPriceConfig,
+  PriceState,
+  OTCPriceTick,
+  PriceMode,
+  IOTCPriceGenerator
+} from './types.js';
+import { manualControlService } from './manual-control.service.js';
+
+// Constants for price generation
+const PRICE_HISTORY_LENGTH = 300; // Extended buffer for longer timeframe chart accuracy
+const MIN_TICK_INTERVAL_MS = 500;
+const SUPPORT_RESISTANCE_MEMORY = 50;
+
+// PIP-BASED MOVEMENT CONSTANTS (tuned for professional smooth OTC appearance)
+// These values produce small, consistent candles like PocketOption/Quotex
+const NORMAL_MOVEMENT_PIPS_MIN = 0.2;  // Minimum pips per normal tick (was 0.5)
+const NORMAL_MOVEMENT_PIPS_MAX = 1.0;  // Maximum pips per normal tick (was 2.0)
+const IMPULSE_MOVEMENT_PIPS_MIN = 0.5; // Minimum pips during impulse (was 2.0)
+const IMPULSE_MOVEMENT_PIPS_MAX = 2.0; // Maximum pips during impulse (was 5.0)
+const CONSOLIDATION_MOVEMENT_PIPS = 0.15; // Pips during consolidation (was 0.3)
+const MAX_MOVEMENT_PIPS = 3.0; // Absolute maximum pips per tick (was 8.0)
+const VOLATILITY_EVENT_MULTIPLIER_MAX = 1.5; // Max 1.5x during volatility events (was 2.0)
+
+// Professional market behavior constants
+const IMPULSE_PROBABILITY = 0.12; // 12% chance to start impulse
+const IMPULSE_DURATION_MIN = 3;
+const IMPULSE_DURATION_MAX = 6;
+const CONSOLIDATION_PROBABILITY = 0.20; // 20% chance for consolidation
+const CONSOLIDATION_DURATION_MIN = 8;
+const CONSOLIDATION_DURATION_MAX = 20;
+const VOLATILITY_EVENT_PROBABILITY = 0.005; // 0.5% chance for vol spike
+const VOLATILITY_EVENT_DURATION_MIN = 5;
+const VOLATILITY_EVENT_DURATION_MAX = 12;
+const MICRO_GAP_PROBABILITY = 0.005; // 0.5% chance for micro gap (was 1.5%)
+const MICRO_GAP_PIPS_MAX = 1; // Maximum gap size in pips (was 3)
+const PATTERN_FORMATION_STRENGTH = 0.5;
+
+// V2 Advanced constants
+const FALSE_BREAKOUT_PROBABILITY = 0.10;
+const ROUND_NUMBER_STALL_PROBABILITY = 0.30;
+const CROWD_FADE_STRENGTH = 0.10;
+const MAX_SAME_DIRECTION_CANDLES = 5;
+const PRICE_MAGNET_STRENGTH = 0.05;
+const TICK_TIMING_VARIANCE = 0.3; // 30% variance
+
+// Market session hours (UTC) - subtle volatility adjustment
+const SESSIONS = {
+  ASIAN: { start: 0, end: 8, multiplier: 0.8 },
+  LONDON: { start: 8, end: 16, multiplier: 1.1 },
+  NEW_YORK: { start: 13, end: 21, multiplier: 1.15 },
+  OVERLAP: { start: 13, end: 16, multiplier: 1.2 },
+  QUIET: { start: 21, end: 24, multiplier: 0.7 }
+};
+
+// ============================================================
+// MARKET TYPE SPECIFIC CHARACTERISTICS
+// Forex and Crypto behave very differently in real markets
+// ============================================================
+const MARKET_TYPE_CONFIG = {
+  FOREX: {
+    // Forex: Tight spreads, slow movements, high consolidation
+    movementMultiplier: 0.6,      // 60% of base movement (tighter candles)
+    trendPersistence: 0.70,       // 70% trend continuation (more trending)
+    impulseProbability: 0.08,     // 8% impulse chance (less frequent)
+    consolidationProbability: 0.30, // 30% consolidation (more ranging)
+    volatilityEventProbability: 0.002, // 0.2% vol spike (rare)
+    maxSameDirectionCandles: 7,   // Allow longer trends
+    sessionMultiplierStrength: 1.2, // Sessions matter more for forex
+  },
+  CRYPTO: {
+    // Crypto: Higher volatility, more momentum, sudden moves
+    movementMultiplier: 1.4,      // 140% of base movement (larger candles)
+    trendPersistence: 0.55,       // 55% trend continuation (more choppy)
+    impulseProbability: 0.18,     // 18% impulse chance (more frequent)
+    consolidationProbability: 0.12, // 12% consolidation (less ranging)
+    volatilityEventProbability: 0.012, // 1.2% vol spike (more common)
+    maxSameDirectionCandles: 4,   // Shorter trends, more reversals
+    sessionMultiplierStrength: 0.5, // Sessions matter less for 24/7 crypto
+  }
+};
+
+// Extended price state
+interface ExtendedPriceState extends PriceState {
+  marketPhase: 'normal' | 'impulse' | 'consolidation';
+  phaseTicksRemaining: number;
+  impulseDirection: number;
+
+  volatilityEventActive: boolean;
+  volatilityEventMultiplier: number;
+  volatilityEventTicksRemaining: number;
+
+  patternType: 'none' | 'doji' | 'hammer' | 'shooting_star' | 'engulfing' | 'false_breakout';
+  patternTicksRemaining: number;
+  patternAnchorPrice: number;
+
+  currentCandleOpen: number;
+  currentCandleHigh: number;
+  currentCandleLow: number;
+  candleTickCount: number;
+
+  consecutiveSameDirection: number;
+  lastMoveDirection: number;
+  nearRoundNumber: boolean;
+  roundNumberLevel: number;
+  pricesMagnetTarget: number | null;
+  magnetTicksRemaining: number;
+  falseBreakoutLevel: number | null;
+  falseBreakoutDirection: number;
+
+  nextTickDelayMs: number;
+  lastTickTime: number;
+}
+
+interface TraderSentiment {
+  upPercent: number;
+  downPercent: number;
+  lastUpdate: number;
+}
+
+export class OTCPriceGenerator implements IOTCPriceGenerator {
+  private priceStates: Map<string, ExtendedPriceState> = new Map();
+  private configs: Map<string, OTCPriceConfig> = new Map();
+  private supportResistanceLevels: Map<string, { support: number[]; resistance: number[] }> = new Map();
+  private traderSentiment: Map<string, TraderSentiment> = new Map();
+
+  /**
+   * Generate random number with normal distribution (Box-Muller)
+   */
+  private gaussianRandom(): number {
+    let u1: number, u2: number;
+    do {
+      u1 = Math.random();
+      u2 = Math.random();
+    } while (u1 === 0);
+    return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+  }
+
+  /**
+   * Random integer between min and max (inclusive)
+   */
+  private randomInt(min: number, max: number): number {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  /**
+   * Random float between min and max
+   */
+  private randomFloat(min: number, max: number): number {
+    return min + Math.random() * (max - min);
+  }
+
+  /**
+   * Get session-based multiplier (subtle, 0.7-1.2 range)
+   */
+  private getSessionMultiplier(): number {
+    const hour = new Date().getUTCHours();
+
+    if (hour >= SESSIONS.OVERLAP.start && hour < SESSIONS.OVERLAP.end) {
+      return SESSIONS.OVERLAP.multiplier;
+    }
+    if (hour >= SESSIONS.NEW_YORK.start && hour < SESSIONS.NEW_YORK.end) {
+      return SESSIONS.NEW_YORK.multiplier;
+    }
+    if (hour >= SESSIONS.LONDON.start && hour < SESSIONS.LONDON.end) {
+      return SESSIONS.LONDON.multiplier;
+    }
+    if (hour >= SESSIONS.ASIAN.start && hour < SESSIONS.ASIAN.end) {
+      return SESSIONS.ASIAN.multiplier;
+    }
+    return SESSIONS.QUIET.multiplier;
+  }
+
+  /**
+   * Get market type configuration for a symbol
+   */
+  private getMarketTypeConfig(config: OTCPriceConfig) {
+    return MARKET_TYPE_CONFIG[config.marketType] || MARKET_TYPE_CONFIG.FOREX;
+  }
+
+  /**
+   * Generate pip-based movement for current tick
+   * This is the core function that ensures realistic movement
+   * Now includes MARKET TYPE differentiation (Forex vs Crypto)
+   */
+  private generatePipMovement(state: ExtendedPriceState, config: OTCPriceConfig): number {
+    let basePips: number;
+    const mtConfig = this.getMarketTypeConfig(config);
+
+    // Determine base movement based on market phase
+    switch (state.marketPhase) {
+      case 'impulse':
+        // Impulse: Larger pips in consistent direction
+        basePips = this.randomFloat(IMPULSE_MOVEMENT_PIPS_MIN, IMPULSE_MOVEMENT_PIPS_MAX);
+        basePips *= state.impulseDirection;
+        break;
+
+      case 'consolidation':
+        // Consolidation: Very small movement
+        basePips = this.randomFloat(0.1, CONSOLIDATION_MOVEMENT_PIPS);
+        basePips *= Math.random() > 0.5 ? 1 : -1;
+        break;
+
+      default:
+        // Normal: Small pips with TREND PERSISTENCE for smooth movement
+        basePips = this.randomFloat(NORMAL_MOVEMENT_PIPS_MIN, NORMAL_MOVEMENT_PIPS_MAX);
+        // Use gaussian for more natural distribution (small moves more common)
+        const gaussian = Math.abs(this.gaussianRandom()) * 0.5;
+        basePips = Math.min(basePips, NORMAL_MOVEMENT_PIPS_MIN + gaussian);
+
+        // TREND PERSISTENCE: Use market-type specific value
+        // Forex: 70% (longer trends), Crypto: 55% (more reversals)
+        const trendPersistence = mtConfig.trendPersistence;
+        if (state.lastMoveDirection !== 0 && Math.random() < trendPersistence) {
+          basePips *= state.lastMoveDirection;
+        } else {
+          basePips *= Math.random() > 0.5 ? 1 : -1;
+        }
+    }
+
+    // Apply MARKET TYPE movement multiplier
+    // Forex: 0.6x (tighter candles), Crypto: 1.4x (larger candles)
+    basePips *= mtConfig.movementMultiplier;
+
+    // Apply session multiplier (weighted by market type)
+    // Sessions matter more for Forex, less for 24/7 Crypto
+    const sessionMult = this.getSessionMultiplier();
+    const weightedSessionMult = 1 + (sessionMult - 1) * mtConfig.sessionMultiplierStrength;
+    basePips *= weightedSessionMult;
+
+    // Apply volatility event multiplier (max 1.5x)
+    if (state.volatilityEventActive) {
+      basePips *= Math.min(state.volatilityEventMultiplier, VOLATILITY_EVENT_MULTIPLIER_MAX);
+    }
+
+    // Apply manual volatility override from admin
+    const manualMultiplier = manualControlService.getVolatilityMultiplier(config.symbol);
+    basePips *= manualMultiplier;
+
+    // Cap at absolute maximum
+    basePips = Math.max(-MAX_MOVEMENT_PIPS, Math.min(MAX_MOVEMENT_PIPS, basePips));
+
+    // Convert pips to price change
+    return basePips * config.pipSize;
+  }
+
+  /**
+   * Update trader sentiment simulation
+   */
+  private updateTraderSentiment(symbol: string, direction: number): void {
+    let sentiment = this.traderSentiment.get(symbol);
+    if (!sentiment) {
+      sentiment = { upPercent: 50, downPercent: 50, lastUpdate: Date.now() };
+      this.traderSentiment.set(symbol, sentiment);
+    }
+
+    // Traders follow price (herd behavior)
+    if (direction > 0) {
+      sentiment.upPercent = Math.min(85, sentiment.upPercent + 0.5);
+    } else if (direction < 0) {
+      sentiment.downPercent = Math.min(85, sentiment.downPercent + 0.5);
+    }
+
+    // Normalize
+    const total = sentiment.upPercent + sentiment.downPercent;
+    sentiment.upPercent = (sentiment.upPercent / total) * 100;
+    sentiment.downPercent = (sentiment.downPercent / total) * 100;
+
+    // Decay toward 50/50
+    sentiment.upPercent = sentiment.upPercent * 0.995 + 50 * 0.005;
+    sentiment.downPercent = sentiment.downPercent * 0.995 + 50 * 0.005;
+    sentiment.lastUpdate = Date.now();
+  }
+
+  /**
+   * Get crowd fading influence (in pips direction modifier)
+   */
+  private getCrowdFadeInfluence(symbol: string): number {
+    const sentiment = this.traderSentiment.get(symbol);
+    if (!sentiment) return 0;
+
+    const imbalance = sentiment.upPercent - sentiment.downPercent;
+    if (Math.abs(imbalance) > 15) {
+      // Slight tendency to fade the crowd
+      return imbalance > 0 ? -CROWD_FADE_STRENGTH : CROWD_FADE_STRENGTH;
+    }
+    return 0;
+  }
+
+  /**
+   * Handle round number psychology
+   */
+  private handleRoundNumber(
+    state: ExtendedPriceState,
+    config: OTCPriceConfig,
+    proposedPrice: number
+  ): { price: number; stalled: boolean } {
+    // Calculate round number levels based on asset type
+    const roundFactor = config.pipSize < 0.001
+      ? config.pipSize * 500  // Forex: 50 pip levels
+      : config.pipSize * 100; // Crypto: 100 pip levels
+
+    const nearestRound = Math.round(proposedPrice / roundFactor) * roundFactor;
+    const distance = Math.abs(proposedPrice - nearestRound);
+    const threshold = config.pipSize * 8;
+
+    if (distance < threshold) {
+      state.nearRoundNumber = true;
+      state.roundNumberLevel = nearestRound;
+
+      if (Math.random() < ROUND_NUMBER_STALL_PROBABILITY) {
+        // Stall at round number with micro movement
+        const microMove = (Math.random() - 0.5) * config.pipSize * 1.5;
+        return { price: nearestRound + microMove, stalled: true };
+      }
+    } else {
+      state.nearRoundNumber = false;
+    }
+
+    return { price: proposedPrice, stalled: false };
+  }
+
+  /**
+   * Check and apply false breakout
+   */
+  private checkFalseBreakout(
+    state: ExtendedPriceState,
+    config: OTCPriceConfig,
+    priceChange: number
+  ): number {
+    const levels = this.supportResistanceLevels.get(state.symbol);
+    if (!levels) return priceChange;
+
+    // Continue existing false breakout
+    if (state.falseBreakoutLevel !== null) {
+      const distanceFromLevel = state.currentPrice - state.falseBreakoutLevel;
+      if (Math.abs(distanceFromLevel) > config.pipSize * 12) {
+        state.falseBreakoutLevel = null;
+        state.falseBreakoutDirection = 0;
+        return priceChange;
+      }
+      // Pull back toward level
+      return -Math.abs(priceChange) * state.falseBreakoutDirection;
+    }
+
+    // Check for new false breakout
+    if (Math.random() < FALSE_BREAKOUT_PROBABILITY) {
+      const allLevels = [...levels.support, ...levels.resistance];
+      for (const level of allLevels) {
+        const distance = state.currentPrice - level;
+        if (Math.abs(distance) < config.pipSize * 4 && Math.abs(distance) > config.pipSize) {
+          state.falseBreakoutLevel = level;
+          state.falseBreakoutDirection = distance > 0 ? -1 : 1;
+          state.patternType = 'false_breakout';
+          state.patternTicksRemaining = this.randomInt(4, 10);
+          return -Math.abs(priceChange) * state.falseBreakoutDirection * 1.5;
+        }
+      }
+    }
+
+    return priceChange;
+  }
+
+  /**
+   * Apply candle sequence control
+   */
+  private applySequenceControl(state: ExtendedPriceState, priceChange: number): number {
+    const direction = priceChange >= 0 ? 1 : -1;
+
+    if (direction === state.lastMoveDirection) {
+      state.consecutiveSameDirection++;
+    } else {
+      state.consecutiveSameDirection = 1;
+    }
+
+    // Force reversal after too many same direction
+    if (state.consecutiveSameDirection >= MAX_SAME_DIRECTION_CANDLES) {
+      if (Math.random() < 0.65) {
+        state.consecutiveSameDirection = 0;
+        return -priceChange * (0.4 + Math.random() * 0.3);
+      }
+    }
+
+    // Increasing reversal probability
+    const reversalProb = 0.08 + (state.consecutiveSameDirection * 0.08);
+    if (Math.random() < reversalProb) {
+      return -priceChange * (0.5 + Math.random() * 0.3);
+    }
+
+    state.lastMoveDirection = direction;
+    return priceChange;
+  }
+
+  /**
+   * Apply price magnet effect
+   */
+  private applyPriceMagnet(
+    state: ExtendedPriceState,
+    config: OTCPriceConfig,
+    priceChange: number
+  ): number {
+    // Set new magnet
+    if (state.pricesMagnetTarget === null && Math.random() < 0.04) {
+      const levels = this.supportResistanceLevels.get(state.symbol);
+      const roundFactor = config.pipSize * 50;
+      const nearestRound = Math.round(state.currentPrice / roundFactor) * roundFactor;
+
+      if (levels && levels.support.length + levels.resistance.length > 0 && Math.random() < 0.5) {
+        const allLevels = [...levels.support, ...levels.resistance];
+        state.pricesMagnetTarget = allLevels.reduce((closest, level) =>
+          Math.abs(level - state.currentPrice) < Math.abs(closest - state.currentPrice) ? level : closest
+        , allLevels[0]);
+      } else {
+        state.pricesMagnetTarget = nearestRound;
+      }
+      state.magnetTicksRemaining = this.randomInt(8, 25);
+    }
+
+    // Apply magnet pull
+    if (state.pricesMagnetTarget !== null) {
+      state.magnetTicksRemaining--;
+      if (state.magnetTicksRemaining <= 0) {
+        state.pricesMagnetTarget = null;
+        return priceChange;
+      }
+
+      const distanceToMagnet = state.pricesMagnetTarget - state.currentPrice;
+      const pull = distanceToMagnet * PRICE_MAGNET_STRENGTH;
+      return priceChange + pull;
+    }
+
+    return priceChange;
+  }
+
+  /**
+   * Calculate next tick delay
+   */
+  private calculateNextTickDelay(state: ExtendedPriceState): number {
+    const base = MIN_TICK_INTERVAL_MS;
+    const variance = base * TICK_TIMING_VARIANCE;
+
+    let mult = 1;
+    if (state.marketPhase === 'consolidation') mult = 1.3;
+    if (state.marketPhase === 'impulse') mult = 0.7;
+
+    const randomVar = (Math.random() - 0.5) * 2 * variance * mult;
+    return Math.max(350, base + randomVar);
+  }
+
+  /**
+   * Update market phase with MARKET TYPE specific probabilities
+   * Forex: Less impulse, more consolidation
+   * Crypto: More impulse, less consolidation
+   */
+  private updateMarketPhase(state: ExtendedPriceState, config: OTCPriceConfig): void {
+    const mtConfig = this.getMarketTypeConfig(config);
+
+    if (state.phaseTicksRemaining > 0) {
+      state.phaseTicksRemaining--;
+      if (state.phaseTicksRemaining === 0) {
+        state.marketPhase = 'normal';
+        state.impulseDirection = 0;
+      }
+      return;
+    }
+
+    if (state.marketPhase === 'normal') {
+      // Use market-type specific impulse probability
+      if (Math.random() < mtConfig.impulseProbability) {
+        state.marketPhase = 'impulse';
+        state.phaseTicksRemaining = this.randomInt(IMPULSE_DURATION_MIN, IMPULSE_DURATION_MAX);
+        state.impulseDirection = Math.random() > 0.5 ? 1 : -1;
+        return;
+      }
+
+      // Use market-type specific consolidation probability
+      if (Math.random() < mtConfig.consolidationProbability) {
+        state.marketPhase = 'consolidation';
+        state.phaseTicksRemaining = this.randomInt(CONSOLIDATION_DURATION_MIN, CONSOLIDATION_DURATION_MAX);
+        return;
+      }
+    }
+  }
+
+  /**
+   * Update volatility event with MARKET TYPE specific probability
+   * Forex: Rare volatility spikes
+   * Crypto: More frequent volatility spikes
+   */
+  private updateVolatilityEvent(state: ExtendedPriceState, config: OTCPriceConfig): void {
+    const mtConfig = this.getMarketTypeConfig(config);
+
+    if (state.volatilityEventActive && state.volatilityEventTicksRemaining > 0) {
+      state.volatilityEventTicksRemaining--;
+      const progress = state.volatilityEventTicksRemaining / VOLATILITY_EVENT_DURATION_MAX;
+      state.volatilityEventMultiplier = 1 + (state.volatilityEventMultiplier - 1) * progress;
+
+      if (state.volatilityEventTicksRemaining === 0) {
+        state.volatilityEventActive = false;
+        state.volatilityEventMultiplier = 1;
+      }
+      return;
+    }
+
+    // Use market-type specific volatility event probability
+    if (!state.volatilityEventActive && Math.random() < mtConfig.volatilityEventProbability) {
+      state.volatilityEventActive = true;
+      state.volatilityEventTicksRemaining = this.randomInt(
+        VOLATILITY_EVENT_DURATION_MIN,
+        VOLATILITY_EVENT_DURATION_MAX
+      );
+      // Subtle multiplier: 1.2x to 1.5x
+      state.volatilityEventMultiplier = 1.2 + Math.random() * 0.3;
+    }
+  }
+
+  /**
+   * Generate micro-gap
+   */
+  private generateMicroGap(config: OTCPriceConfig): number {
+    if (Math.random() < MICRO_GAP_PROBABILITY) {
+      const gapPips = this.randomFloat(0.5, MICRO_GAP_PIPS_MAX);
+      const direction = Math.random() > 0.5 ? 1 : -1;
+      return gapPips * config.pipSize * direction;
+    }
+    return 0;
+  }
+
+  /**
+   * Update pattern formation (called before price calculation)
+   * Note: Candle OHLC tracking is now done AFTER price is calculated via updateCandleOHLC()
+   */
+  private updatePatternFormation(state: ExtendedPriceState): void {
+    state.candleTickCount++;
+
+    // Pattern formation triggers periodically (not tied to candle boundaries)
+    // Patterns help create realistic candlestick shapes
+    if (state.candleTickCount % 10 === 0 && state.patternType === 'none' && Math.random() < 0.12) {
+      const patterns: Array<'doji' | 'hammer' | 'shooting_star' | 'engulfing'> =
+        ['doji', 'hammer', 'shooting_star', 'engulfing'];
+      state.patternType = patterns[this.randomInt(0, patterns.length - 1)];
+      state.patternTicksRemaining = this.randomInt(6, 12);
+      state.patternAnchorPrice = state.currentPrice;
+    }
+
+    if (state.patternTicksRemaining > 0) {
+      state.patternTicksRemaining--;
+      if (state.patternTicksRemaining === 0) state.patternType = 'none';
+    }
+  }
+
+  /**
+   * Update candle OHLC tracking - called AFTER new price is calculated
+   * This ensures candle high/low includes the current tick's movement
+   */
+  private updateCandleOHLC(state: ExtendedPriceState, newPrice: number, config: OTCPriceConfig): void {
+    // Update candle high/low with the NEW price
+    if (newPrice > state.currentCandleHigh) state.currentCandleHigh = newPrice;
+    if (newPrice < state.currentCandleLow) state.currentCandleLow = newPrice;
+
+    // CRITICAL: Limit candle range to prevent spike candles
+    // Maximum reasonable candle range: 20 pips for Forex, 200 pips for Crypto
+    const maxCandlePips = config.marketType === 'FOREX' ? 20 : 200;
+    const maxCandleRange = maxCandlePips * config.pipSize;
+    const currentRange = state.currentCandleHigh - state.currentCandleLow;
+
+    if (currentRange > maxCandleRange) {
+      // Limit the candle range by adjusting the extreme that's further from current price
+      const midpoint = (state.currentCandleHigh + state.currentCandleLow) / 2;
+      const halfMaxRange = maxCandleRange / 2;
+
+      // Keep the candle centered around current price direction
+      if (newPrice > midpoint) {
+        // Price is moving up - preserve the high, limit the low
+        state.currentCandleLow = Math.max(state.currentCandleLow, state.currentCandleHigh - maxCandleRange);
+      } else {
+        // Price is moving down - preserve the low, limit the high
+        state.currentCandleHigh = Math.min(state.currentCandleHigh, state.currentCandleLow + maxCandleRange);
+      }
+    }
+  }
+
+  /**
+   * Apply pattern bias to price change
+   */
+  private applyPatternBias(
+    state: ExtendedPriceState,
+    config: OTCPriceConfig,
+    priceChange: number
+  ): number {
+    if (state.patternType === 'none' || state.patternTicksRemaining <= 0) {
+      return priceChange;
+    }
+
+    const progress = 1 - (state.patternTicksRemaining / 12);
+
+    switch (state.patternType) {
+      case 'doji':
+        if (progress > 0.6) {
+          const deviation = state.currentPrice - state.patternAnchorPrice;
+          return priceChange - deviation * 0.2 * PATTERN_FORMATION_STRENGTH;
+        }
+        break;
+      case 'hammer':
+        if (progress < 0.5) {
+          return -Math.abs(priceChange) * PATTERN_FORMATION_STRENGTH;
+        } else {
+          return Math.abs(priceChange) * 1.3 * PATTERN_FORMATION_STRENGTH;
+        }
+      case 'shooting_star':
+        if (progress < 0.5) {
+          return Math.abs(priceChange) * PATTERN_FORMATION_STRENGTH;
+        } else {
+          return -Math.abs(priceChange) * 1.3 * PATTERN_FORMATION_STRENGTH;
+        }
+      case 'engulfing':
+        const dir = Math.random() > 0.5 ? 1 : -1;
+        return Math.abs(priceChange) * 1.5 * dir * PATTERN_FORMATION_STRENGTH;
+    }
+
+    return priceChange;
+  }
+
+  /**
+   * Apply mean reversion toward real price
+   * CRITICAL: Limit reversion to pip-based amounts to prevent large jumps
+   * Professional OTC should move smoothly even when real price diverges
+   */
+  private calculateMeanReversion(state: ExtendedPriceState, config: OTCPriceConfig): number {
+    const deviation = state.lastRealPrice - state.currentPrice;
+    const maxDev = state.lastRealPrice * (config.maxDeviationPercent / 100);
+    const devRatio = Math.abs(deviation) / maxDev;
+
+    // Calculate reversion strength based on deviation
+    let reversionFactor: number;
+    if (devRatio < 0.3) reversionFactor = 0.005;      // Very weak - stay organic
+    else if (devRatio < 0.6) reversionFactor = 0.01;  // Slight pull
+    else if (devRatio < 1.0) reversionFactor = 0.02;  // Moderate pull
+    else reversionFactor = 0.03;                       // Stronger pull but still limited
+
+    // Calculate raw reversion amount
+    let reversionAmount = deviation * reversionFactor;
+
+    // CRITICAL: Cap reversion to maximum pip-based amount to prevent large jumps
+    // Maximum reversion should be 2-3 pips per tick regardless of deviation size
+    const maxReversionPips = 3;
+    const maxReversion = maxReversionPips * config.pipSize;
+    reversionAmount = Math.max(-maxReversion, Math.min(maxReversion, reversionAmount));
+
+    return reversionAmount;
+  }
+
+  /**
+   * Update support/resistance levels
+   */
+  private updateSupportResistance(symbol: string, price: number): void {
+    const levels = this.supportResistanceLevels.get(symbol);
+    const config = this.configs.get(symbol);
+    if (!levels || !config) return;
+
+    const roundFactor = config.pipSize * 50;
+    const roundedPrice = Math.round(price / roundFactor) * roundFactor;
+    const history = this.priceStates.get(symbol)?.priceHistory || [];
+    const recent = history.slice(-20);
+
+    if (recent.length > 0) {
+      const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
+      if (roundedPrice < avg) {
+        levels.support.push(roundedPrice);
+        if (levels.support.length > SUPPORT_RESISTANCE_MEMORY) levels.support.shift();
+      } else {
+        levels.resistance.push(roundedPrice);
+        if (levels.resistance.length > SUPPORT_RESISTANCE_MEMORY) levels.resistance.shift();
+      }
+    }
+  }
+
+  /**
+   * Initialize a symbol
+   */
+  initializeSymbol(config: OTCPriceConfig, initialPrice: number): void {
+    const state: ExtendedPriceState = {
+      symbol: config.symbol,
+      currentPrice: initialPrice,
+      lastRealPrice: initialPrice,
+      volatilityState: config.baseVolatility,
+      momentum: 0,
+      lastReturn: 0,
+      lastUpdate: Date.now(),
+      priceHistory: [initialPrice],
+
+      marketPhase: 'normal',
+      phaseTicksRemaining: 0,
+      impulseDirection: 0,
+
+      volatilityEventActive: false,
+      volatilityEventMultiplier: 1,
+      volatilityEventTicksRemaining: 0,
+
+      patternType: 'none',
+      patternTicksRemaining: 0,
+      patternAnchorPrice: initialPrice,
+
+      currentCandleOpen: initialPrice,
+      currentCandleHigh: initialPrice,
+      currentCandleLow: initialPrice,
+      candleTickCount: 0,
+
+      consecutiveSameDirection: 0,
+      lastMoveDirection: 0,
+      nearRoundNumber: false,
+      roundNumberLevel: 0,
+      pricesMagnetTarget: null,
+      magnetTicksRemaining: 0,
+      falseBreakoutLevel: null,
+      falseBreakoutDirection: 0,
+
+      nextTickDelayMs: MIN_TICK_INTERVAL_MS,
+      lastTickTime: Date.now()
+    };
+
+    this.priceStates.set(config.symbol, state);
+    this.configs.set(config.symbol, config);
+    this.supportResistanceLevels.set(config.symbol, { support: [], resistance: [] });
+    this.traderSentiment.set(config.symbol, { upPercent: 50, downPercent: 50, lastUpdate: Date.now() });
+
+    logger.info(`[OTC] Initialized v3 pip-based generator for ${config.symbol} at ${initialPrice}`);
+  }
+
+  /**
+   * Update real price reference
+   */
+  updateRealPrice(symbol: string, realPrice: number): void {
+    const state = this.priceStates.get(symbol);
+    if (state) {
+      state.lastRealPrice = realPrice;
+      this.updateSupportResistance(symbol, realPrice);
+    }
+  }
+
+  /**
+   * MAIN: Generate next price tick with pip-based movement
+   */
+  generateNextPrice(symbol: string): OTCPriceTick | null {
+    const state = this.priceStates.get(symbol) as ExtendedPriceState;
+    const config = this.configs.get(symbol);
+    if (!state || !config) {
+      logger.warn(`[OTC] No state/config for: ${symbol}`);
+      return null;
+    }
+
+    const now = Date.now();
+    const deltaMs = now - state.lastUpdate;
+
+    // Variable tick timing
+    if (deltaMs < state.nextTickDelayMs && deltaMs > 0) {
+      return null;
+    }
+
+    // Check for manual price override
+    const override = manualControlService.getPriceOverride(symbol);
+    if (override !== null) {
+      return this.createOverrideTick(symbol, override, state, config, now);
+    }
+
+    // === UPDATE STATES ===
+    this.updateMarketPhase(state, config);
+    this.updateVolatilityEvent(state, config);
+    this.updatePatternFormation(state);
+
+    // === GENERATE PIP-BASED MOVEMENT ===
+    let priceChange = this.generatePipMovement(state, config);
+
+    // Apply pattern bias
+    priceChange = this.applyPatternBias(state, config, priceChange);
+
+    // Apply crowd fade influence
+    priceChange += this.getCrowdFadeInfluence(symbol) * config.pipSize;
+
+    // Check false breakout
+    priceChange = this.checkFalseBreakout(state, config, priceChange);
+
+    // Apply sequence control
+    priceChange = this.applySequenceControl(state, priceChange);
+
+    // Apply price magnet
+    priceChange = this.applyPriceMagnet(state, config, priceChange);
+
+    // Apply mean reversion
+    priceChange += this.calculateMeanReversion(state, config);
+
+    // Apply manual direction bias
+    const { bias, strength } = manualControlService.getDirectionBias(symbol);
+    if (bias !== 0 && strength > 0) {
+      const biasProb = 0.5 + (Math.abs(bias) / 100) * strength * 0.2;
+      if (Math.random() < biasProb) {
+        const biasDir = bias > 0 ? 1 : -1;
+        const currentDir = priceChange >= 0 ? 1 : -1;
+        if (currentDir !== biasDir) {
+          priceChange = -priceChange * (0.5 + Math.random() * 0.3);
+        }
+      }
+    }
+
+    // === CRITICAL: LIMIT MAX PRICE CHANGE PER TICK ===
+    // This prevents large candles and ensures smooth professional movement
+    const maxPriceChangePerTick = MAX_MOVEMENT_PIPS * config.pipSize;
+    priceChange = Math.max(-maxPriceChangePerTick, Math.min(maxPriceChangePerTick, priceChange));
+
+    // Calculate new price
+    let newPrice = state.currentPrice + priceChange;
+
+    // Handle round number psychology
+    const roundResult = this.handleRoundNumber(state, config, newPrice);
+    newPrice = roundResult.price;
+
+    // Apply micro-gap if not stalled
+    if (!roundResult.stalled) {
+      newPrice += this.generateMicroGap(config);
+    }
+
+    // === SOFT MAX DEVIATION ENFORCEMENT ===
+    // Instead of hard clamping (which causes jumps), apply gradual correction
+    // The mean reversion already handles pulling back toward real price
+    const maxPrice = state.lastRealPrice * (1 + config.maxDeviationPercent / 100);
+    const minPrice = state.lastRealPrice * (1 - config.maxDeviationPercent / 100);
+
+    if (newPrice > maxPrice) {
+      // Gradually move toward bound instead of instant clamp
+      const overshoot = newPrice - maxPrice;
+      newPrice = maxPrice + overshoot * 0.1; // Allow slight overshoot, will correct over time
+    } else if (newPrice < minPrice) {
+      const undershoot = minPrice - newPrice;
+      newPrice = minPrice - undershoot * 0.1;
+    }
+
+    // === FINAL SANITY CHECK: LIMIT TOTAL CHANGE FROM PREVIOUS PRICE ===
+    // This is the ultimate guard against large candles
+    const actualChange = newPrice - state.currentPrice;
+    const absoluteMaxChange = maxPriceChangePerTick * 1.5; // Allow 50% extra for combined effects
+    if (Math.abs(actualChange) > absoluteMaxChange) {
+      newPrice = state.currentPrice + (actualChange > 0 ? absoluteMaxChange : -absoluteMaxChange);
+    }
+
+    // Round to pip precision
+    const pipMult = 1 / config.pipSize;
+    newPrice = Math.round(newPrice * pipMult) / pipMult;
+
+    // Update state
+    const prevPrice = state.currentPrice;
+    state.currentPrice = newPrice;
+    state.lastReturn = prevPrice > 0 ? (newPrice - prevPrice) / prevPrice : 0;
+    state.lastUpdate = now;
+
+    // CRITICAL: Update candle OHLC AFTER price is updated
+    // This ensures high/low includes current tick's movement
+    this.updateCandleOHLC(state, newPrice, config);
+
+    // Update sentiment
+    this.updateTraderSentiment(symbol, newPrice > prevPrice ? 1 : -1);
+
+    // Calculate next tick delay
+    state.nextTickDelayMs = this.calculateNextTickDelay(state);
+
+    // Update history
+    state.priceHistory.push(newPrice);
+    if (state.priceHistory.length > PRICE_HISTORY_LENGTH) {
+      state.priceHistory.shift();
+    }
+
+    // Calculate spread (1-3 pips normally, wider during volatility)
+    let spreadPips = 1;
+    if (state.marketPhase === 'impulse') spreadPips = 2;
+    if (state.volatilityEventActive) spreadPips = 2;
+    const spread = spreadPips * config.pipSize;
+
+    // Build tick
+    const change = newPrice - state.priceHistory[0];
+    const changePct = (change / state.priceHistory[0]) * 100;
+
+    return {
+      symbol,
+      price: newPrice,
+      bid: newPrice - spread / 2,
+      ask: newPrice + spread / 2,
+      timestamp: new Date(now),
+      priceMode: 'OTC',
+      volatilityState: state.volatilityState,
+      change: Number(change.toFixed(config.pipSize < 0.01 ? 5 : 2)),
+      changePercent: Number(changePct.toFixed(2))
+    };
+  }
+
+  /**
+   * Create tick from manual override
+   */
+  private createOverrideTick(
+    symbol: string,
+    price: number,
+    state: ExtendedPriceState,
+    config: OTCPriceConfig,
+    now: number
+  ): OTCPriceTick {
+    const pipMult = 1 / config.pipSize;
+    const newPrice = Math.round(price * pipMult) / pipMult;
+
+    const prevPrice = state.currentPrice;
+    state.currentPrice = newPrice;
+    state.lastReturn = prevPrice > 0 ? (newPrice - prevPrice) / prevPrice : 0;
+    state.lastUpdate = now;
+
+    // Update candle OHLC for override ticks too
+    this.updateCandleOHLC(state, newPrice, config);
+
+    state.priceHistory.push(newPrice);
+    if (state.priceHistory.length > PRICE_HISTORY_LENGTH) {
+      state.priceHistory.shift();
+    }
+
+    const spread = 2 * config.pipSize;
+    const change = newPrice - (state.priceHistory[0] || newPrice);
+    const changePct = state.priceHistory[0] ? (change / state.priceHistory[0]) * 100 : 0;
+
+    return {
+      symbol,
+      price: newPrice,
+      bid: newPrice - spread / 2,
+      ask: newPrice + spread / 2,
+      timestamp: new Date(now),
+      priceMode: 'OTC',
+      volatilityState: state.volatilityState,
+      change: Number(change.toFixed(config.pipSize < 0.01 ? 5 : 2)),
+      changePercent: Number(changePct.toFixed(2))
+    };
+  }
+
+  /**
+   * Get real-based price (when market is open)
+   */
+  getRealBasedPrice(symbol: string, realPrice: number): OTCPriceTick | null {
+    const config = this.configs.get(symbol);
+    const state = this.priceStates.get(symbol) as ExtendedPriceState;
+    if (!config || !state) return null;
+
+    // Add tiny offset (1-2 pips)
+    const offsetPips = (Math.random() - 0.5) * 2;
+    const price = realPrice + offsetPips * config.pipSize;
+
+    state.lastRealPrice = realPrice;
+    state.currentPrice = price;
+    state.lastUpdate = Date.now();
+
+    // Update candle OHLC for real mode too
+    this.updateCandleOHLC(state, price, config);
+    state.candleTickCount++;
+
+    const spread = 2 * config.pipSize;
+    const change = price - (state.priceHistory[0] || price);
+    const changePct = state.priceHistory[0] ? (change / state.priceHistory[0]) * 100 : 0;
+
+    return {
+      symbol,
+      price,
+      bid: price - spread / 2,
+      ask: price + spread / 2,
+      timestamp: new Date(),
+      priceMode: 'REAL',
+      volatilityState: state.volatilityState,
+      change: Number(change.toFixed(config.pipSize < 0.01 ? 5 : 2)),
+      changePercent: Number(changePct.toFixed(2))
+    };
+  }
+
+  // === GETTERS ===
+
+  getCurrentPrice(symbol: string): number | null {
+    return this.priceStates.get(symbol)?.currentPrice || null;
+  }
+
+  getState(symbol: string): PriceState | null {
+    return this.priceStates.get(symbol) || null;
+  }
+
+  getExtendedState(symbol: string): ExtendedPriceState | null {
+    return this.priceStates.get(symbol) || null;
+  }
+
+  /**
+   * Get current candle OHLC data for chart storage
+   * Returns properly tracked open/high/low/close values
+   */
+  getCandleOHLC(symbol: string): { open: number; high: number; low: number; close: number; tickCount: number } | null {
+    const state = this.priceStates.get(symbol);
+    if (!state) return null;
+
+    return {
+      open: state.currentCandleOpen,
+      high: state.currentCandleHigh,
+      low: state.currentCandleLow,
+      close: state.currentPrice,
+      tickCount: state.candleTickCount
+    };
+  }
+
+  /**
+   * Reset candle OHLC for new candle period
+   * Called after saving candle to database
+   */
+  resetCandle(symbol: string): void {
+    const state = this.priceStates.get(symbol);
+    if (!state) return;
+
+    // Start new candle with current price
+    state.currentCandleOpen = state.currentPrice;
+    state.currentCandleHigh = state.currentPrice;
+    state.currentCandleLow = state.currentPrice;
+    state.candleTickCount = 0;
+  }
+
+  /**
+   * Generate realistic volume based on price movement
+   * Higher movement = higher volume (typical market behavior)
+   */
+  generateVolume(symbol: string): number {
+    const state = this.priceStates.get(symbol);
+    const config = this.configs.get(symbol);
+    if (!state || !config) return 10;
+
+    // Calculate candle range in pips
+    const range = state.currentCandleHigh - state.currentCandleLow;
+    const rangeInPips = range / config.pipSize;
+
+    // Base volume + range-based component + random variation
+    const baseVolume = 50;
+    const rangeVolume = rangeInPips * 10; // More pips = more volume
+    const randomFactor = 0.7 + Math.random() * 0.6; // 70%-130% variation
+
+    // Add impulse/volatility bonus
+    let multiplier = 1;
+    if (state.marketPhase === 'impulse') multiplier = 1.5;
+    if (state.volatilityEventActive) multiplier *= 1.3;
+
+    return Math.round((baseVolume + rangeVolume) * randomFactor * multiplier);
+  }
+
+  getTraderSentiment(symbol: string): TraderSentiment | null {
+    return this.traderSentiment.get(symbol) || null;
+  }
+
+  getActiveSymbols(): string[] {
+    return Array.from(this.priceStates.keys());
+  }
+
+  hasSymbol(symbol: string): boolean {
+    return this.priceStates.has(symbol);
+  }
+
+  // === MUTATORS ===
+
+  removeSymbol(symbol: string): void {
+    this.priceStates.delete(symbol);
+    this.configs.delete(symbol);
+    this.supportResistanceLevels.delete(symbol);
+    this.traderSentiment.delete(symbol);
+    logger.info(`[OTC] Removed ${symbol}`);
+  }
+
+  updateConfig(symbol: string, config: Partial<OTCPriceConfig>): void {
+    const existing = this.configs.get(symbol);
+    if (existing) {
+      this.configs.set(symbol, { ...existing, ...config });
+      logger.info(`[OTC] Updated config for ${symbol}`);
+    }
+  }
+
+  // === ADMIN CONTROLS ===
+
+  forceImpulse(symbol: string, direction: 'up' | 'down', duration: number = 5): void {
+    const state = this.priceStates.get(symbol);
+    if (state) {
+      state.marketPhase = 'impulse';
+      state.phaseTicksRemaining = duration;
+      state.impulseDirection = direction === 'up' ? 1 : -1;
+      logger.info(`[OTC] Forced ${direction} impulse on ${symbol}`);
+    }
+  }
+
+  forceConsolidation(symbol: string, duration: number = 15): void {
+    const state = this.priceStates.get(symbol);
+    if (state) {
+      state.marketPhase = 'consolidation';
+      state.phaseTicksRemaining = duration;
+      logger.info(`[OTC] Forced consolidation on ${symbol}`);
+    }
+  }
+
+  forceVolatilityEvent(symbol: string, multiplier: number = 1.5, duration: number = 10): void {
+    const state = this.priceStates.get(symbol);
+    if (state) {
+      state.volatilityEventActive = true;
+      state.volatilityEventMultiplier = Math.min(multiplier, VOLATILITY_EVENT_MULTIPLIER_MAX);
+      state.volatilityEventTicksRemaining = duration;
+      logger.info(`[OTC] Forced ${multiplier}x volatility event on ${symbol}`);
+    }
+  }
+
+  setPriceMagnet(symbol: string, target: number, duration: number = 20): void {
+    const state = this.priceStates.get(symbol);
+    if (state) {
+      state.pricesMagnetTarget = target;
+      state.magnetTicksRemaining = duration;
+      logger.info(`[OTC] Set magnet to ${target} on ${symbol}`);
+    }
+  }
+
+  setTraderSentiment(symbol: string, upPercent: number): void {
+    const sentiment = this.traderSentiment.get(symbol);
+    if (sentiment) {
+      sentiment.upPercent = Math.max(0, Math.min(100, upPercent));
+      sentiment.downPercent = 100 - sentiment.upPercent;
+      logger.info(`[OTC] Set sentiment ${upPercent}% up on ${symbol}`);
+    }
+  }
+}
+
+// Singleton
+export const otcPriceGenerator = new OTCPriceGenerator();
