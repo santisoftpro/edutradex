@@ -668,7 +668,7 @@ export default function UserDetailPage() {
             className={cn(
               'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
               activeTab === tab
-                ? 'bg-emerald-600 text-white'
+                ? 'bg-gradient-to-r from-[#1079ff] to-[#092ab2] text-white'
                 : 'text-slate-400 hover:text-white hover:bg-slate-700'
             )}
           >
@@ -885,7 +885,7 @@ export default function UserDetailPage() {
                 className={cn(
                   'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
                   transactionType === type
-                    ? 'bg-emerald-600 text-white'
+                    ? 'bg-gradient-to-r from-[#1079ff] to-[#092ab2] text-white'
                     : 'bg-slate-700 text-slate-400 hover:text-white'
                 )}
               >
@@ -910,7 +910,7 @@ export default function UserDetailPage() {
                   {isLoadingTransactions ? (
                     <tr>
                       <td colSpan={5} className="px-4 py-8 text-center">
-                        <Loader2 className="h-6 w-6 text-emerald-500 animate-spin mx-auto" />
+                        <Loader2 className="h-6 w-6 text-[#1079ff] animate-spin mx-auto" />
                       </td>
                     </tr>
                   ) : transactions.length === 0 ? (

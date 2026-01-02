@@ -65,13 +65,26 @@ class WithdrawalServiceError extends Error {
 
 export class WithdrawalService {
   async createMobileMoneyWithdrawal(data: CreateMobileMoneyWithdrawal) {
-    const user = await queryOne<{ demoBalance: number }>(
-      `SELECT "demoBalance" FROM "User" WHERE id = $1`,
+    const user = await queryOne<{ demoBalance: number; emailVerified: boolean; kycStatus: string | null }>(
+      `SELECT u."demoBalance", u."emailVerified", k.status as "kycStatus"
+       FROM "User" u
+       LEFT JOIN "KYC" k ON k."userId" = u.id
+       WHERE u.id = $1`,
       [data.userId]
     );
 
     if (!user) {
       throw new WithdrawalServiceError('User not found', 404);
+    }
+
+    // Verify email is verified
+    if (!user.emailVerified) {
+      throw new WithdrawalServiceError('Email verification required before withdrawal', 400);
+    }
+
+    // Verify KYC is approved
+    if (user.kycStatus !== 'APPROVED') {
+      throw new WithdrawalServiceError('KYC verification required before withdrawal', 400);
     }
 
     if (user.demoBalance < data.amount) {
@@ -116,13 +129,26 @@ export class WithdrawalService {
   }
 
   async createCryptoWithdrawal(data: CreateCryptoWithdrawal) {
-    const user = await queryOne<{ demoBalance: number }>(
-      `SELECT "demoBalance" FROM "User" WHERE id = $1`,
+    const user = await queryOne<{ demoBalance: number; emailVerified: boolean; kycStatus: string | null }>(
+      `SELECT u."demoBalance", u."emailVerified", k.status as "kycStatus"
+       FROM "User" u
+       LEFT JOIN "KYC" k ON k."userId" = u.id
+       WHERE u.id = $1`,
       [data.userId]
     );
 
     if (!user) {
       throw new WithdrawalServiceError('User not found', 404);
+    }
+
+    // Verify email is verified
+    if (!user.emailVerified) {
+      throw new WithdrawalServiceError('Email verification required before withdrawal', 400);
+    }
+
+    // Verify KYC is approved
+    if (user.kycStatus !== 'APPROVED') {
+      throw new WithdrawalServiceError('KYC verification required before withdrawal', 400);
     }
 
     if (user.demoBalance < data.amount) {

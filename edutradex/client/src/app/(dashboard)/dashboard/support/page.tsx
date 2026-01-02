@@ -47,7 +47,7 @@ const CATEGORIES: { value: TicketCategory; label: string; description: string }[
 ];
 
 const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; bgColor: string; icon: typeof Clock }> = {
-  OPEN: { label: 'Open', color: 'text-blue-400', bgColor: 'bg-blue-500/10 border-blue-500/20', icon: Clock },
+  OPEN: { label: 'Open', color: 'text-[#1079ff]', bgColor: 'bg-[#1079ff]/10 border-[#1079ff]/20', icon: Clock },
   IN_PROGRESS: { label: 'In Progress', color: 'text-amber-400', bgColor: 'bg-amber-500/10 border-amber-500/20', icon: Loader2 },
   REPLIED: { label: 'Replied', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10 border-emerald-500/20', icon: MessageCircle },
   RESOLVED: { label: 'Resolved', color: 'text-green-400', bgColor: 'bg-green-500/10 border-green-500/20', icon: CheckCircle },
@@ -131,7 +131,7 @@ export default function SupportPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -265,7 +265,7 @@ export default function SupportPage() {
                     className={cn(
                       'p-3 rounded-xl text-left transition-all border',
                       category === cat.value
-                        ? 'bg-emerald-600/10 border-emerald-600/50 text-emerald-400'
+                        ? 'bg-[#1079ff]/10 border-[#1079ff]/50 text-[#1079ff]'
                         : 'bg-slate-700/30 border-slate-700 text-slate-300 hover:bg-slate-700/50 hover:border-slate-600'
                     )}
                   >
@@ -283,7 +283,7 @@ export default function SupportPage() {
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Brief description of your issue"
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#1079ff]/50 focus:border-[#1079ff]/50 transition-all"
               />
             </div>
 
@@ -295,7 +295,7 @@ export default function SupportPage() {
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Please describe your issue in detail. Include any relevant information that might help us assist you better."
                 rows={6}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all resize-none"
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#1079ff]/50 focus:border-[#1079ff]/50 transition-all resize-none"
               />
               <p className="text-xs text-slate-500">Minimum 20 characters</p>
             </div>
@@ -303,7 +303,7 @@ export default function SupportPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-all shadow-lg shadow-emerald-600/20"
+              className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-all shadow-lg shadow-[#1079ff]/20"
             >
               {isSubmitting ? (
                 <>
@@ -334,7 +334,7 @@ export default function SupportPage() {
         </div>
         <button
           onClick={() => setShowNewForm(true)}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition-all shadow-lg shadow-emerald-600/20"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-xl font-medium transition-all shadow-lg shadow-[#1079ff]/20"
         >
           <Plus className="h-4 w-4" />
           <span>New Ticket</span>
@@ -356,7 +356,7 @@ export default function SupportPage() {
             </div>
             <button
               onClick={() => setShowNewForm(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition-all"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-xl font-medium transition-all"
             >
               <Plus className="h-4 w-4" />
               <span>Create Ticket</span>

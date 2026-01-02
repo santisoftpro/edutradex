@@ -243,7 +243,7 @@ function ProcessWithdrawalModal({
               onChange={(e) => setNote(e.target.value)}
               placeholder={action === 'reject' ? 'Reason for rejection...' : 'Add a note...'}
               rows={3}
-              className="w-full px-3 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-sm"
+              className="w-full px-3 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#1079ff] focus:border-transparent resize-none text-sm"
             />
           </div>
         </div>
@@ -467,8 +467,8 @@ export default function AdminWithdrawalsPage() {
         </div>
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-purple-500/20">
-              <DollarSign className="h-4 w-4 text-purple-400" />
+            <div className="p-2 rounded-lg bg-[#1079ff]/20">
+              <DollarSign className="h-4 w-4 text-[#1079ff]" />
             </div>
             <div>
               <p className="text-xs text-slate-400">Total Withdrawn</p>
@@ -488,7 +488,7 @@ export default function AdminWithdrawalsPage() {
               placeholder="Search by ID, user, phone, wallet..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#1079ff] focus:border-transparent text-sm"
             />
           </div>
           <div className="flex flex-wrap gap-2">
@@ -498,7 +498,7 @@ export default function AdminWithdrawalsPage() {
                 setStatusFilter(e.target.value as WithdrawalStatus | '');
                 setPagination((p) => ({ ...p, page: 1 }));
               }}
-              className="px-3 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="px-3 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
             >
               <option value="">All Status</option>
               <option value="PENDING">Pending</option>
@@ -511,7 +511,7 @@ export default function AdminWithdrawalsPage() {
                 setMethodFilter(e.target.value as WithdrawalMethod | '');
                 setPagination((p) => ({ ...p, page: 1 }));
               }}
-              className="px-3 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="px-3 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
             >
               <option value="">All Methods</option>
               <option value="MOBILE_MONEY">Mobile Money</option>
@@ -520,7 +520,7 @@ export default function AdminWithdrawalsPage() {
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value as DateRange)}
-              className="px-3 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="px-3 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
             >
               <option value="all">All Time</option>
               <option value="today">Today</option>
@@ -550,7 +550,7 @@ export default function AdminWithdrawalsPage() {
               {isLoading ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center">
-                    <Loader2 className="h-8 w-8 text-purple-500 animate-spin mx-auto" />
+                    <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin mx-auto" />
                   </td>
                 </tr>
               ) : filteredWithdrawals.length === 0 ? (
@@ -678,7 +678,7 @@ export default function AdminWithdrawalsPage() {
       <div className="lg:hidden space-y-3">
         {isLoading ? (
           <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 text-purple-500 animate-spin" />
+            <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
           </div>
         ) : filteredWithdrawals.length === 0 ? (
           <div className="text-center py-12 text-slate-400">No withdrawals found</div>

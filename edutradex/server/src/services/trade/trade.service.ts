@@ -80,14 +80,22 @@ class TradeServiceError extends Error {
 
 export class TradeService {
   async placeTrade(userId: string, data: PlaceTradeInput): Promise<TradeResult> {
-    const user = await queryOne<{ demoBalance: number; isActive: boolean }>(
-      `SELECT "demoBalance", "isActive" FROM "User" WHERE id = $1`,
+    const user = await queryOne<{ demoBalance: number; practiceBalance: number; activeAccountType: string; isActive: boolean }>(
+      `SELECT "demoBalance", "practiceBalance", "activeAccountType", "isActive" FROM "User" WHERE id = $1`,
       [userId]
     );
 
     if (!user || !user.isActive) {
       throw new TradeServiceError('User not found or account deactivated', 404);
     }
+
+    // NOTE: Due to legacy naming:
+    // - 'LIVE' mode uses demoBalance (which is actually the real money)
+    // - 'DEMO' mode uses practiceBalance (which is the practice/demo money)
+    const isLiveMode = user.activeAccountType === 'LIVE';
+    const currentBalance = isLiveMode ? user.demoBalance : user.practiceBalance;
+    const balanceField = isLiveMode ? 'demoBalance' : 'practiceBalance';
+    const accountType = user.activeAccountType; // 'LIVE' or 'DEMO'
 
     if (data.amount < config.trading.minTradeAmount) {
       throw new TradeServiceError(
@@ -103,7 +111,7 @@ export class TradeService {
       );
     }
 
-    if (data.amount > user.demoBalance) {
+    if (data.amount > currentBalance) {
       throw new TradeServiceError('Insufficient balance', 400);
     }
 
@@ -118,7 +126,7 @@ export class TradeService {
 
     // Create trade and deduct balance atomically using transaction
     const trade = await transaction(async (client) => {
-      // Insert trade
+      // Insert trade with correct accountType
       const tradeResult = await client.query<TradeRow>(
         `INSERT INTO "Trade" (
           id, "userId", symbol, direction, amount, "entryPrice", duration,
@@ -138,15 +146,15 @@ export class TradeService {
           data.marketType.toUpperCase(),
           'OPEN',
           expiresAt,
-          'DEMO',
+          accountType, // Use user's active account type ('LIVE' or 'DEMO')
           false,
           now
         ]
       );
 
-      // Deduct balance
+      // Deduct from the correct balance
       await client.query(
-        `UPDATE "User" SET "demoBalance" = "demoBalance" - $1, "updatedAt" = $2 WHERE id = $3`,
+        `UPDATE "User" SET "${balanceField}" = "${balanceField}" - $1, "updatedAt" = $2 WHERE id = $3`,
         [data.amount, now, userId]
       );
 
@@ -264,6 +272,12 @@ export class TradeService {
     const returnAmount = won ? trade.amount + profit : 0;
     const now = new Date();
 
+    // Determine which balance to credit based on trade's accountType
+    // NOTE: Due to legacy naming:
+    // - 'LIVE' trades use demoBalance (which is actually the real money)
+    // - 'DEMO' trades use practiceBalance (which is the practice/demo money)
+    const balanceField = trade.accountType === 'LIVE' ? 'demoBalance' : 'practiceBalance';
+
     // Update trade and user balance atomically
     const updatedTrade = await transaction(async (client) => {
       // Update trade
@@ -274,9 +288,9 @@ export class TradeService {
         [exitPrice, 'CLOSED', won ? 'WON' : 'LOST', won ? profit : -trade.amount, now, tradeId]
       );
 
-      // Add return amount to user balance
+      // Add return amount to the correct balance
       await client.query(
-        `UPDATE "User" SET "demoBalance" = "demoBalance" + $1, "updatedAt" = $2 WHERE id = $3`,
+        `UPDATE "User" SET "${balanceField}" = "${balanceField}" + $1, "updatedAt" = $2 WHERE id = $3`,
         [returnAmount, now, trade.userId]
       );
 

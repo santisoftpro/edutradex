@@ -240,7 +240,7 @@ function DocumentViewer({
                   <div className="flex gap-3">
                     <button
                       onClick={handleOpenNewTab}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors text-white"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] rounded-lg transition-all text-white"
                     >
                       <ExternalLink className="h-4 w-4" />
                       Open in New Tab
@@ -367,7 +367,7 @@ function DocumentPreviewCard({
       <p className="text-slate-400 text-sm mb-2">{label}</p>
       <div
         onClick={() => onView(url, label)}
-        className="relative h-40 bg-slate-600 rounded-xl overflow-hidden cursor-pointer border-2 border-transparent hover:border-emerald-500 transition-all"
+        className="relative h-40 bg-slate-600 rounded-xl overflow-hidden cursor-pointer border-2 border-transparent hover:border-[#1079ff] transition-all"
       >
         {isPDF ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-700">
@@ -456,7 +456,7 @@ function ViewKYCModal({
               {/* User Info */}
               <div className="bg-slate-700/50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <User className="h-4 w-4 text-emerald-400" />
+                  <User className="h-4 w-4 text-[#1079ff]" />
                   <h4 className="text-white font-medium">Account Information</h4>
                 </div>
                 <div className="space-y-2 text-sm">
@@ -478,7 +478,7 @@ function ViewKYCModal({
               {/* Personal Info */}
               <div className="bg-slate-700/50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <FileCheck className="h-4 w-4 text-emerald-400" />
+                  <FileCheck className="h-4 w-4 text-[#1079ff]" />
                   <h4 className="text-white font-medium">Personal Details</h4>
                 </div>
                 <div className="space-y-2 text-sm">
@@ -508,7 +508,7 @@ function ViewKYCModal({
               {/* Document Info */}
               <div className="bg-slate-700/50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <FileText className="h-4 w-4 text-emerald-400" />
+                  <FileText className="h-4 w-4 text-[#1079ff]" />
                   <h4 className="text-white font-medium">Document Details</h4>
                 </div>
                 <div className="space-y-2 text-sm">
@@ -526,7 +526,7 @@ function ViewKYCModal({
               {/* Status Info */}
               <div className="bg-slate-700/50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Clock className="h-4 w-4 text-emerald-400" />
+                  <Clock className="h-4 w-4 text-[#1079ff]" />
                   <h4 className="text-white font-medium">Submission Status</h4>
                 </div>
                 <div className="space-y-2 text-sm">
@@ -565,7 +565,7 @@ function ViewKYCModal({
             <div className="space-y-4">
               <div className="bg-slate-700/50 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-4">
-                  <Image className="h-4 w-4 text-emerald-400" />
+                  <Image className="h-4 w-4 text-[#1079ff]" />
                   <h4 className="text-white font-medium">Uploaded Documents</h4>
                 </div>
                 <p className="text-slate-400 text-sm mb-4">Click on any document to view it in full screen</p>
@@ -777,7 +777,7 @@ export default function AdminKYCPage() {
               setStatusFilter(e.target.value as KYCStatus | '');
               setPage(1);
             }}
-            className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-[#1079ff] focus:border-transparent"
           >
             <option value="">All Status</option>
             <option value="PENDING">Pending</option>
@@ -792,7 +792,7 @@ export default function AdminKYCPage() {
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#1079ff]" />
           </div>
         ) : submissions.length === 0 ? (
           <div className="text-center py-12">

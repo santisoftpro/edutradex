@@ -159,13 +159,24 @@ export async function validateSuperAdminSession(
  */
 import rateLimit from 'express-rate-limit';
 
+// Helper to safely get IP for rate limiting (handles IPv6)
+const getClientIp = (req: Request): string => {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const ip = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0];
+    return ip.trim();
+  }
+  return req.ip || req.socket.remoteAddress || 'unknown';
+};
+
 export const superAdminSensitiveRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // 10 sensitive operations per 15 minutes
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   keyGenerator: (req: Request) => {
-    return `superadmin-sensitive:${req.userId || req.ip}`;
+    return `superadmin-sensitive:${req.userId || getClientIp(req)}`;
   },
   handler: (_req: Request, res: Response) => {
     res.status(429).json({

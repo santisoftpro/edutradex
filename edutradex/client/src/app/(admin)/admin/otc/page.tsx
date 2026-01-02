@@ -273,7 +273,7 @@ export default function OTCAdminPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1079ff]" />
       </div>
     );
   }
@@ -299,7 +299,7 @@ export default function OTCAdminPage() {
           */}
           <button
             onClick={() => { setEditingConfig(null); setIsModalOpen(true); }}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg transition-all"
           >
             <Plus className="h-4 w-4" />
             <span>Add OTC Pair</span>
@@ -362,7 +362,7 @@ export default function OTCAdminPage() {
               className={cn(
                 'flex items-center gap-2 px-4 py-3 border-b-2 transition-colors',
                 activeTab === tab.id
-                  ? 'border-emerald-500 text-emerald-400'
+                  ? 'border-[#1079ff] text-[#1079ff]'
                   : 'border-transparent text-slate-400 hover:text-white'
               )}
             >
@@ -520,22 +520,22 @@ export default function OTCAdminPage() {
                 <h3 className="text-sm font-medium text-white mb-3">Seeding Results</h3>
                 <div className="grid grid-cols-3 gap-4 mb-4">
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-emerald-400">{seedingResults.totalSeeded}</p>
+                    <p className="text-2xl font-bold text-emerald-400">{seedingResults?.totalSeeded}</p>
                     <p className="text-xs text-slate-400">Candles Seeded</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-blue-400">{seedingResults.successful}</p>
+                    <p className="text-2xl font-bold text-blue-400">{seedingResults?.successful}</p>
                     <p className="text-xs text-slate-400">Successful</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-slate-400">{seedingResults.total}</p>
+                    <p className="text-2xl font-bold text-slate-400">{seedingResults?.total}</p>
                     <p className="text-xs text-slate-400">Total Pairs</p>
                   </div>
                 </div>
 
                 {/* Individual results */}
                 <div className="max-h-40 overflow-y-auto space-y-1">
-                  {seedingResults.results.map((result, idx) => (
+                  {seedingResults?.results.map((result, idx) => (
                     <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-slate-700/50 last:border-0">
                       <span className="text-slate-300">{result.symbol}</span>
                       <span className={cn(
@@ -644,13 +644,13 @@ function ConfigsTab({
             placeholder="Search by symbol or name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
           />
         </div>
         <select
           value={marketTypeFilter}
           onChange={(e) => setMarketTypeFilter(e.target.value as any)}
-          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
         >
           <option value="all">All Markets</option>
           <option value="FOREX">Forex</option>
@@ -659,7 +659,7 @@ function ConfigsTab({
         <select
           value={enabledFilter}
           onChange={(e) => setEnabledFilter(e.target.value as any)}
-          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
         >
           <option value="all">All Status</option>
           <option value="enabled">Enabled</option>
@@ -674,7 +674,7 @@ function ConfigsTab({
           <div className="flex gap-2 ml-auto">
             <button
               onClick={() => onBulkToggleEnabled(true)}
-              className="px-3 py-1 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+              className="px-3 py-1 text-sm bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg transition-all"
             >
               Enable All
             </button>
@@ -710,7 +710,7 @@ function ConfigsTab({
                   type="checkbox"
                   checked={selectedIds.size === configs.length && configs.length > 0}
                   onChange={toggleSelectAll}
-                  className="rounded border-slate-600 text-emerald-500 focus:ring-emerald-500"
+                  className="rounded border-slate-600 text-[#1079ff] focus:ring-[#1079ff]"
                 />
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Symbol</th>
@@ -730,7 +730,7 @@ function ConfigsTab({
                     type="checkbox"
                     checked={selectedIds.has(config.id)}
                     onChange={() => toggleSelect(config.id)}
-                    className="rounded border-slate-600 text-emerald-500 focus:ring-emerald-500"
+                    className="rounded border-slate-600 text-[#1079ff] focus:ring-[#1079ff]"
                   />
                 </td>
                 <td className="px-4 py-3">
@@ -810,7 +810,7 @@ function ConfigsTab({
                   type="checkbox"
                   checked={selectedIds.has(config.id)}
                   onChange={() => toggleSelect(config.id)}
-                  className="rounded border-slate-600 text-emerald-500 focus:ring-emerald-500"
+                  className="rounded border-slate-600 text-[#1079ff] focus:ring-[#1079ff]"
                 />
                 <div>
                   <p className="font-mono text-white font-medium">{config.symbol}</p>
@@ -851,7 +851,7 @@ function ConfigsTab({
                   'flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors',
                   config.isEnabled
                     ? 'bg-slate-600 hover:bg-slate-700 text-white'
-                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    : 'bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white'
                 )}
               >
                 <Power className="h-4 w-4" />
@@ -1275,7 +1275,7 @@ function ConfigModal({ config, onClose, onSave }: {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Euro / US Dollar (OTC)"
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                 />
               </div>
 
@@ -1306,7 +1306,7 @@ function ConfigModal({ config, onClose, onSave }: {
                     step="0.0001"
                     value={formData.pipSize}
                     onChange={(e) => setFormData({ ...formData, pipSize: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
               </div>
@@ -1320,7 +1320,7 @@ function ConfigModal({ config, onClose, onSave }: {
                     max="100"
                     value={formData.payoutPercent}
                     onChange={(e) => setFormData({ ...formData, payoutPercent: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -1331,7 +1331,7 @@ function ConfigModal({ config, onClose, onSave }: {
                     step="0.01"
                     value={formData.minTradeAmount}
                     onChange={(e) => setFormData({ ...formData, minTradeAmount: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -1341,7 +1341,7 @@ function ConfigModal({ config, onClose, onSave }: {
                     min="1"
                     value={formData.maxTradeAmount}
                     onChange={(e) => setFormData({ ...formData, maxTradeAmount: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
               </div>
@@ -1352,7 +1352,7 @@ function ConfigModal({ config, onClose, onSave }: {
                     type="checkbox"
                     checked={formData.isEnabled}
                     onChange={(e) => setFormData({ ...formData, isEnabled: e.target.checked })}
-                    className="rounded border-slate-600 text-emerald-500 focus:ring-emerald-500"
+                    className="rounded border-slate-600 text-[#1079ff] focus:ring-[#1079ff]"
                   />
                   <span className="text-white">Enabled</span>
                 </label>
@@ -1389,7 +1389,7 @@ function ConfigModal({ config, onClose, onSave }: {
                     max="0.1"
                     value={formData.baseVolatility}
                     onChange={(e) => setFormData({ ...formData, baseVolatility: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -1404,7 +1404,7 @@ function ConfigModal({ config, onClose, onSave }: {
                     max="5"
                     value={formData.volatilityMultiplier}
                     onChange={(e) => setFormData({ ...formData, volatilityMultiplier: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
               </div>
@@ -1422,7 +1422,7 @@ function ConfigModal({ config, onClose, onSave }: {
                     max="0.1"
                     value={formData.meanReversionStrength}
                     onChange={(e) => setFormData({ ...formData, meanReversionStrength: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -1437,7 +1437,7 @@ function ConfigModal({ config, onClose, onSave }: {
                     max="10"
                     value={formData.maxDeviationPercent}
                     onChange={(e) => setFormData({ ...formData, maxDeviationPercent: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
               </div>
@@ -1453,7 +1453,7 @@ function ConfigModal({ config, onClose, onSave }: {
                   max="60"
                   value={formData.anchoringDurationMins}
                   onChange={(e) => setFormData({ ...formData, anchoringDurationMins: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                 />
                 <p className="text-xs text-slate-500 mt-1">Time to smoothly transition from OTC to real prices when markets reopen</p>
               </div>
@@ -1492,7 +1492,7 @@ function ConfigModal({ config, onClose, onSave }: {
                   max="0.9"
                   value={formData.exposureThreshold}
                   onChange={(e) => setFormData({ ...formData, exposureThreshold: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                 />
                 <p className="text-xs text-slate-500 mt-1">Trade imbalance ratio that triggers risk review</p>
               </div>
@@ -1510,7 +1510,7 @@ function ConfigModal({ config, onClose, onSave }: {
                     max="1"
                     value={formData.minInterventionRate}
                     onChange={(e) => setFormData({ ...formData, minInterventionRate: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -1525,7 +1525,7 @@ function ConfigModal({ config, onClose, onSave }: {
                     max="1"
                     value={formData.maxInterventionRate}
                     onChange={(e) => setFormData({ ...formData, maxInterventionRate: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
               </div>
@@ -1555,7 +1555,7 @@ function ConfigModal({ config, onClose, onSave }: {
             </button>
             <button
               type="submit"
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg transition-all"
             >
               <Check className="h-4 w-4" />
               {isEditing ? 'Save Changes' : 'Create OTC Pair'}
@@ -2017,7 +2017,7 @@ function ManualControlsTab({ configs }: { configs: OTCConfig[] }) {
   if (isLoading && !control) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1079ff]" />
       </div>
     );
   }
@@ -2122,7 +2122,7 @@ function ManualControlsTab({ configs }: { configs: OTCConfig[] }) {
             <select
               value={selectedSymbol}
               onChange={(e) => setSelectedSymbol(e.target.value)}
-              className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
             >
               {configs.map((config) => (
                 <option key={config.id} value={config.symbol}>
@@ -2323,7 +2323,7 @@ function ManualControlsTab({ configs }: { configs: OTCConfig[] }) {
               <select
                 value={directionBiasDuration || 'permanent'}
                 onChange={(e) => setDirectionBiasDuration(e.target.value === 'permanent' ? null : parseInt(e.target.value))}
-                className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
               >
                 <option value="permanent">Permanent (until cleared)</option>
                 <option value={5}>5 minutes</option>
@@ -2339,7 +2339,7 @@ function ManualControlsTab({ configs }: { configs: OTCConfig[] }) {
 
             <button
               onClick={handleSetDirectionBias}
-              className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+              className="w-full px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg transition-all"
             >
               Apply Direction Bias
             </button>
@@ -2635,7 +2635,7 @@ function ManualControlsTab({ configs }: { configs: OTCConfig[] }) {
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => showForceTradeConfirm(trade, 'WIN')}
-                          className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded transition-colors"
+                          className="px-2 py-1 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-xs rounded transition-all"
                         >
                           Win
                         </button>
@@ -2801,7 +2801,7 @@ function ManualControlsTab({ configs }: { configs: OTCConfig[] }) {
                     max="100"
                     value={forceNextWin}
                     onChange={(e) => setForceNextWin(parseInt(e.target.value) || 0)}
-                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -2917,7 +2917,7 @@ function ManualControlsTab({ configs }: { configs: OTCConfig[] }) {
                 className={cn(
                   'px-4 py-2 rounded-lg font-medium text-white transition-colors',
                   forceTradeConfirm.outcome === 'WIN'
-                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    ? 'bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff]'
                     : 'bg-red-600 hover:bg-red-700'
                 )}
               >

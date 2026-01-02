@@ -68,7 +68,7 @@ function SettingModal({
               disabled={isEditing}
               placeholder="e.g., MAX_TRADE_AMOUNT"
               className={cn(
-                'w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500',
+                'w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff]',
                 isEditing && 'opacity-50 cursor-not-allowed'
               )}
             />
@@ -83,7 +83,7 @@ function SettingModal({
               onChange={(e) => setValue(e.target.value)}
               placeholder="Enter value..."
               rows={3}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff] resize-none"
             />
           </div>
 
@@ -97,7 +97,7 @@ function SettingModal({
             </button>
             <button
               type="submit"
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg font-medium transition-all"
             >
               <Save className="h-4 w-4" />
               {isEditing ? 'Save Changes' : 'Create Setting'}
@@ -151,7 +151,7 @@ function FeatureToggleItem({
         onClick={() => onChange(!value)}
         disabled={isLoading}
         className={cn(
-          'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-800',
+          'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#1079ff] focus:ring-offset-2 focus:ring-offset-slate-800',
           value ? 'bg-emerald-600' : 'bg-slate-600',
           isLoading && 'opacity-50 cursor-not-allowed'
         )}
@@ -269,7 +269,7 @@ export default function SystemSettingsPage() {
   if (isLoading && systemSettings.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -285,7 +285,7 @@ export default function SystemSettingsPage() {
               clearError();
               fetchSystemSettings();
             }}
-            className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+            className="mt-4 px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg transition-all"
           >
             Retry
           </button>
@@ -303,7 +303,7 @@ export default function SystemSettingsPage() {
         </div>
         <button
           onClick={() => setIsAddingNew(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg font-medium transition-all"
         >
           <Plus className="h-4 w-4" />
           Add Setting
@@ -353,7 +353,7 @@ export default function SystemSettingsPage() {
                 {systemSettings.map((setting) => (
                   <tr key={setting.id} className="hover:bg-slate-700/50 transition-colors">
                     <td className="px-6 py-4">
-                      <code className="text-emerald-400 bg-slate-700/50 px-2 py-1 rounded text-sm">
+                      <code className="text-[#1079ff] bg-slate-700/50 px-2 py-1 rounded text-sm">
                         {setting.key}
                       </code>
                     </td>
@@ -398,27 +398,27 @@ export default function SystemSettingsPage() {
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-slate-700/50 rounded-lg p-4">
-            <code className="text-emerald-400 text-sm">DEFAULT_DEMO_BALANCE</code>
+            <code className="text-[#1079ff] text-sm">DEFAULT_DEMO_BALANCE</code>
             <p className="text-slate-400 text-sm mt-1">Initial balance for new users</p>
           </div>
           <div className="bg-slate-700/50 rounded-lg p-4">
-            <code className="text-emerald-400 text-sm">DEFAULT_PAYOUT_PERCENTAGE</code>
+            <code className="text-[#1079ff] text-sm">DEFAULT_PAYOUT_PERCENTAGE</code>
             <p className="text-slate-400 text-sm mt-1">Default payout for winning trades</p>
           </div>
           <div className="bg-slate-700/50 rounded-lg p-4">
-            <code className="text-emerald-400 text-sm">MIN_TRADE_AMOUNT</code>
+            <code className="text-[#1079ff] text-sm">MIN_TRADE_AMOUNT</code>
             <p className="text-slate-400 text-sm mt-1">Minimum allowed trade amount</p>
           </div>
           <div className="bg-slate-700/50 rounded-lg p-4">
-            <code className="text-emerald-400 text-sm">MAX_TRADE_AMOUNT</code>
+            <code className="text-[#1079ff] text-sm">MAX_TRADE_AMOUNT</code>
             <p className="text-slate-400 text-sm mt-1">Maximum allowed trade amount</p>
           </div>
           <div className="bg-slate-700/50 rounded-lg p-4">
-            <code className="text-emerald-400 text-sm">MAINTENANCE_MODE</code>
+            <code className="text-[#1079ff] text-sm">MAINTENANCE_MODE</code>
             <p className="text-slate-400 text-sm mt-1">Enable/disable maintenance mode</p>
           </div>
           <div className="bg-slate-700/50 rounded-lg p-4">
-            <code className="text-emerald-400 text-sm">REGISTRATION_ENABLED</code>
+            <code className="text-[#1079ff] text-sm">REGISTRATION_ENABLED</code>
             <p className="text-slate-400 text-sm mt-1">Allow new user registrations</p>
           </div>
         </div>

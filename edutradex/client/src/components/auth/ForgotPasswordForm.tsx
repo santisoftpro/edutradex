@@ -50,14 +50,14 @@ export function ForgotPasswordForm() {
             </div>
             <h2 className="text-2xl font-semibold text-white mb-4">Check Your Email</h2>
             <p className="text-slate-400 mb-6">
-              If an account exists with <span className="text-emerald-500">{email}</span>, you will receive a password reset link shortly.
+              If an account exists with <span className="text-[#1079ff]">{email}</span>, you will receive a password reset link shortly.
             </p>
             <p className="text-slate-500 text-sm mb-6">
               The link will expire in 1 hour. Check your spam folder if you don&apos;t see it.
             </p>
             <Link
               href="/login"
-              className="inline-flex items-center gap-2 text-emerald-500 hover:text-emerald-400 font-medium"
+              className="inline-flex items-center gap-2 text-[#1079ff] hover:text-[#3a93ff] font-medium"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to Sign In
@@ -100,7 +100,7 @@ export function ForgotPasswordForm() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#1079ff] focus:border-transparent transition-all"
                 />
               </div>
             </div>
@@ -108,7 +108,7 @@ export function ForgotPasswordForm() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>

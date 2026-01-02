@@ -42,14 +42,14 @@ function StepIndicator({ currentStep, totalSteps = 4 }: { currentStep: Step; tot
             <div className={cn(
               'w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-semibold transition-all',
               currentStep >= step.num
-                ? 'bg-purple-500 text-white'
+                ? 'bg-[#1079ff] text-white'
                 : 'bg-slate-700 text-slate-400'
             )}>
               {currentStep > step.num ? <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : step.num}
             </div>
             <span className={cn(
               'text-[10px] sm:text-xs mt-1',
-              currentStep >= step.num ? 'text-purple-400' : 'text-slate-500'
+              currentStep >= step.num ? 'text-[#1079ff]' : 'text-slate-500'
             )}>
               {step.label}
             </span>
@@ -57,7 +57,7 @@ function StepIndicator({ currentStep, totalSteps = 4 }: { currentStep: Step; tot
           {index < steps.length - 1 && (
             <div className={cn(
               'flex-1 h-0.5 mx-1 sm:mx-2',
-              currentStep > step.num ? 'bg-purple-500' : 'bg-slate-700'
+              currentStep > step.num ? 'bg-[#1079ff]' : 'bg-slate-700'
             )} />
           )}
         </div>
@@ -180,8 +180,8 @@ function OTPInput({
           className={cn(
             'w-10 h-12 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-bold rounded-lg sm:rounded-xl border-2 transition-all',
             'bg-slate-900 focus:outline-none',
-            getDigit(index) ? 'border-purple-500 text-white' : 'border-slate-600 text-white',
-            'focus:border-purple-400 focus:ring-2 focus:ring-purple-500/30',
+            getDigit(index) ? 'border-[#1079ff] text-white' : 'border-slate-600 text-white',
+            'focus:border-[#1079ff] focus:ring-2 focus:ring-[#1079ff]/30',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
         />
@@ -447,7 +447,7 @@ export default function WithdrawPage() {
   if (!isHydrated || isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 text-purple-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -468,11 +468,128 @@ export default function WithdrawPage() {
             </p>
             <a
               href="/dashboard/deposit"
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-lg transition-all"
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white font-medium rounded-lg transition-all"
             >
               Make a Deposit
               <ArrowRight className="h-4 w-4" />
             </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Check verification requirements
+  const emailVerified = user?.emailVerified === true;
+  const kycApproved = user?.kycStatus === 'APPROVED';
+  const canWithdraw = emailVerified && kycApproved;
+
+  // Verification required - show requirements
+  if (!canWithdraw) {
+    return (
+      <div className="min-h-screen bg-slate-900 p-3 sm:p-4 md:p-6">
+        <div className="max-w-lg mx-auto">
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Shield className="h-8 w-8 text-amber-400" />
+              </div>
+              <h2 className="text-lg font-bold text-white mb-2">Verification Required</h2>
+              <p className="text-slate-400 text-sm">
+                Complete the following verifications to withdraw funds
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {/* Email Verification */}
+              <div className={cn(
+                'flex items-center gap-4 p-4 rounded-xl border transition-all',
+                emailVerified
+                  ? 'bg-emerald-500/10 border-emerald-500/30'
+                  : 'bg-slate-800 border-slate-700'
+              )}>
+                <div className={cn(
+                  'w-10 h-10 rounded-full flex items-center justify-center',
+                  emailVerified ? 'bg-emerald-500/20' : 'bg-amber-500/20'
+                )}>
+                  {emailVerified ? (
+                    <CheckCircle className="h-5 w-5 text-emerald-400" />
+                  ) : (
+                    <Mail className="h-5 w-5 text-amber-400" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-white font-medium text-sm">Email Verification</p>
+                  <p className={cn(
+                    'text-xs',
+                    emailVerified ? 'text-emerald-400' : 'text-slate-400'
+                  )}>
+                    {emailVerified ? 'Verified' : 'Verify your email address'}
+                  </p>
+                </div>
+                {!emailVerified && (
+                  <a
+                    href="/dashboard/profile"
+                    className="px-3 py-1.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-xs font-medium rounded-lg transition-all"
+                  >
+                    Verify
+                  </a>
+                )}
+              </div>
+
+              {/* KYC Verification */}
+              <div className={cn(
+                'flex items-center gap-4 p-4 rounded-xl border transition-all',
+                kycApproved
+                  ? 'bg-emerald-500/10 border-emerald-500/30'
+                  : 'bg-slate-800 border-slate-700'
+              )}>
+                <div className={cn(
+                  'w-10 h-10 rounded-full flex items-center justify-center',
+                  kycApproved ? 'bg-emerald-500/20' : 'bg-amber-500/20'
+                )}>
+                  {kycApproved ? (
+                    <CheckCircle className="h-5 w-5 text-emerald-400" />
+                  ) : (
+                    <Shield className="h-5 w-5 text-amber-400" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-white font-medium text-sm">KYC Verification</p>
+                  <p className={cn(
+                    'text-xs',
+                    kycApproved ? 'text-emerald-400' : 'text-slate-400'
+                  )}>
+                    {kycApproved
+                      ? 'Approved'
+                      : user?.kycStatus === 'PENDING'
+                        ? 'Under review'
+                        : user?.kycStatus === 'REJECTED'
+                          ? 'Rejected - Please resubmit'
+                          : 'Complete identity verification'}
+                  </p>
+                </div>
+                {!kycApproved && (
+                  <a
+                    href="/dashboard/profile"
+                    className="px-3 py-1.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-xs font-medium rounded-lg transition-all"
+                  >
+                    {user?.kycStatus === 'PENDING' ? 'View' : 'Complete'}
+                  </a>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 p-4 bg-blue-900/20 border border-blue-900/30 rounded-lg flex items-start gap-3">
+              <Info className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+              <div className="text-sm text-blue-300">
+                <p className="font-medium mb-1">Why is this required?</p>
+                <p className="text-xs text-blue-300/80">
+                  These verifications help protect your account and ensure secure withdrawals.
+                  Once verified, you can withdraw funds anytime.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -491,8 +608,8 @@ export default function WithdrawPage() {
         {/* Balance Card */}
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="p-1.5 sm:p-2 bg-purple-600/20 rounded-lg">
-              <Wallet className="h-4 w-4 text-purple-400" />
+            <div className="p-1.5 sm:p-2 bg-[#1079ff]/20 rounded-lg">
+              <Wallet className="h-4 w-4 text-[#1079ff]" />
             </div>
             <div>
               <p className="text-slate-400 text-[10px] sm:text-xs">Available</p>
@@ -533,7 +650,7 @@ export default function WithdrawPage() {
                 </div>
 
                 {/* Method Card */}
-                <div className="bg-slate-900 border border-purple-500/50 rounded-xl p-4 mb-4">
+                <div className="bg-slate-900 border border-[#1079ff]/50 rounded-xl p-4 mb-4">
                   <div className="flex items-center gap-3">
                     <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden', depositMethod.iconBg)}>
                       {depositMethod.iconUrl ? (
@@ -552,14 +669,14 @@ export default function WithdrawPage() {
                         {isMobileMoney ? 'Mobile Money' : 'Cryptocurrency'}
                       </p>
                       {depositMethod.network && (
-                        <p className="text-purple-400 text-xs">Network: {depositMethod.network}</p>
+                        <p className="text-[#1079ff] text-xs">Network: {depositMethod.network}</p>
                       )}
                     </div>
                     <div className="text-right">
                       {isMobileMoney ? (
-                        <Smartphone className="h-6 w-6 text-purple-400" />
+                        <Smartphone className="h-6 w-6 text-[#1079ff]" />
                       ) : (
-                        <Bitcoin className="h-6 w-6 text-purple-400" />
+                        <Bitcoin className="h-6 w-6 text-[#1079ff]" />
                       )}
                     </div>
                   </div>
@@ -577,7 +694,7 @@ export default function WithdrawPage() {
                 <button
                   onClick={handleContinueToDetails}
                   disabled={balance < 1}
-                  className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   Continue
                   <ArrowRight className="h-4 w-4" />
@@ -621,7 +738,7 @@ export default function WithdrawPage() {
                       placeholder="0.00"
                       min={depositMethod.minAmount}
                       max={balance}
-                      className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-base sm:text-lg placeholder-slate-600 focus:outline-none focus:border-purple-500"
+                      className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-base sm:text-lg placeholder-slate-600 focus:outline-none focus:border-[#1079ff]"
                     />
                     {quickAmounts.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
@@ -633,7 +750,7 @@ export default function WithdrawPage() {
                             className={cn(
                               'px-2.5 sm:px-3 py-1 rounded-lg text-[10px] sm:text-xs font-medium transition-all',
                               amount === quickAmount.toString()
-                                ? 'bg-purple-500 text-white'
+                                ? 'bg-[#1079ff] text-white'
                                 : 'bg-slate-900 text-slate-400 hover:bg-slate-700 border border-slate-700'
                             )}
                           >
@@ -652,7 +769,7 @@ export default function WithdrawPage() {
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
                         placeholder="+255 7XX XXX XXX"
-                        className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-purple-500"
+                        className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-[#1079ff]"
                       />
                       <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
                         Phone number registered with {depositMethod.name}
@@ -668,10 +785,10 @@ export default function WithdrawPage() {
                         value={walletAddress}
                         onChange={(e) => setWalletAddress(e.target.value)}
                         placeholder="Enter wallet address"
-                        className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 font-mono text-xs sm:text-sm"
+                        className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-600 focus:outline-none focus:border-[#1079ff] font-mono text-xs sm:text-sm"
                       />
                       {depositMethod.network && (
-                        <p className="text-[10px] sm:text-xs text-purple-400 mt-1">
+                        <p className="text-[10px] sm:text-xs text-[#1079ff] mt-1">
                           Network: <span className="font-medium">{depositMethod.network}</span>
                         </p>
                       )}
@@ -684,7 +801,7 @@ export default function WithdrawPage() {
                   <button
                     onClick={handleSendVerificationCode}
                     disabled={isSendingCode}
-                    className="w-full py-2 sm:py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full py-2 sm:py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {isSendingCode ? (
                       <>
@@ -705,13 +822,13 @@ export default function WithdrawPage() {
             {/* Step 3: Verify Code */}
             {step === 3 && depositMethod && (
               <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 sm:p-6 text-center">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                  <Shield className="h-6 w-6 sm:h-7 sm:w-7 text-purple-400" />
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[#1079ff]/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                  <Shield className="h-6 w-6 sm:h-7 sm:w-7 text-[#1079ff]" />
                 </div>
                 <h2 className="text-base sm:text-lg font-bold text-white mb-1">Verify Your Withdrawal</h2>
                 <p className="text-slate-400 text-xs sm:text-sm mb-4 sm:mb-6">
                   Enter the 6-digit code sent to<br />
-                  <span className="text-purple-400 font-medium break-all">{user?.email}</span>
+                  <span className="text-[#1079ff] font-medium break-all">{user?.email}</span>
                 </p>
 
                 <OTPInput
@@ -725,13 +842,13 @@ export default function WithdrawPage() {
                     <button
                       onClick={handleResendCode}
                       disabled={isSendingCode}
-                      className="text-purple-400 hover:text-purple-300 transition-colors"
+                      className="text-[#1079ff] hover:text-[#3a93ff] transition-colors"
                     >
                       {isSendingCode ? 'Sending...' : "Didn't receive code? Resend"}
                     </button>
                   ) : (
                     <p className="text-slate-500">
-                      Resend code in <span className="text-purple-400">{resendCountdown}s</span>
+                      Resend code in <span className="text-[#1079ff]">{resendCountdown}s</span>
                     </p>
                   )}
                 </div>
@@ -740,7 +857,7 @@ export default function WithdrawPage() {
                   <button
                     onClick={handleVerifyAndSubmit}
                     disabled={verificationCode.length !== 6 || isVerifying || isSubmitting}
-                    className="w-full py-2 sm:py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full py-2 sm:py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {isVerifying || isSubmitting ? (
                       <>
@@ -818,7 +935,7 @@ export default function WithdrawPage() {
 
                 <button
                   onClick={handleReset}
-                  className="px-5 sm:px-6 py-2 sm:py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg transition-all"
+                  className="px-5 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-sm font-medium rounded-lg transition-all"
                 >
                   {lastWithdrawalStatus === 'PENDING' ? 'Make Another Withdrawal' : 'Done'}
                 </button>

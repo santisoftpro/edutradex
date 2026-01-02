@@ -129,7 +129,7 @@ export default function SpreadsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -142,7 +142,7 @@ export default function SpreadsPage() {
           <p className="mt-4 text-slate-400">{error}</p>
           <button
             onClick={fetchData}
-            className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+            className="mt-4 px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg transition-all"
           >
             Retry
           </button>
@@ -168,7 +168,7 @@ export default function SpreadsPage() {
               min="0.5"
               max="10"
               step="0.1"
-              className="w-24 px-3 py-1 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-24 px-3 py-1 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
               autoFocus
             />
           ) : (
@@ -182,7 +182,7 @@ export default function SpreadsPage() {
               value={editValues.description}
               onChange={(e) => setEditValues({ ...editValues, description: e.target.value })}
               placeholder="Optional description"
-              className="w-full px-3 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
             />
           ) : (
             <span className="text-slate-400 text-sm">{spread.description || '—'}</span>
@@ -246,7 +246,7 @@ export default function SpreadsPage() {
         <button
           onClick={handleReload}
           disabled={isReloading}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg font-medium transition-all disabled:opacity-50"
         >
           <RefreshCw className={cn('h-4 w-4', isReloading && 'animate-spin')} />
           Reload Configs
@@ -256,7 +256,7 @@ export default function SpreadsPage() {
       {marketStatus && (
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-4">
           <div className="flex items-center gap-3">
-            <Activity className="h-5 w-5 text-emerald-400" />
+            <Activity className="h-5 w-5 text-[#1079ff]" />
             <div className="flex-1">
               <h3 className="text-sm font-medium text-white">Market Status</h3>
               <div className="flex items-center gap-4 mt-1 text-xs text-slate-400">

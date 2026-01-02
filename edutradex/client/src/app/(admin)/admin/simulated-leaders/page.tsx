@@ -127,7 +127,7 @@ export default function SimulatedLeadersPage() {
       {/* Leaders List */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+          <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
         </div>
       ) : leaders.length === 0 ? (
         <div className="text-center py-16 bg-slate-800 rounded-xl border border-slate-700">
@@ -308,7 +308,7 @@ function StatCard({
 }) {
   const colors = {
     emerald: 'bg-emerald-600/20 text-emerald-400',
-    blue: 'bg-blue-600/20 text-blue-400',
+    blue: 'bg-[#1079ff]/20 text-[#1079ff]',
     slate: 'bg-slate-600/20 text-slate-400',
   };
 
@@ -408,7 +408,7 @@ function LeaderFormModal({
                     type="text"
                     value={formData.displayName}
                     onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                     placeholder="e.g., Alex_Trades"
                   />
                 </div>
@@ -420,7 +420,7 @@ function LeaderFormModal({
                     max="60"
                     value={formData.tradeFrequency}
                     onChange={(e) => setFormData({ ...formData, tradeFrequency: parseInt(e.target.value) || 5 })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
               </div>
@@ -449,7 +449,7 @@ function LeaderFormModal({
                     step="0.1"
                     value={formData.winRate}
                     onChange={(e) => setFormData({ ...formData, winRate: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -459,7 +459,7 @@ function LeaderFormModal({
                     step="0.01"
                     value={formData.totalProfit}
                     onChange={(e) => setFormData({ ...formData, totalProfit: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -469,7 +469,7 @@ function LeaderFormModal({
                     min="0"
                     value={formData.totalTrades}
                     onChange={(e) => setFormData({ ...formData, totalTrades: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -479,7 +479,7 @@ function LeaderFormModal({
                     min="0"
                     value={formData.followerCount}
                     onChange={(e) => setFormData({ ...formData, followerCount: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
               </div>
@@ -500,7 +500,7 @@ function LeaderFormModal({
                     max="100"
                     value={formData.winRateMin}
                     onChange={(e) => setFormData({ ...formData, winRateMin: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -511,7 +511,7 @@ function LeaderFormModal({
                     max="100"
                     value={formData.winRateMax}
                     onChange={(e) => setFormData({ ...formData, winRateMax: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -521,7 +521,7 @@ function LeaderFormModal({
                     min="0"
                     value={formData.followerMin}
                     onChange={(e) => setFormData({ ...formData, followerMin: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -531,7 +531,7 @@ function LeaderFormModal({
                     min="0"
                     value={formData.followerMax}
                     onChange={(e) => setFormData({ ...formData, followerMax: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
               </div>
@@ -652,7 +652,7 @@ function AutoGenerateModal({
               max="20"
               value={count}
               onChange={(e) => setCount(parseInt(e.target.value) || 1)}
-              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white text-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white text-lg focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
             />
             <p className="text-slate-500 text-sm mt-2">Maximum 20 at a time</p>
           </div>

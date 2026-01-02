@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ArrowUp, ArrowDown } from 'lucide-react';
-import { useTradeStore, Trade } from '@/store/trade.store';
+import { Trade, useFilteredActiveTrades } from '@/store/trade.store';
 import { PriceTick } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -11,7 +11,8 @@ interface ActiveTradesProps {
 }
 
 export function ActiveTrades({ latestPrices }: ActiveTradesProps) {
-  const { activeTrades } = useTradeStore();
+  // Use filtered active trades - only shows trades for current account type (LIVE or DEMO)
+  const activeTrades = useFilteredActiveTrades();
   const [isClient, setIsClient] = useState(false);
 
   // Prevent hydration mismatch - only render on client side

@@ -140,7 +140,7 @@ export function MyFollowing({ onRefreshStats }: MyFollowingProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -253,7 +253,7 @@ function FollowingCard({
       <div className="flex items-center gap-3 p-4">
         {/* Avatar */}
         <div className="relative flex-shrink-0">
-          <div className="h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold bg-gradient-to-br from-emerald-500 to-blue-500">
+          <div className="h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold bg-gradient-to-br from-[#1079ff] to-[#092ab2]">
             {follow.leader.displayName.charAt(0).toUpperCase()}
           </div>
         </div>
@@ -387,7 +387,7 @@ function SimulatedFollowingCard({
       <div className="flex items-center gap-3 p-4">
         {/* Avatar */}
         <div className="relative flex-shrink-0">
-          <div className="h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold bg-gradient-to-br from-emerald-500 to-blue-500">
+          <div className="h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold bg-gradient-to-br from-[#1079ff] to-[#092ab2]">
             {leader.displayName.charAt(0).toUpperCase()}
           </div>
         </div>
@@ -515,7 +515,7 @@ function EditPanel({
           className={cn(
             'flex items-center justify-center gap-2 p-3 rounded-lg border transition-all',
             copyMode === 'PERCENTAGE'
-              ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+              ? 'border-[#1079ff] bg-[#1079ff]/10 text-[#1079ff]'
               : 'border-slate-700 text-slate-400 hover:border-slate-600'
           )}
         >
@@ -527,7 +527,7 @@ function EditPanel({
           className={cn(
             'flex items-center justify-center gap-2 p-3 rounded-lg border transition-all',
             copyMode === 'FIXED_AMOUNT'
-              ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+              ? 'border-[#1079ff] bg-[#1079ff]/10 text-[#1079ff]'
               : 'border-slate-700 text-slate-400 hover:border-slate-600'
           )}
         >
@@ -547,7 +547,7 @@ function EditPanel({
               onChange={(e) => setPercentageAmount(Number(e.target.value))}
               min={1}
               max={1000}
-              className="w-full px-4 py-2.5 pr-10 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500"
+              className="w-full px-4 py-2.5 pr-10 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-[#1079ff]"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">%</span>
           </div>
@@ -564,7 +564,7 @@ function EditPanel({
                 onChange={(e) => setFixedAmount(Number(e.target.value))}
                 min={1}
                 max={10000}
-                className="w-full pl-8 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                className="w-full pl-8 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-[#1079ff]"
               />
             </div>
           </div>
@@ -580,7 +580,7 @@ function EditPanel({
                   onChange={(e) => setDailyLossLimit(e.target.value ? Number(e.target.value) : null)}
                   min={1}
                   placeholder="No limit"
-                  className="w-full pl-8 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                  className="w-full pl-8 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-[#1079ff]"
                 />
               </div>
             </div>
@@ -594,7 +594,7 @@ function EditPanel({
                   onChange={(e) => setDailyProfitLimit(e.target.value ? Number(e.target.value) : null)}
                   min={1}
                   placeholder="No limit"
-                  className="w-full pl-8 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                  className="w-full pl-8 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-[#1079ff]"
                 />
               </div>
             </div>
@@ -611,7 +611,7 @@ function EditPanel({
               type="checkbox"
               checked={unlimitedTrades}
               onChange={(e) => setUnlimitedTrades(e.target.checked)}
-              className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500"
+              className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-[#1079ff] focus:ring-[#1079ff]"
             />
             <span className="text-xs text-slate-500 flex items-center gap-1">
               <Infinity className="h-3 w-3" /> Unlimited
@@ -625,7 +625,7 @@ function EditPanel({
             onChange={(e) => setMaxDailyTrades(Number(e.target.value))}
             min={1}
             max={500}
-            className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500"
+            className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-[#1079ff]"
           />
         )}
       </div>
@@ -640,7 +640,7 @@ function EditPanel({
         </button>
         <button
           onClick={onSave}
-          className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg transition-colors"
+          className="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-sm rounded-lg transition-all"
         >
           Save
         </button>

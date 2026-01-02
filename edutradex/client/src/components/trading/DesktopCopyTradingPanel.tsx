@@ -298,7 +298,7 @@ export function DesktopCopyTradingPanel({ isOpen, onClose }: DesktopCopyTradingP
               {/* Leaders List */}
               {isPageLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
+                  <Loader2 className="h-6 w-6 text-[#1079ff] animate-spin" />
                 </div>
               ) : filteredLeaders.length === 0 ? (
                 <div className="text-center py-12">
@@ -499,7 +499,7 @@ function FollowingTab({ onRefresh }: { onRefresh: () => void }) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
+        <Loader2 className="h-6 w-6 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -816,7 +816,7 @@ function FollowingCard({
                   type="checkbox"
                   checked={unlimitedTrades}
                   onChange={(e) => setUnlimitedTrades(e.target.checked)}
-                  className="w-3 h-3 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500"
+                  className="w-3 h-3 rounded border-slate-600 bg-slate-800 text-[#1079ff] focus:ring-[#1079ff]"
                 />
                 <span className="text-[10px] text-slate-500 flex items-center gap-0.5">
                   <Infinity className="h-2.5 w-2.5" /> Unlimited
@@ -845,7 +845,7 @@ function FollowingCard({
             </button>
             <button
               onClick={handleSave}
-              className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-lg transition-colors"
+              className="flex-1 px-3 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-xs rounded-lg transition-all"
             >
               Save
             </button>

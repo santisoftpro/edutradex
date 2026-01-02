@@ -16,6 +16,7 @@ interface MobileTradingPanelProps {
   onOpenTrades?: () => void;
   onOpenCopyTrading?: () => void;
   activeTradesCount?: number;
+  isDemoMode?: boolean;
 }
 
 const DURATIONS = [
@@ -43,6 +44,7 @@ function MobileTradingPanelComponent({
   onOpenTrades,
   onOpenCopyTrading,
   activeTradesCount = 0,
+  isDemoMode = false,
 }: MobileTradingPanelProps) {
   const router = useRouter();
   const [amount, setAmount] = useState(50);
@@ -163,7 +165,7 @@ function MobileTradingPanelComponent({
                     className={cn(
                       'py-3 rounded-lg font-semibold text-xs transition-all min-h-[40px]',
                       amount === quickAmount
-                        ? 'bg-emerald-600 text-white'
+                        ? 'bg-[#1079ff] text-white'
                         : 'bg-[#252542] text-gray-400 active:bg-[#2d2d52]'
                     )}
                   >
@@ -178,13 +180,13 @@ function MobileTradingPanelComponent({
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))}
-                  className="w-full pl-8 pr-3 py-3 bg-[#252542] border border-[#3d3d5c] rounded-lg text-white text-lg font-bold text-center focus:outline-none focus:border-emerald-500"
+                  className="w-full pl-8 pr-3 py-3 bg-[#252542] border border-[#3d3d5c] rounded-lg text-white text-lg font-bold text-center focus:outline-none focus:border-[#1079ff]"
                   placeholder="Enter amount"
                 />
               </div>
               <button
                 onClick={() => setShowAmountSheet(false)}
-                className="w-full mt-3 py-2.5 bg-emerald-600 text-white font-semibold text-sm rounded-lg"
+                className="w-full mt-3 py-2.5 bg-[#1079ff] text-white font-semibold text-sm rounded-lg"
               >
                 Confirm
               </button>
@@ -194,9 +196,15 @@ function MobileTradingPanelComponent({
       )}
 
       {/* Main Trading Panel - Fixed at bottom with integrated nav */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0d0d1a] safe-area-bottom">
+      <div className={cn(
+        "md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0d0d1a] safe-area-bottom",
+        isDemoMode && "border-t-2 border-t-amber-500/50"
+      )}>
         {/* Time, Amount, Profit Row */}
-        <div className="flex gap-2 px-3 pt-2 border-t border-[#1a1a2e]">
+        <div className={cn(
+          "flex gap-2 px-3 pt-2",
+          isDemoMode ? "border-t border-amber-500/20" : "border-t border-[#1a1a2e]"
+        )}>
           {/* Time Input */}
           <button
             onClick={() => setShowTimeSheet(true)}

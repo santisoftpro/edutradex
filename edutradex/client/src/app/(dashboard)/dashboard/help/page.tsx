@@ -115,15 +115,15 @@ export default function HelpPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <a
           href="/dashboard/trade"
-          className="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-xl p-6 hover:from-emerald-500 hover:to-emerald-700 transition-all"
+          className="bg-gradient-to-br from-[#1079ff] to-[#092ab2] rounded-xl p-6 hover:from-[#3a93ff] hover:to-[#1079ff] transition-all"
         >
           <TrendingUp className="h-8 w-8 text-white mb-3" />
           <h3 className="text-white font-semibold">Start Trading</h3>
-          <p className="text-emerald-100 text-sm mt-1">Jump into the trading platform</p>
+          <p className="text-blue-100 text-sm mt-1">Jump into the trading platform</p>
         </a>
         <a
           href="/dashboard/analytics"
-          className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl p-6 hover:from-blue-500 hover:to-blue-700 transition-all"
+          className="bg-gradient-to-br from-[#1079ff] to-[#092ab2] rounded-xl p-6 hover:from-[#3a93ff] hover:to-[#1079ff] transition-all"
         >
           <Clock className="h-8 w-8 text-white mb-3" />
           <h3 className="text-white font-semibold">View Analytics</h3>
@@ -131,30 +131,30 @@ export default function HelpPage() {
         </a>
         <a
           href="/dashboard/deposits"
-          className="bg-gradient-to-br from-purple-600 to-purple-800 rounded-xl p-6 hover:from-purple-500 hover:to-purple-700 transition-all"
+          className="bg-gradient-to-br from-[#1079ff] to-[#092ab2] rounded-xl p-6 hover:from-[#3a93ff] hover:to-[#1079ff] transition-all"
         >
           <DollarSign className="h-8 w-8 text-white mb-3" />
           <h3 className="text-white font-semibold">Make a Deposit</h3>
-          <p className="text-purple-100 text-sm mt-1">Add funds to your account</p>
+          <p className="text-blue-100 text-sm mt-1">Add funds to your account</p>
         </a>
       </div>
 
       {/* Getting Started Guides */}
       <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
         <div className="flex items-center gap-3 mb-6">
-          <BookOpen className="h-5 w-5 text-emerald-500" />
+          <BookOpen className="h-5 w-5 text-[#1079ff]" />
           <h2 className="text-lg font-semibold text-white">Getting Started Guides</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {guides.map((guide, index) => (
             <div key={index} className="bg-slate-700/50 rounded-lg p-5">
-              <guide.icon className="h-8 w-8 text-emerald-500 mb-3" />
+              <guide.icon className="h-8 w-8 text-[#1079ff] mb-3" />
               <h3 className="text-white font-semibold">{guide.title}</h3>
               <p className="text-slate-400 text-sm mt-1 mb-4">{guide.description}</p>
               <ol className="space-y-2">
                 {guide.steps.map((step, i) => (
                   <li key={i} className="text-slate-300 text-sm flex items-start gap-2">
-                    <span className="text-emerald-500 font-medium">{i + 1}.</span>
+                    <span className="text-[#1079ff] font-medium">{i + 1}.</span>
                     {step}
                   </li>
                 ))}
@@ -167,7 +167,7 @@ export default function HelpPage() {
       {/* FAQ Section */}
       <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
         <div className="flex items-center gap-3 mb-6">
-          <HelpCircle className="h-5 w-5 text-emerald-500" />
+          <HelpCircle className="h-5 w-5 text-[#1079ff]" />
           <h2 className="text-lg font-semibold text-white">Frequently Asked Questions</h2>
         </div>
         <div className="space-y-3">
@@ -203,8 +203,8 @@ export default function HelpPage() {
       {/* Contact Section */}
       <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-xl p-6 border border-slate-600">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-emerald-600/20 rounded-lg">
-            <MessageCircle className="h-6 w-6 text-emerald-500" />
+          <div className="p-3 bg-[#1079ff]/20 rounded-lg">
+            <MessageCircle className="h-6 w-6 text-[#1079ff]" />
           </div>
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-white">Need More Help?</h3>

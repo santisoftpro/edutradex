@@ -237,7 +237,7 @@ export default function AdminTransactionsPage() {
   if (isLoading) {
     return (
       <div className="min-h-[400px] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -311,8 +311,8 @@ export default function AdminTransactionsPage() {
         </div>
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3">
           <div className="flex items-center gap-2 mb-1">
-            <div className="p-1.5 bg-purple-500/20 rounded-lg">
-              <Clock className="h-3.5 w-3.5 text-purple-400" />
+            <div className="p-1.5 bg-[#1079ff]/20 rounded-lg">
+              <Clock className="h-3.5 w-3.5 text-[#1079ff]" />
             </div>
             <span className="text-slate-400 text-[10px] sm:text-xs">Pending With.</span>
           </div>
@@ -320,8 +320,8 @@ export default function AdminTransactionsPage() {
         </div>
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 col-span-2 sm:col-span-1">
           <div className="flex items-center gap-2 mb-1">
-            <div className="p-1.5 bg-blue-500/20 rounded-lg">
-              <FileText className="h-3.5 w-3.5 text-blue-400" />
+            <div className="p-1.5 bg-[#1079ff]/20 rounded-lg">
+              <FileText className="h-3.5 w-3.5 text-[#1079ff]" />
             </div>
             <span className="text-slate-400 text-[10px] sm:text-xs">Total</span>
           </div>
@@ -332,7 +332,7 @@ export default function AdminTransactionsPage() {
       {/* Search by Transaction ID */}
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 sm:p-4">
         <div className="flex items-center gap-2 mb-2">
-          <Hash className="h-4 w-4 text-emerald-400" />
+          <Hash className="h-4 w-4 text-[#1079ff]" />
           <span className="text-white text-sm font-medium">Verify Transaction by ID</span>
         </div>
         <div className="flex gap-2">
@@ -344,12 +344,12 @@ export default function AdminTransactionsPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearchById()}
               placeholder="Enter transaction ID, user name, email, phone, or wallet..."
-              className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-[#1079ff]"
             />
           </div>
           <button
             onClick={handleSearchById}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors"
+            className="px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-sm font-medium rounded-lg transition-all"
           >
             Verify
           </button>
@@ -367,7 +367,7 @@ export default function AdminTransactionsPage() {
               className={cn(
                 'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
                 typeFilter === opt.value
-                  ? 'bg-emerald-600 text-white'
+                  ? 'bg-gradient-to-r from-[#1079ff] to-[#092ab2] text-white'
                   : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white'
               )}
             >
@@ -380,7 +380,7 @@ export default function AdminTransactionsPage() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as TransactionStatus)}
-          className="bg-slate-800/50 border border-slate-700 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-emerald-500"
+          className="bg-slate-800/50 border border-slate-700 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-[#1079ff]"
         >
           {statusOptions.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -487,7 +487,7 @@ export default function AdminTransactionsPage() {
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => setSelectedTransaction(tx)}
-                        className="p-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-900/30 rounded-lg transition-colors"
+                        className="p-2 text-[#1079ff] hover:text-[#3a93ff] hover:bg-[#1079ff]/10 rounded-lg transition-colors"
                         title="View Details"
                       >
                         <Eye className="h-4 w-4" />

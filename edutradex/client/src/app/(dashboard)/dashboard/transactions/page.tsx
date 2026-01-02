@@ -184,7 +184,7 @@ export default function TransactionsPage() {
   if (!isHydrated || isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -259,8 +259,8 @@ export default function TransactionsPage() {
           </div>
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3">
             <div className="flex items-center gap-2 mb-1">
-              <div className="p-1.5 bg-blue-500/20 rounded-lg">
-                <Wallet className="h-3.5 w-3.5 text-blue-400" />
+              <div className="p-1.5 bg-[#1079ff]/20 rounded-lg">
+                <Wallet className="h-3.5 w-3.5 text-[#1079ff]" />
               </div>
               <span className="text-slate-400 text-[10px] sm:text-xs">Total</span>
             </div>
@@ -279,7 +279,7 @@ export default function TransactionsPage() {
                 className={cn(
                   'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
                   typeFilter === opt.value
-                    ? 'bg-emerald-600 text-white'
+                    ? 'bg-[#1079ff] text-white'
                     : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white'
                 )}
               >
@@ -292,7 +292,7 @@ export default function TransactionsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as TransactionStatus)}
-            className="bg-slate-800/50 border border-slate-700 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-emerald-500"
+            className="bg-slate-800/50 border border-slate-700 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-[#1079ff]"
           >
             {statusOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -303,7 +303,7 @@ export default function TransactionsPage() {
           <select
             value={dateRange}
             onChange={(e) => setDateRange(e.target.value as DateRangeType)}
-            className="bg-slate-800/50 border border-slate-700 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-emerald-500 ml-auto"
+            className="bg-slate-800/50 border border-slate-700 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-[#1079ff] ml-auto"
           >
             {dateOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -387,7 +387,7 @@ export default function TransactionsPage() {
                       <td className="px-4 py-3 text-right">
                         <button
                           onClick={() => setSelectedTransaction(tx)}
-                          className="text-emerald-400 hover:text-emerald-300 text-xs font-medium"
+                          className="text-[#1079ff] hover:text-[#3a93ff] text-xs font-medium"
                         >
                           View
                         </button>

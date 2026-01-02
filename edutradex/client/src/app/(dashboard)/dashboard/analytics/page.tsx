@@ -128,7 +128,7 @@ export default function AnalyticsPage() {
         {/* Win/Loss Distribution */}
         <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <PieChart className="h-5 w-5 text-emerald-500" />
+            <PieChart className="h-5 w-5 text-[#1079ff]" />
             Profit/Loss Distribution
           </h2>
           {stats.totalTrades === 0 ? (
@@ -178,7 +178,7 @@ export default function AnalyticsPage() {
         {/* Market Distribution */}
         <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-blue-500" />
+            <BarChart3 className="h-5 w-5 text-[#1079ff]" />
             Trading Patterns
           </h2>
           {stats.totalTrades === 0 ? (
@@ -309,7 +309,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Tips Section */}
-      <div className="bg-gradient-to-r from-blue-900/50 to-slate-800 rounded-xl p-6 border border-blue-800/50">
+      <div className="bg-gradient-to-r from-[#092ab2]/30 to-slate-800 rounded-xl p-6 border border-[#1079ff]/30">
         <h3 className="text-lg font-semibold text-white mb-3">Trading Tips</h3>
         <ul className="space-y-2 text-slate-300 text-sm">
           <li>• Start with small amounts to learn market behavior</li>
@@ -341,7 +341,7 @@ function StatCard({
   const colors = {
     emerald: 'text-emerald-500 bg-emerald-500/10',
     red: 'text-red-500 bg-red-500/10',
-    blue: 'text-blue-500 bg-blue-500/10',
+    blue: 'text-[#1079ff] bg-[#1079ff]/10',
     purple: 'text-purple-500 bg-purple-500/10',
     yellow: 'text-yellow-500 bg-yellow-500/10',
   };

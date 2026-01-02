@@ -219,7 +219,7 @@ export function DiscoverLeaders({ onFollowSuccess }: DiscoverLeadersProps) {
             className={cn(
               'px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap',
               sortBy === option.value
-                ? 'bg-emerald-600 text-white'
+                ? 'bg-[#1079ff] text-white'
                 : 'bg-slate-800 text-slate-400 hover:text-white'
             )}
           >
@@ -231,7 +231,7 @@ export function DiscoverLeaders({ onFollowSuccess }: DiscoverLeadersProps) {
       {/* Leaders List */}
       {isPageLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+          <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
         </div>
       ) : filteredLeaders.length === 0 ? (
         <div className="text-center py-20">
@@ -296,8 +296,8 @@ function LiveActivityTicker({ activities }: { activities: FakeActivity[] }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3 bg-slate-800/50 rounded-xl">
       <div className="relative flex-shrink-0">
-        <Activity className="h-4 w-4 text-emerald-400" />
-        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
+        <Activity className="h-4 w-4 text-[#1079ff]" />
+        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[#1079ff] rounded-full animate-ping" />
       </div>
       <div className="flex-1 overflow-hidden">
         <div key={currentActivity.id} className="animate-fade-in text-sm text-slate-300">
@@ -315,7 +315,7 @@ function LiveActivityTicker({ activities }: { activities: FakeActivity[] }) {
             <>
               <span className="text-white font-medium">{currentActivity.userName}</span>
               {' followed '}
-              <span className="text-emerald-400">{currentActivity.leaderName}</span>
+              <span className="text-[#1079ff]">{currentActivity.leaderName}</span>
             </>
           )}
         </div>
@@ -362,7 +362,7 @@ function LeaderCard({
 
       {/* Avatar */}
       <div className="relative flex-shrink-0">
-        <div className="h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold bg-gradient-to-br from-emerald-500 to-blue-500">
+        <div className="h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold bg-gradient-to-br from-[#1079ff] to-[#092ab2]">
           {leader.displayName.charAt(0).toUpperCase()}
         </div>
         {leader.isOnline && (
@@ -375,7 +375,7 @@ function LeaderCard({
         <div className="flex items-center gap-2">
           <h3 className="text-white font-medium text-sm truncate">{leader.displayName}</h3>
           {leader.isFollowing && (
-            <Check className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+            <Check className="h-4 w-4 text-[#1079ff] flex-shrink-0" />
           )}
         </div>
         <p className="text-slate-500 text-xs">

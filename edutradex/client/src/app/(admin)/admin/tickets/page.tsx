@@ -60,7 +60,7 @@ interface Stats {
 }
 
 const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; bgColor: string; icon: typeof Clock }> = {
-  OPEN: { label: 'Open', color: 'text-blue-400', bgColor: 'bg-blue-500/10 border-blue-500/20', icon: Mail },
+  OPEN: { label: 'Open', color: 'text-[#1079ff]', bgColor: 'bg-[#1079ff]/10 border-[#1079ff]/20', icon: Mail },
   IN_PROGRESS: { label: 'In Progress', color: 'text-amber-400', bgColor: 'bg-amber-500/10 border-amber-500/20', icon: Loader2 },
   REPLIED: { label: 'Replied', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10 border-emerald-500/20', icon: MailOpen },
   RESOLVED: { label: 'Resolved', color: 'text-green-400', bgColor: 'bg-green-500/10 border-green-500/20', icon: CheckCheck },
@@ -169,7 +169,7 @@ export default function AdminTicketsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 text-red-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -279,7 +279,7 @@ export default function AdminTicketsPage() {
                           onChange={(e) => setReply(e.target.value)}
                           placeholder="Type your response to the customer..."
                           rows={4}
-                          className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 transition-all resize-none"
+                          className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#1079ff]/50 focus:border-[#1079ff]/50 transition-all resize-none"
                         />
                         <div className="flex items-center justify-between">
                           <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer select-none">
@@ -409,7 +409,7 @@ export default function AdminTicketsPage() {
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
           {[
-            { label: 'Open', value: stats.open, color: 'text-blue-400', icon: Mail },
+            { label: 'Open', value: stats.open, color: 'text-[#1079ff]', icon: Mail },
             { label: 'In Progress', value: stats.inProgress, color: 'text-amber-400', icon: Loader2 },
             { label: 'Replied', value: stats.replied, color: 'text-emerald-400', icon: MailOpen },
             { label: 'Resolved', value: stats.resolved, color: 'text-green-400', icon: CheckCheck },
@@ -441,7 +441,7 @@ export default function AdminTicketsPage() {
           className={cn(
             'px-4 py-2 rounded-lg text-sm font-medium transition-all border',
             statusFilter === 'ALL'
-              ? 'bg-red-600/10 border-red-600/50 text-red-400'
+              ? 'bg-[#1079ff]/10 border-[#1079ff]/50 text-[#1079ff]'
               : 'bg-slate-700/30 border-slate-700 text-slate-400 hover:bg-slate-700/50'
           )}
         >
@@ -538,7 +538,7 @@ export default function AdminTicketsPage() {
                     </div>
 
                     <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="px-3 py-1.5 bg-red-600/10 text-red-400 rounded-lg text-sm font-medium">
+                      <span className="px-3 py-1.5 bg-[#1079ff]/10 text-[#1079ff] rounded-lg text-sm font-medium">
                         View
                       </span>
                     </div>

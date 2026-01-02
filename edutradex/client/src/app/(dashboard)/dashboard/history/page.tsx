@@ -24,7 +24,7 @@ import {
   Check,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { useTradeStore, Trade } from '@/store/trade.store';
+import { useTradeStore, useFilteredTrades, useFilteredStats, Trade } from '@/store/trade.store';
 import { useAuthStore } from '@/store/auth.store';
 import { cn, formatCurrency } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -38,7 +38,10 @@ type DateRangeType = 'all' | 'today' | '7d' | '30d';
 
 export default function HistoryPage() {
   const { isHydrated } = useAuthStore();
-  const { trades, stats, clearHistory } = useTradeStore();
+  // Use filtered trades and stats - only shows data for current account type (LIVE or DEMO)
+  const trades = useFilteredTrades();
+  const stats = useFilteredStats();
+  const clearHistory = useTradeStore((state) => state.clearHistory);
   const [activeTab, setActiveTab] = useState<TabType>('trades');
   const [tradeFilter, setTradeFilter] = useState<TradeFilterType>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>('all');
@@ -202,7 +205,7 @@ export default function HistoryPage() {
   if (!isHydrated) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -263,7 +266,7 @@ export default function HistoryPage() {
               className={cn(
                 'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all',
                 activeTab === tab.id
-                  ? 'bg-emerald-600 text-white'
+                  ? 'bg-[#1079ff] text-white'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
               )}
             >
@@ -271,7 +274,7 @@ export default function HistoryPage() {
               <span>{tab.label}</span>
               <span className={cn(
                 'ml-1 px-1.5 py-0.5 rounded-full text-[10px]',
-                activeTab === tab.id ? 'bg-emerald-500' : 'bg-slate-700'
+                activeTab === tab.id ? 'bg-[#0d66d0]' : 'bg-slate-700'
               )}>
                 {tab.count}
               </span>
@@ -313,7 +316,7 @@ export default function HistoryPage() {
                   className={cn(
                     'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
                     tradeFilter === f
-                      ? 'bg-emerald-600 text-white'
+                      ? 'bg-[#1079ff] text-white'
                       : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white'
                   )}
                 >
@@ -333,7 +336,7 @@ export default function HistoryPage() {
                   className={cn(
                     'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
                     statusFilter === f
-                      ? 'bg-emerald-600 text-white'
+                      ? 'bg-[#1079ff] text-white'
                       : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white'
                   )}
                 >
@@ -349,7 +352,7 @@ export default function HistoryPage() {
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value as DateRangeType)}
-              className="bg-slate-800/50 border border-slate-700 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-emerald-500"
+              className="bg-slate-800/50 border border-slate-700 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-[#1079ff]"
             >
               {dateOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -427,7 +430,7 @@ function TradesContent({
         <p className="text-slate-500 text-xs sm:text-sm mt-1">Start trading to see your history here</p>
         <a
           href="/dashboard/trade"
-          className="inline-block mt-4 px-4 sm:px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg transition-colors"
+          className="inline-block mt-4 px-4 sm:px-6 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-sm rounded-lg transition-colors"
         >
           Start Trading
         </a>
@@ -552,7 +555,7 @@ function DepositsContent({
   if (isLoading) {
     return (
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -564,7 +567,7 @@ function DepositsContent({
         <p className="text-slate-400 mt-4 text-sm sm:text-base">No deposits found</p>
         <a
           href="/dashboard/deposit"
-          className="inline-block mt-4 px-4 sm:px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg transition-colors"
+          className="inline-block mt-4 px-4 sm:px-6 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-sm rounded-lg transition-colors"
         >
           Make a Deposit
         </a>
@@ -592,7 +595,7 @@ function DepositsContent({
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     {deposit.method === 'MOBILE_MONEY' ? (
-                      <Smartphone className="h-4 w-4 text-emerald-400" />
+                      <Smartphone className="h-4 w-4 text-[#1079ff]" />
                     ) : (
                       <Bitcoin className="h-4 w-4 text-amber-400" />
                     )}
@@ -609,7 +612,7 @@ function DepositsContent({
                 <td className="px-4 py-3 text-right">
                   <button
                     onClick={() => onViewDetails(deposit)}
-                    className="text-emerald-400 hover:text-emerald-300 text-xs"
+                    className="text-[#1079ff] hover:text-[#3a93ff] text-xs"
                   >
                     View
                   </button>
@@ -631,8 +634,8 @@ function DepositsContent({
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 {deposit.method === 'MOBILE_MONEY' ? (
-                  <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                    <Smartphone className="h-4 w-4 text-emerald-400" />
+                  <div className="w-8 h-8 bg-[#1079ff]/20 rounded-lg flex items-center justify-center">
+                    <Smartphone className="h-4 w-4 text-[#1079ff]" />
                   </div>
                 ) : (
                   <div className="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center">
@@ -674,7 +677,7 @@ function WithdrawalsContent({
   if (isLoading) {
     return (
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 text-purple-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }

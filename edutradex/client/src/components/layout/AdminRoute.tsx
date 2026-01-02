@@ -23,7 +23,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-10 w-10 text-emerald-500 animate-spin mx-auto" />
+          <Loader2 className="h-10 w-10 text-[#1079ff] animate-spin mx-auto" />
           <p className="mt-4 text-slate-400">Loading...</p>
         </div>
       </div>
@@ -46,7 +46,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
           </p>
           <button
             onClick={() => router.push('/dashboard')}
-            className="mt-6 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+            className="mt-6 px-6 py-3 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg transition-all"
           >
             Return to Dashboard
           </button>

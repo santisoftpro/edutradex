@@ -43,7 +43,7 @@ function StatCard({
     amber: 'bg-amber-600/20 text-amber-500',
     emerald: 'bg-emerald-600/20 text-emerald-500',
     red: 'bg-red-600/20 text-red-500',
-    blue: 'bg-blue-600/20 text-blue-500',
+    blue: 'bg-[#1079ff]/20 text-[#1079ff]',
     purple: 'bg-purple-600/20 text-purple-500',
   };
 
@@ -214,7 +214,7 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={type === 'crypto' ? 'Tether (USDT) TRC20' : 'MTN MoMo'}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                 required
               />
             </div>
@@ -229,7 +229,7 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
                 value={code}
                 onChange={(e) => setCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                 placeholder={type === 'crypto' ? 'usdt-trc20' : 'mtn-momo'}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                 required
                 disabled={isEditing}
               />
@@ -246,7 +246,7 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
                     value={cryptoCurrency}
                     onChange={(e) => setCryptoCurrency(e.target.value.toUpperCase())}
                     placeholder="USDT"
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                     required
                     disabled={isEditing}
                   />
@@ -258,7 +258,7 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
                     value={network}
                     onChange={(e) => setNetwork(e.target.value)}
                     placeholder="TRC20, ERC20, BEP20"
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                     disabled={isEditing}
                   />
                 </div>
@@ -288,7 +288,7 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
                   <select
                     value={mobileProvider}
                     onChange={(e) => setMobileProvider(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                     required
                     disabled={isEditing}
                   >
@@ -308,7 +308,7 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     placeholder="+255 123 456 789"
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                     required
                   />
                 </div>
@@ -321,7 +321,7 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
                   placeholder="Account holder name"
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                 />
               </div>
             </>
@@ -335,7 +335,7 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
                 value={minAmount}
                 onChange={(e) => setMinAmount(e.target.value)}
                 min="1"
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
               />
             </div>
             <div>
@@ -345,7 +345,7 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
                 value={maxAmount}
                 onChange={(e) => setMaxAmount(e.target.value)}
                 min="1"
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
               />
             </div>
             <div>
@@ -355,7 +355,7 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
                 value={processingTime}
                 onChange={(e) => setProcessingTime(e.target.value)}
                 placeholder="~5 min"
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
               />
             </div>
           </div>
@@ -394,7 +394,7 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
                 value={displayOrder}
                 onChange={(e) => setDisplayOrder(e.target.value)}
                 min="0"
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
               />
             </div>
           </div>
@@ -431,7 +431,7 @@ function PaymentMethodModal({ type, method, onSave, onCancel }: PaymentMethodMod
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEditing ? 'Update' : 'Create'}
@@ -669,7 +669,7 @@ export default function AdminPaymentMethodsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -728,13 +728,13 @@ export default function AdminPaymentMethodsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search payment methods..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
           />
         </div>
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as PaymentMethodType | '')}
-          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
         >
           <option value="">All Types</option>
           <option value="CRYPTO">Crypto</option>

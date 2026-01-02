@@ -115,7 +115,7 @@ function ProcessDepositModal({
               onChange={(e) => setNote(e.target.value)}
               placeholder={action === 'reject' ? 'Reason for rejection...' : 'Add a note...'}
               rows={3}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none text-sm"
+              className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-[#1079ff] resize-none text-sm"
             />
           </div>
 
@@ -438,8 +438,8 @@ export default function AdminDepositsPage() {
         </div>
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3">
           <div className="flex items-center gap-2 mb-1">
-            <div className="p-1.5 bg-blue-500/20 rounded-lg">
-              <DollarSign className="h-3.5 w-3.5 text-blue-400" />
+            <div className="p-1.5 bg-[#1079ff]/20 rounded-lg">
+              <DollarSign className="h-3.5 w-3.5 text-[#1079ff]" />
             </div>
             <span className="text-slate-400 text-[10px] sm:text-xs">Volume</span>
           </div>
@@ -456,7 +456,7 @@ export default function AdminDepositsPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by ID, name, email, phone..."
-            className="w-full pl-9 pr-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            className="w-full pl-9 pr-3 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-[#1079ff]"
           />
         </div>
         <select
@@ -465,7 +465,7 @@ export default function AdminDepositsPage() {
             setStatusFilter(e.target.value as DepositStatus | '');
             setPagination(p => ({ ...p, page: 1 }));
           }}
-          className="bg-slate-800/50 border border-slate-700 text-white px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+          className="bg-slate-800/50 border border-slate-700 text-white px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-[#1079ff]"
         >
           {statusOptions.map(opt => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -477,7 +477,7 @@ export default function AdminDepositsPage() {
             setMethodFilter(e.target.value as DepositMethod | '');
             setPagination(p => ({ ...p, page: 1 }));
           }}
-          className="bg-slate-800/50 border border-slate-700 text-white px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500"
+          className="bg-slate-800/50 border border-slate-700 text-white px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-[#1079ff]"
         >
           {methodOptions.map(opt => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -488,7 +488,7 @@ export default function AdminDepositsPage() {
       {/* Deposits List */}
       {isLoading ? (
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-12 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+          <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
         </div>
       ) : filteredDeposits.length === 0 ? (
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 sm:p-12 text-center">

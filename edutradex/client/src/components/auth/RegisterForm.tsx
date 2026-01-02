@@ -130,7 +130,7 @@ export function RegisterForm() {
                   value={formData.name}
                   onChange={handleChange}
                   placeholder="John Doe"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#1079ff] focus:border-transparent transition-all"
                 />
               </div>
             </div>
@@ -149,7 +149,7 @@ export function RegisterForm() {
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="you@example.com"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#1079ff] focus:border-transparent transition-all"
                 />
               </div>
             </div>
@@ -169,7 +169,7 @@ export function RegisterForm() {
                   value={formData.password}
                   onChange={handleChange}
                   placeholder="Min. 8 characters"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#1079ff] focus:border-transparent transition-all"
                 />
               </div>
               <p className="mt-1 text-xs text-slate-500">
@@ -191,7 +191,7 @@ export function RegisterForm() {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   placeholder="Confirm your password"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#1079ff] focus:border-transparent transition-all"
                 />
               </div>
             </div>
@@ -210,7 +210,7 @@ export function RegisterForm() {
                   onChange={handleReferralCodeChange}
                   onBlur={handleReferralCodeBlur}
                   placeholder="Enter referral code"
-                  className="w-full pl-10 pr-10 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all uppercase"
+                  className="w-full pl-10 pr-10 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#1079ff] focus:border-transparent transition-all uppercase"
                 />
                 {validatingCode && (
                   <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 animate-spin" />
@@ -229,7 +229,7 @@ export function RegisterForm() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>
@@ -245,7 +245,7 @@ export function RegisterForm() {
           <div className="mt-6 text-center">
             <p className="text-slate-400">
               Already have an account?{' '}
-              <Link href="/login" className="text-emerald-500 hover:text-emerald-400 font-medium">
+              <Link href="/login" className="text-[#1079ff] hover:text-[#3a93ff] font-medium">
                 Sign in
               </Link>
             </p>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, usePathname } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { MobileNav } from '@/components/layout/MobileNav';
@@ -24,7 +24,6 @@ function ImpersonationSetup() {
     const isImpersonateMode = searchParams.get('impersonate') === 'true';
 
     if (isImpersonateMode && !isImpersonating) {
-      // Use sessionStorage for impersonation data (more secure)
       const token = sessionStorage.getItem('impersonation-token');
       const userStr = sessionStorage.getItem('impersonation-user');
       const adminId = sessionStorage.getItem('impersonation-admin-id');
@@ -33,7 +32,6 @@ function ImpersonationSetup() {
         try {
           const user = JSON.parse(userStr);
 
-          // Set up impersonation (using sessionStorage for security)
           startImpersonation({
             originalAdminId: adminId,
             impersonatedUserId: user.id,
@@ -42,13 +40,11 @@ function ImpersonationSetup() {
             newToken: token,
           });
 
-          // Set auth state
           setAuthUser(user);
           setAuthToken(token);
           localStorage.setItem('auth-token', token);
           api.setToken(token);
 
-          // Clean up temporary storage (now using sessionStorage)
           sessionStorage.removeItem('impersonation-token');
           sessionStorage.removeItem('impersonation-user');
           sessionStorage.removeItem('impersonation-admin-id');
@@ -69,16 +65,38 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
+  // Trade pages have their own layout with TradingHeader - don't show the default layout
+  const isTradePagePath = pathname === '/dashboard/trade' || pathname === '/dashboard/demo-trade';
+
+  // For trade pages, render just the children (they have their own fixed layout)
+  if (isTradePagePath) {
+    return (
+      <ProtectedRoute>
+        <DepositNotificationProvider>
+          <ImpersonationSetup />
+          <ImpersonationBanner />
+          {children}
+        </DepositNotificationProvider>
+      </ProtectedRoute>
+    );
+  }
+
   return (
     <ProtectedRoute>
       <DepositNotificationProvider>
         <ImpersonationSetup />
         <ImpersonationBanner />
-        <div className="min-h-screen bg-slate-900 flex flex-col">
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 flex flex-col">
           <Header />
           <div className="flex-1 flex overflow-hidden">
             <Sidebar />
-            <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6">{children}</main>
+            <main className="flex-1 overflow-auto">
+              <div className="p-4 md:p-6 pb-20 md:pb-6">
+                {children}
+              </div>
+            </main>
           </div>
           <MobileNav />
         </div>

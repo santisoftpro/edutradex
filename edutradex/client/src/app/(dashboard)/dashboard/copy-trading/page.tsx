@@ -67,7 +67,7 @@ export default function CopyTradingPage() {
             className={cn(
               'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 justify-center',
               activeTab === tab.id
-                ? 'bg-emerald-600 text-white shadow-lg'
+                ? 'bg-[#1079ff] text-white shadow-lg shadow-[#1079ff]/20'
                 : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
             )}
           >

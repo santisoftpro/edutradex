@@ -1,6 +1,16 @@
 import rateLimit from 'express-rate-limit';
 import { Request, Response } from 'express';
 
+// Helper to safely get IP for rate limiting (handles IPv6)
+const getClientIp = (req: Request): string => {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const ip = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0];
+    return ip.trim();
+  }
+  return req.ip || req.socket.remoteAddress || 'unknown';
+};
+
 /**
  * Rate Limiting Middleware for Sensitive Endpoints
  *
@@ -25,10 +35,10 @@ export const impersonationRateLimiter = rateLimit({
   max: 5, // 5 attempts per window
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   keyGenerator: (req: Request) => {
-    // Use both IP and user ID for more accurate limiting
     const userId = req.userId || 'anonymous';
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const ip = getClientIp(req);
     return `impersonate:${ip}:${userId}`;
   },
   handler: rateLimitResponse,
@@ -47,8 +57,9 @@ export const loginRateLimiter = rateLimit({
   max: 10, // 10 attempts per window
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   keyGenerator: (req: Request) => {
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const ip = getClientIp(req);
     return `login:${ip}`;
   },
   handler: rateLimitResponse,
@@ -68,9 +79,10 @@ export const passwordResetRateLimiter = rateLimit({
   max: 3, // 3 attempts per hour
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   keyGenerator: (req: Request) => {
     const email = req.body?.email || 'unknown';
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const ip = getClientIp(req);
     return `password-reset:${ip}:${email}`;
   },
   handler: rateLimitResponse,
@@ -89,6 +101,7 @@ export const adminActionsRateLimiter = rateLimit({
   max: 100, // 100 requests per minute
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   keyGenerator: (req: Request) => {
     const userId = req.userId || 'anonymous';
     return `admin:${userId}`;

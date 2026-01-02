@@ -14,12 +14,12 @@ export function StepPill({ active, completed, label, stepNumber }: StepPillProps
       <div
         className={cn(
           'w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all',
-          completed || active ? 'bg-emerald-600 text-white ring-4 ring-emerald-600/30' : 'bg-slate-700 text-slate-400'
+          completed || active ? 'bg-[#1079ff] text-white ring-4 ring-[#1079ff]/30' : 'bg-slate-700 text-slate-400'
         )}
       >
         {completed ? <Check className="h-5 w-5" /> : stepNumber}
       </div>
-      <span className={cn('text-xs font-medium', active || completed ? 'text-emerald-400' : 'text-slate-400')}>
+      <span className={cn('text-xs font-medium', active || completed ? 'text-[#1079ff]' : 'text-slate-400')}>
         {label}
       </span>
     </div>

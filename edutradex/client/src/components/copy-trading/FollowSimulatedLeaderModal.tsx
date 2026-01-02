@@ -72,7 +72,7 @@ export function FollowSimulatedLeaderModal({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+            <div className="h-10 w-10 bg-gradient-to-br from-[#1079ff] to-[#092ab2] rounded-full flex items-center justify-center text-white font-bold">
               {leader.displayName.charAt(0).toUpperCase()}
             </div>
             <div>
@@ -100,7 +100,7 @@ export function FollowSimulatedLeaderModal({
               className={cn(
                 'flex items-center justify-center gap-2 p-3 rounded-xl border transition-all',
                 copyMode === 'PERCENTAGE'
-                  ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                  ? 'border-[#1079ff] bg-[#1079ff]/10 text-[#1079ff]'
                   : 'border-slate-700 text-slate-400 hover:border-slate-600'
               )}
             >
@@ -113,7 +113,7 @@ export function FollowSimulatedLeaderModal({
               className={cn(
                 'flex items-center justify-center gap-2 p-3 rounded-xl border transition-all',
                 copyMode === 'FIXED_AMOUNT'
-                  ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                  ? 'border-[#1079ff] bg-[#1079ff]/10 text-[#1079ff]'
                   : 'border-slate-700 text-slate-400 hover:border-slate-600'
               )}
             >
@@ -133,7 +133,7 @@ export function FollowSimulatedLeaderModal({
                   onChange={(e) => setPercentageAmount(Number(e.target.value))}
                   min={1}
                   max={1000}
-                  className="w-full px-4 py-3 pr-12 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
+                  className="w-full px-4 py-3 pr-12 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-[#1079ff]"
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">%</span>
               </div>
@@ -156,7 +156,7 @@ export function FollowSimulatedLeaderModal({
                     onChange={(e) => setFixedAmount(Number(e.target.value))}
                     min={1}
                     max={10000}
-                    className="w-full pl-9 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500"
+                    className="w-full pl-9 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-[#1079ff]"
                   />
                 </div>
               </div>
@@ -172,7 +172,7 @@ export function FollowSimulatedLeaderModal({
                       onChange={(e) => setDailyLossLimit(e.target.value ? Number(e.target.value) : null)}
                       min={1}
                       placeholder="None"
-                      className="w-full pl-9 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                      className="w-full pl-9 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-600 focus:outline-none focus:border-[#1079ff]"
                     />
                   </div>
                 </div>
@@ -186,7 +186,7 @@ export function FollowSimulatedLeaderModal({
                       onChange={(e) => setDailyProfitLimit(e.target.value ? Number(e.target.value) : null)}
                       min={1}
                       placeholder="None"
-                      className="w-full pl-9 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                      className="w-full pl-9 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-600 focus:outline-none focus:border-[#1079ff]"
                     />
                   </div>
                 </div>
@@ -203,7 +203,7 @@ export function FollowSimulatedLeaderModal({
                   type="checkbox"
                   checked={unlimitedTrades}
                   onChange={(e) => setUnlimitedTrades(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500"
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-[#1079ff] focus:ring-[#1079ff]"
                 />
                 <span className="text-xs text-slate-500 flex items-center gap-1">
                   <Infinity className="h-3 w-3" /> Unlimited
@@ -217,7 +217,7 @@ export function FollowSimulatedLeaderModal({
                 onChange={(e) => setMaxDailyTrades(Number(e.target.value))}
                 min={1}
                 max={500}
-                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
+                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-[#1079ff]"
               />
             )}
           </div>
@@ -235,7 +235,7 @@ export function FollowSimulatedLeaderModal({
           <button
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white text-sm font-medium rounded-xl transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all"
           >
             {isSubmitting ? (
               <Loader2 className="h-4 w-4 animate-spin" />

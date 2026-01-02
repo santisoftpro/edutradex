@@ -9,6 +9,7 @@ import { referralService } from '../referral/referral.service.js';
 import { emailService } from '../email/email.service.js';
 import { auditService } from '../audit/audit.service.js';
 import { tokenBlacklistService } from './token-blacklist.service.js';
+import { twoFactorService } from './two-factor.service.js';
 import { securityService, LoginContext } from '../security/security.service.js';
 import { ipService } from '../security/ip.service.js';
 import { deviceService, DeviceInfo } from '../security/device.service.js';
@@ -28,9 +29,11 @@ interface UserPublic {
   name: string;
   role: string;
   liveBalance: number;
-  demoBalance: number;
-  activeAccountType: 'LIVE' | 'DEMO';
+  demoBalance: number;           // NOTE: This is actually the REAL money balance (legacy naming)
+  practiceBalance: number;        // Demo/practice balance for risk-free trading
+  activeAccountType: 'LIVE' | 'DEMO';  // 'LIVE' uses demoBalance, 'DEMO' uses practiceBalance
   emailVerified: boolean;
+  kycStatus: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
 interface AuthResult {
@@ -46,11 +49,36 @@ interface UserRow {
   role: string;
   liveBalance: number;
   demoBalance: number;
+  practiceBalance: number;
   activeAccountType: string;
   isActive: boolean;
   emailVerified: boolean;
   emailVerifiedAt: Date | null;
+  twoFactorEnabled: boolean;
 }
+
+// 2FA pending response - returned when 2FA is required
+interface TwoFactorPendingResult {
+  requires2FA: true;
+  tempToken: string;
+  userId: string;
+}
+
+// Temp token payload for 2FA verification
+interface TempTokenPayload {
+  userId: string;
+  email: string;
+  role: string;
+  purpose: '2fa-verify';
+  ipAddress?: string;
+  userAgent?: string;
+  deviceFingerprint?: string;
+}
+
+// Combined login result type
+type LoginResult =
+  | (AuthResult & { securityInfo?: { isNewDevice: boolean; isNewLocation: boolean; requiresVerification: boolean } })
+  | TwoFactorPendingResult;
 
 class AuthServiceError extends Error {
   constructor(
@@ -121,7 +149,7 @@ export class AuthService {
         "registrationIp", "registrationCountry", "registrationUserAgent",
         "lastKnownCountry", "createdAt", "updatedAt"
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-      RETURNING id, email, name, role, "liveBalance", "demoBalance", "activeAccountType", "emailVerified"`,
+      RETURNING id, email, name, role, "liveBalance", "demoBalance", "practiceBalance", "activeAccountType", "emailVerified"`,
       [
         userId,
         data.email,
@@ -244,8 +272,10 @@ export class AuthService {
         role: user.role,
         liveBalance: Number(user.liveBalance),
         demoBalance: Number(user.demoBalance),
+        practiceBalance: Number(user.practiceBalance),
         activeAccountType: user.activeAccountType as 'LIVE' | 'DEMO',
         emailVerified: user.emailVerified,
+        kycStatus: 'NOT_SUBMITTED' as const,
       },
       token,
     };
@@ -256,7 +286,7 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string,
     deviceFingerprint?: string
-  ): Promise<AuthResult & { securityInfo?: { isNewDevice: boolean; isNewLocation: boolean; requiresVerification: boolean } }> {
+  ): Promise<LoginResult> {
     const loginContext: LoginContext = {
       email: data.email,
       ipAddress: ipAddress || 'unknown',
@@ -302,10 +332,13 @@ export class AuthService {
       throw new AuthServiceError('Access denied from this device', 403);
     }
 
-    const user = await queryOne<UserRow>(
-      `SELECT id, email, password, name, role, "liveBalance", "demoBalance",
-              "activeAccountType", "isActive", "emailVerified"
-       FROM "User" WHERE email = $1`,
+    const user = await queryOne<UserRow & { kycStatus: string | null }>(
+      `SELECT u.id, u.email, u.password, u.name, u.role, u."liveBalance", u."demoBalance", u."practiceBalance",
+              u."activeAccountType", u."isActive", u."emailVerified", u."twoFactorEnabled",
+              k.status as "kycStatus"
+       FROM "User" u
+       LEFT JOIN "KYC" k ON k."userId" = u.id
+       WHERE u.email = $1`,
       [data.email]
     );
 
@@ -343,6 +376,28 @@ export class AuthService {
         `Invalid email or password. ${failResult.attemptsRemaining} attempts remaining.`,
         401
       );
+    }
+
+    // Check if 2FA is enabled - return temp token for 2FA verification
+    if (user.twoFactorEnabled) {
+      // Also check if admin requires 2FA setup (configurable)
+      const tempToken = this.generateTempToken({
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        purpose: '2fa-verify',
+        ipAddress,
+        userAgent,
+        deviceFingerprint,
+      });
+
+      logger.info('2FA required for login', { userId: user.id, email: user.email });
+
+      return {
+        requires2FA: true,
+        tempToken,
+        userId: user.id,
+      };
     }
 
     // Update login context with device info for successful login
@@ -407,8 +462,10 @@ export class AuthService {
         role: user.role,
         liveBalance: Number(user.liveBalance),
         demoBalance: Number(user.demoBalance),
+        practiceBalance: Number(user.practiceBalance),
         activeAccountType: user.activeAccountType as 'LIVE' | 'DEMO',
         emailVerified: user.emailVerified,
+        kycStatus: (user.kycStatus as UserPublic['kycStatus']) || 'NOT_SUBMITTED',
       },
       token,
       securityInfo: {
@@ -420,10 +477,13 @@ export class AuthService {
   }
 
   async getUserById(userId: string): Promise<UserPublic | null> {
-    const user = await queryOne<UserRow>(
-      `SELECT id, email, name, role, "liveBalance", "demoBalance",
-              "activeAccountType", "isActive", "emailVerified"
-       FROM "User" WHERE id = $1`,
+    const user = await queryOne<UserRow & { kycStatus: string | null }>(
+      `SELECT u.id, u.email, u.name, u.role, u."liveBalance", u."demoBalance", u."practiceBalance",
+              u."activeAccountType", u."isActive", u."emailVerified",
+              k.status as "kycStatus"
+       FROM "User" u
+       LEFT JOIN "KYC" k ON k."userId" = u.id
+       WHERE u.id = $1`,
       [userId]
     );
 
@@ -438,8 +498,10 @@ export class AuthService {
       role: user.role,
       liveBalance: Number(user.liveBalance),
       demoBalance: Number(user.demoBalance),
+      practiceBalance: Number(user.practiceBalance),
       activeAccountType: user.activeAccountType as 'LIVE' | 'DEMO',
       emailVerified: user.emailVerified,
+      kycStatus: (user.kycStatus as UserPublic['kycStatus']) || 'NOT_SUBMITTED',
     };
   }
 
@@ -501,6 +563,35 @@ export class AuthService {
     };
   }
 
+  /**
+   * Top up practice balance for demo trading
+   * Users can reset their practice balance anytime
+   */
+  async topUpPracticeBalance(userId: string, amount?: number): Promise<{ practiceBalance: number }> {
+    // Default to 10000 if no amount specified (full reset)
+    const topUpAmount = amount ?? 10000;
+
+    if (topUpAmount <= 0 || topUpAmount > 100000) {
+      throw new AuthServiceError('Invalid top-up amount. Must be between 1 and 100,000', 400);
+    }
+
+    const result = await queryOne<{ practiceBalance: number }>(
+      `UPDATE "User" SET "practiceBalance" = $1, "updatedAt" = $2
+       WHERE id = $3 RETURNING "practiceBalance"`,
+      [topUpAmount, new Date(), userId]
+    );
+
+    if (!result) {
+      throw new AuthServiceError('User not found', 404);
+    }
+
+    logger.info('Practice balance topped up', { userId, amount: topUpAmount, newBalance: Number(result.practiceBalance) });
+
+    return {
+      practiceBalance: Number(result.practiceBalance),
+    };
+  }
+
   verifyToken(token: string): JwtPayload {
     try {
       const decoded = jwt.verify(token, config.jwt.secret) as JwtPayload;
@@ -529,6 +620,151 @@ export class AuthService {
       return new Date(now + 60 * 60 * 1000); // 1 hour
     }
     return new Date(now + 7 * 24 * 60 * 60 * 1000); // 7 days
+  }
+
+  /**
+   * Generate a short-lived temp token for 2FA verification
+   */
+  private generateTempToken(payload: TempTokenPayload): string {
+    return jwt.sign(payload, config.jwt.secret, {
+      expiresIn: '5m', // 5 minutes to complete 2FA
+    });
+  }
+
+  /**
+   * Verify temp token for 2FA
+   */
+  verifyTempToken(token: string): TempTokenPayload {
+    try {
+      const decoded = jwt.verify(token, config.jwt.secret) as TempTokenPayload;
+      if (decoded.purpose !== '2fa-verify') {
+        throw new AuthServiceError('Invalid token purpose', 401);
+      }
+      return decoded;
+    } catch (error) {
+      if (error instanceof AuthServiceError) throw error;
+      throw new AuthServiceError('Invalid or expired temporary token', 401);
+    }
+  }
+
+  /**
+   * Verify 2FA and complete login
+   */
+  async verify2FA(
+    tempToken: string,
+    code?: string,
+    backupCode?: string
+  ): Promise<AuthResult & { securityInfo?: { isNewDevice: boolean; isNewLocation: boolean; requiresVerification: boolean } }> {
+    // Verify temp token
+    const payload = this.verifyTempToken(tempToken);
+
+    // Verify 2FA code or backup code
+    let isValid = false;
+
+    if (code) {
+      isValid = await twoFactorService.verifyLoginToken(payload.userId, code);
+    } else if (backupCode) {
+      isValid = await twoFactorService.verifyBackupCode(payload.userId, backupCode);
+    }
+
+    if (!isValid) {
+      throw new AuthServiceError('Invalid verification code', 401);
+    }
+
+    // Get user data for the final auth response
+    const user = await queryOne<UserRow & { kycStatus: string | null }>(
+      `SELECT u.id, u.email, u.name, u.role, u."liveBalance", u."demoBalance", u."practiceBalance",
+              u."activeAccountType", u."isActive", u."emailVerified",
+              k.status as "kycStatus"
+       FROM "User" u
+       LEFT JOIN "KYC" k ON k."userId" = u.id
+       WHERE u.id = $1`,
+      [payload.userId]
+    );
+
+    if (!user || !user.isActive) {
+      throw new AuthServiceError('User not found or inactive', 401);
+    }
+
+    // Create login context for security tracking
+    const loginContext: LoginContext = {
+      email: user.email,
+      ipAddress: payload.ipAddress || 'unknown',
+      userAgent: payload.userAgent,
+      deviceFingerprint: payload.deviceFingerprint,
+    };
+
+    // Update login context with device info
+    if (payload.deviceFingerprint) {
+      loginContext.deviceInfo = {
+        fingerprint: payload.deviceFingerprint,
+        deviceType: deviceService.parseDeviceType(payload.userAgent),
+        ...deviceService.parseBrowserInfo(payload.userAgent),
+        ...deviceService.parseOsInfo(payload.userAgent),
+      };
+    }
+
+    // Record successful login attempt
+    const loginResult = await securityService.recordLoginAttempt(
+      loginContext,
+      true,
+      user.id
+    );
+
+    // Reset failed login counter
+    await securityService.handleSuccessfulLogin(user.id);
+
+    // Update last known country
+    if (payload.ipAddress) {
+      const geoLocation = await ipService.getGeoLocation(payload.ipAddress);
+      if (geoLocation?.country) {
+        await query(
+          `UPDATE "User" SET "lastKnownCountry" = $1, "updatedAt" = NOW() WHERE id = $2`,
+          [geoLocation.country, user.id]
+        );
+      }
+    }
+
+    // Generate final auth token
+    const token = this.generateToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    logger.info('User logged in with 2FA', {
+      userId: user.id,
+      ip: payload.ipAddress,
+      riskScore: loginResult.riskScore,
+    });
+
+    // Log admin login and create session
+    if (user.role === 'ADMIN' || user.role === 'SUPERADMIN') {
+      await auditService.logLogin(user.id, payload.ipAddress, payload.userAgent);
+      const expiresAt = this.getTokenExpiry(user.role);
+      await auditService.createSession(user.id, token, expiresAt, payload.ipAddress, payload.userAgent);
+    }
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        liveBalance: Number(user.liveBalance),
+        demoBalance: Number(user.demoBalance),
+        practiceBalance: Number(user.practiceBalance),
+        activeAccountType: user.activeAccountType as 'LIVE' | 'DEMO',
+        emailVerified: user.emailVerified,
+        kycStatus: (user.kycStatus as UserPublic['kycStatus']) || 'NOT_SUBMITTED',
+      },
+      token,
+      securityInfo: {
+        isNewDevice: loginResult.isNewDevice,
+        isNewLocation: loginResult.isNewLocation,
+        requiresVerification: loginResult.requiresVerification,
+      },
+    };
   }
 
   async sendVerificationCode(userId: string): Promise<boolean> {
@@ -583,11 +819,20 @@ export class AuthService {
   }
 
   async switchAccountType(userId: string, accountType: 'LIVE' | 'DEMO'): Promise<UserPublic> {
-    const user = await queryOne<UserRow>(
-      `UPDATE "User" SET "activeAccountType" = $1, "updatedAt" = $2
-       WHERE id = $3
-       RETURNING id, email, name, role, "liveBalance", "demoBalance", "activeAccountType", "emailVerified"`,
+    // Update the account type
+    await queryOne(
+      `UPDATE "User" SET "activeAccountType" = $1, "updatedAt" = $2 WHERE id = $3`,
       [accountType, new Date(), userId]
+    );
+
+    // Fetch user with KYC status
+    const user = await queryOne<UserRow & { kycStatus: string | null }>(
+      `SELECT u.id, u.email, u.name, u.role, u."liveBalance", u."demoBalance", u."practiceBalance",
+              u."activeAccountType", u."emailVerified", k.status as "kycStatus"
+       FROM "User" u
+       LEFT JOIN "KYC" k ON k."userId" = u.id
+       WHERE u.id = $1`,
+      [userId]
     );
 
     if (!user) {
@@ -603,14 +848,16 @@ export class AuthService {
       role: user.role,
       liveBalance: Number(user.liveBalance),
       demoBalance: Number(user.demoBalance),
+      practiceBalance: Number(user.practiceBalance),
       activeAccountType: user.activeAccountType as 'LIVE' | 'DEMO',
       emailVerified: user.emailVerified,
+      kycStatus: (user.kycStatus as UserPublic['kycStatus']) || 'NOT_SUBMITTED',
     };
   }
 
   async getActiveBalance(userId: string): Promise<{ balance: number; accountType: 'LIVE' | 'DEMO' }> {
-    const user = await queryOne<{ liveBalance: number; demoBalance: number; activeAccountType: string }>(
-      `SELECT "liveBalance", "demoBalance", "activeAccountType" FROM "User" WHERE id = $1`,
+    const user = await queryOne<{ demoBalance: number; practiceBalance: number; activeAccountType: string }>(
+      `SELECT "demoBalance", "practiceBalance", "activeAccountType" FROM "User" WHERE id = $1`,
       [userId]
     );
 
@@ -618,9 +865,12 @@ export class AuthService {
       throw new AuthServiceError('User not found', 404);
     }
 
+    // NOTE: Due to legacy naming:
+    // - 'LIVE' mode uses demoBalance (which is actually the real money)
+    // - 'DEMO' mode uses practiceBalance (which is the practice/demo money)
     const balance = user.activeAccountType === 'LIVE'
-      ? Number(user.liveBalance)
-      : Number(user.demoBalance);
+      ? Number(user.demoBalance)
+      : Number(user.practiceBalance);
 
     return {
       balance,
@@ -638,12 +888,15 @@ export class AuthService {
       throw new AuthServiceError('User not found', 404);
     }
 
-    const balanceField = user.activeAccountType === 'LIVE' ? 'liveBalance' : 'demoBalance';
+    // NOTE: Due to legacy naming:
+    // - 'LIVE' mode uses demoBalance (which is actually the real money)
+    // - 'DEMO' mode uses practiceBalance (which is the practice/demo money)
+    const balanceField = user.activeAccountType === 'LIVE' ? 'demoBalance' : 'practiceBalance';
 
-    const updatedUser = await queryOne<{ liveBalance: number; demoBalance: number; activeAccountType: string }>(
+    const updatedUser = await queryOne<{ demoBalance: number; practiceBalance: number; activeAccountType: string }>(
       `UPDATE "User" SET "${balanceField}" = "${balanceField}" + $1, "updatedAt" = $2
        WHERE id = $3
-       RETURNING "liveBalance", "demoBalance", "activeAccountType"`,
+       RETURNING "demoBalance", "practiceBalance", "activeAccountType"`,
       [amount, new Date(), userId]
     );
 
@@ -652,8 +905,8 @@ export class AuthService {
     }
 
     const balance = updatedUser.activeAccountType === 'LIVE'
-      ? Number(updatedUser.liveBalance)
-      : Number(updatedUser.demoBalance);
+      ? Number(updatedUser.demoBalance)
+      : Number(updatedUser.practiceBalance);
 
     return {
       balance,
@@ -721,6 +974,55 @@ export class AuthService {
   }
 
   /**
+   * Change password for authenticated user
+   * Requires current password verification
+   */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<boolean> {
+    const user = await queryOne<{ id: string; email: string; name: string; password: string; isActive: boolean }>(
+      `SELECT id, email, name, password, "isActive" FROM "User" WHERE id = $1`,
+      [userId]
+    );
+
+    if (!user || !user.isActive) {
+      throw new AuthServiceError('User not found or inactive', 404);
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      throw new AuthServiceError('Current password is incorrect', 401);
+    }
+
+    // Check if new password is same as current
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      throw new AuthServiceError('New password must be different from current password', 400);
+    }
+
+    // Hash and update password
+    const hashedPassword = await bcrypt.hash(newPassword, this.SALT_ROUNDS);
+
+    await query(
+      `UPDATE "User" SET password = $1, "updatedAt" = $2 WHERE id = $3`,
+      [hashedPassword, new Date(), userId]
+    );
+
+    // Blacklist all user tokens to force re-login on other devices
+    await tokenBlacklistService.blacklistAllUserTokens(userId, 'PASSWORD_CHANGED');
+
+    // Send confirmation email
+    emailService.sendPasswordChanged(user.email, user.name)
+      .catch(err => logger.error('Failed to send password changed email', { userId: user.id, error: err }));
+
+    logger.info('User changed password successfully', { userId: user.id });
+    return true;
+  }
+
+  /**
    * Impersonate a user (Admin/SuperAdmin only)
    * Creates a special token that allows admin to access user's account
    */
@@ -736,11 +1038,14 @@ export class AuthService {
       throw new AuthServiceError('Unauthorized to impersonate users', 403);
     }
 
-    // Get the target user
-    const targetUser = await queryOne<UserRow>(
-      `SELECT id, email, password, name, role, "liveBalance", "demoBalance",
-              "activeAccountType", "isActive", "emailVerified"
-       FROM "User" WHERE id = $1`,
+    // Get the target user with KYC status
+    const targetUser = await queryOne<UserRow & { kycStatus: string | null }>(
+      `SELECT u.id, u.email, u.password, u.name, u.role, u."liveBalance", u."demoBalance", u."practiceBalance",
+              u."activeAccountType", u."isActive", u."emailVerified",
+              k.status as "kycStatus"
+       FROM "User" u
+       LEFT JOIN "KYC" k ON k."userId" = u.id
+       WHERE u.id = $1`,
       [targetUserId]
     );
 
@@ -793,8 +1098,10 @@ export class AuthService {
         role: targetUser.role,
         liveBalance: Number(targetUser.liveBalance),
         demoBalance: Number(targetUser.demoBalance),
+        practiceBalance: Number(targetUser.practiceBalance),
         activeAccountType: targetUser.activeAccountType as 'LIVE' | 'DEMO',
         emailVerified: targetUser.emailVerified,
+        kycStatus: (targetUser.kycStatus as UserPublic['kycStatus']) || 'NOT_SUBMITTED',
       },
       token,
       originalAdminId: adminId,
@@ -811,10 +1118,13 @@ export class AuthService {
     userAgent?: string,
     currentToken?: string
   ): Promise<AuthResult> {
-    const admin = await queryOne<UserRow>(
-      `SELECT id, email, password, name, role, "liveBalance", "demoBalance",
-              "activeAccountType", "isActive", "emailVerified"
-       FROM "User" WHERE id = $1 AND role IN ('ADMIN', 'SUPERADMIN')`,
+    const admin = await queryOne<UserRow & { kycStatus: string | null }>(
+      `SELECT u.id, u.email, u.password, u.name, u.role, u."liveBalance", u."demoBalance", u."practiceBalance",
+              u."activeAccountType", u."isActive", u."emailVerified",
+              k.status as "kycStatus"
+       FROM "User" u
+       LEFT JOIN "KYC" k ON k."userId" = u.id
+       WHERE u.id = $1 AND u.role IN ('ADMIN', 'SUPERADMIN')`,
       [adminId]
     );
 
@@ -871,8 +1181,10 @@ export class AuthService {
         role: admin.role,
         liveBalance: Number(admin.liveBalance),
         demoBalance: Number(admin.demoBalance),
+        practiceBalance: Number(admin.practiceBalance),
         activeAccountType: admin.activeAccountType as 'LIVE' | 'DEMO',
         emailVerified: admin.emailVerified,
+        kycStatus: (admin.kycStatus as UserPublic['kycStatus']) || 'NOT_SUBMITTED',
       },
       token,
     };

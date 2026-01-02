@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import toast from 'react-hot-toast';
 import { api, ApiTrade, TradeStats as ApiTradeStats } from '@/lib/api';
 import { playWinSound, playLoseSound } from '@/lib/sounds';
+import { useAuthStore } from './auth.store';
 
 // Throttle state for preventing rapid API calls
 let lastStatsTime = 0;
@@ -433,4 +434,66 @@ export function markTradeNotified(tradeId: string): boolean {
 
 export function isTradeNotified(tradeId: string): boolean {
   return notifiedTrades.has(tradeId);
+}
+
+// ============================================
+// SELECTORS: Filter trades by account type
+// ============================================
+
+/**
+ * Get trades filtered by the current account type
+ * Use this instead of directly accessing trades array
+ */
+export function useFilteredTrades() {
+  const trades = useTradeStore((state) => state.trades);
+  const accountType = useAuthStore((state) => state.user?.activeAccountType ?? 'LIVE');
+
+  return trades.filter((trade) => trade.accountType === accountType);
+}
+
+/**
+ * Get active trades filtered by the current account type
+ * Use this instead of directly accessing activeTrades array
+ */
+export function useFilteredActiveTrades() {
+  const activeTrades = useTradeStore((state) => state.activeTrades);
+  const accountType = useAuthStore((state) => state.user?.activeAccountType ?? 'LIVE');
+
+  return activeTrades.filter((trade) => trade.accountType === accountType);
+}
+
+/**
+ * Get stats calculated from filtered trades only
+ * Use this instead of directly accessing stats
+ */
+export function useFilteredStats() {
+  const trades = useTradeStore((state) => state.trades);
+  const accountType = useAuthStore((state) => state.user?.activeAccountType ?? 'LIVE');
+
+  const filteredTrades = trades.filter((trade) => trade.accountType === accountType);
+  const closedTrades = filteredTrades.filter((trade) => trade.status !== 'active');
+
+  const wonTrades = closedTrades.filter((trade) => trade.status === 'won').length;
+  const lostTrades = closedTrades.filter((trade) => trade.status === 'lost').length;
+  const totalTrades = closedTrades.length;
+  const totalProfit = closedTrades.reduce((sum, trade) => sum + (trade.profit ?? 0), 0);
+  const winRate = totalTrades > 0 ? (wonTrades / totalTrades) * 100 : 0;
+
+  return {
+    totalTrades,
+    wonTrades,
+    lostTrades,
+    totalProfit,
+    winRate,
+  };
+}
+
+/**
+ * Get count of active trades for current account type
+ */
+export function useActiveTradesCount() {
+  const activeTrades = useTradeStore((state) => state.activeTrades);
+  const accountType = useAuthStore((state) => state.user?.activeAccountType ?? 'LIVE');
+
+  return activeTrades.filter((trade) => trade.accountType === accountType).length;
 }

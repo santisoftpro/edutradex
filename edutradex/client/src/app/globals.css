@@ -5,11 +5,17 @@
   --background: #182031;
   --foreground: #F5F5F5;
 
+  /* Brand Colors - Blue Gradient */
+  --brand: #1079ff;
+  --brand-light: #3a93ff;
+  --brand-dark: #092ab2;
+  --brand-hover: #2386ff;
+
   /* Primary Color - Cyan Blue */
-  --primary: #2f96f0;
-  --primary-light: #63b7fb;
-  --primary-dark: #1a7fd4;
-  --primary-hover: #3ba3f7;
+  --primary: #1079ff;
+  --primary-light: #3a93ff;
+  --primary-dark: #092ab2;
+  --primary-hover: #2386ff;
 
   /* Secondary Color - Navy */
   --secondary: #202e5a;
@@ -30,6 +36,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand: #1079ff;
+  --color-brand-light: #3a93ff;
+  --color-brand-dark: #092ab2;
   --color-primary: var(--primary);
   --color-primary-light: var(--primary-light);
   --color-primary-dark: var(--primary-dark);

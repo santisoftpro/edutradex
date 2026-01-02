@@ -10,7 +10,7 @@ export const metadata = {
 function LoadingFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+      <Loader2 className="h-8 w-8 animate-spin text-[#1079ff]" />
     </div>
   );
 }

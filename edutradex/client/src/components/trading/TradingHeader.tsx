@@ -29,12 +29,14 @@ import {
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
 import { AssetSelector } from './AssetSelector';
+import { AccountSwitcher } from './AccountSwitcher';
 import { PriceTick } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/trade', label: 'Trade', icon: LineChart },
+  { href: '/dashboard/demo-trade', label: 'Demo Trade', icon: LineChart },
   { href: '/dashboard/copy-trading', label: 'Copy Trading', icon: Users },
   { href: '/dashboard/deposit', label: 'Deposit', icon: Wallet },
   { href: '/dashboard/withdraw', label: 'Withdraw', icon: ArrowUpFromLine },
@@ -51,13 +53,13 @@ interface TradingHeaderProps {
   onSelectAsset: (symbol: string) => void;
   currentPrice?: PriceTick | null;
   livePrices?: Map<string, PriceTick>;
+  isDemoMode?: boolean;
 }
 
-export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, livePrices }: TradingHeaderProps) {
+export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, livePrices, isDemoMode = false }: TradingHeaderProps) {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout, getActiveBalance } = useAuthStore();
   const [showMenu, setShowMenu] = useState(false);
-  const [showBalanceMenu, setShowBalanceMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const isAdmin = user?.role === 'ADMIN';
@@ -70,7 +72,8 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, live
 
   if (!user) return null;
 
-  const balance = user.demoBalance ?? 0;
+  const balance = getActiveBalance();
+  const isLiveMode = user.activeAccountType === 'LIVE';
   const priceColor = currentPrice?.changePercent !== undefined && currentPrice.changePercent >= 0 ? 'text-emerald-400' : 'text-red-400';
   const TrendIcon = currentPrice?.changePercent !== undefined && currentPrice.changePercent >= 0 ? TrendingUp : TrendingDown;
 
@@ -119,57 +122,9 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, live
 
       {/* Right - Balance & User */}
       <div className="flex items-center gap-2 md:gap-4">
-        {/* Balance with dropdown */}
-        <div className="flex items-center gap-1.5 md:gap-3">
-          <div className="relative">
-            <button
-              onClick={() => setShowBalanceMenu(!showBalanceMenu)}
-              className="flex items-center gap-1.5 md:gap-2 bg-[#252542] hover:bg-[#2d2d52] rounded-lg px-2 md:px-4 py-1.5 md:py-2 transition-colors"
-            >
-              <Wallet className="h-3.5 md:h-4 w-3.5 md:w-4 text-emerald-500" />
-              <span className="text-emerald-400 font-bold text-sm md:text-base">{formatCurrency(user.demoBalance)}</span>
-              <ChevronDown className="h-3 w-3 text-gray-400" />
-            </button>
-
-            {showBalanceMenu && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowBalanceMenu(false)} />
-                <div className="absolute right-0 top-full mt-2 w-48 bg-[#1a1a2e] border border-[#2d2d44] rounded-lg shadow-xl z-50 py-2">
-                  <div className="px-4 py-2 border-b border-[#2d2d44]">
-                    <p className="text-gray-400 text-xs">Available Balance</p>
-                    <p className="text-lg text-white font-bold">{formatCurrency(user.demoBalance)}</p>
-                  </div>
-                  <Link
-                    href="/dashboard/deposit"
-                    onClick={() => setShowBalanceMenu(false)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:bg-[#252542] hover:text-white transition-colors"
-                  >
-                    <ArrowDownToLine className="h-4 w-4 text-emerald-500" />
-                    Deposit
-                  </Link>
-                  <Link
-                    href="/dashboard/withdraw"
-                    onClick={() => setShowBalanceMenu(false)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:bg-[#252542] hover:text-white transition-colors"
-                  >
-                    <ArrowUpFromLine className="h-4 w-4 text-orange-500" />
-                    Withdraw
-                  </Link>
-                  <Link
-                    href="/dashboard/transactions"
-                    onClick={() => setShowBalanceMenu(false)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:bg-[#252542] hover:text-white transition-colors"
-                  >
-                    <History className="h-4 w-4 text-blue-500" />
-                    Transaction History
-                  </Link>
-                </div>
-              </>
-            )}
-          </div>
-
-          <span className="hidden md:inline text-emerald-500 text-xs px-2 py-1 bg-[#252542] rounded">LIVE</span>
-        </div>
+        {/* Account Switcher - replaces old balance dropdown */}
+        <AccountSwitcher compact className="hidden md:block" />
+        <AccountSwitcher compact className="md:hidden" />
 
         {/* User Menu */}
         <div className="relative">
@@ -177,7 +132,7 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, live
             onClick={() => setShowMenu(!showMenu)}
             className="flex items-center gap-1 md:gap-2 hover:bg-[#252542] rounded-lg px-2 md:px-3 py-1.5 md:py-2 transition-colors"
           >
-            <div className="w-7 h-7 md:w-8 md:h-8 bg-emerald-600 rounded-full flex items-center justify-center">
+            <div className="w-7 h-7 md:w-8 md:h-8 bg-gradient-to-br from-[#1079ff] to-[#092ab2] rounded-full flex items-center justify-center">
               <User className="h-3.5 w-3.5 md:h-4 md:w-4 text-white" />
             </div>
             <ChevronDown className="hidden md:block h-4 w-4 text-gray-400" />
@@ -254,7 +209,7 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, live
           {/* User Info */}
           <div className="p-4 border-b border-slate-700">
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 bg-emerald-600 rounded-full flex items-center justify-center">
+              <div className="h-12 w-12 bg-gradient-to-br from-[#1079ff] to-[#092ab2] rounded-full flex items-center justify-center">
                 <User className="h-6 w-6 text-white" />
               </div>
               <div className="flex-1 min-w-0">
@@ -263,14 +218,23 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, live
               </div>
             </div>
 
-            {/* Balance Display */}
+            {/* Balance Display with Account Type */}
             <div className="mt-3">
-              <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2.5">
+              <div className={`flex items-center justify-between rounded-lg px-3 py-2.5 ${
+                isLiveMode
+                  ? 'bg-emerald-500/10 border border-emerald-500/30'
+                  : 'bg-amber-500/10 border border-amber-500/30'
+              }`}>
                 <div className="flex items-center gap-2">
-                  <Wallet className="h-5 w-5 text-emerald-500" />
-                  <span className="text-white font-medium">Balance</span>
+                  <Wallet className={`h-5 w-5 ${isLiveMode ? 'text-emerald-400' : 'text-amber-400'}`} />
+                  <div className="flex flex-col">
+                    <span className="text-white font-medium text-sm">Balance</span>
+                    <span className={`text-xs ${isLiveMode ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {isLiveMode ? 'LIVE' : 'DEMO'}
+                    </span>
+                  </div>
                 </div>
-                <span className="text-emerald-500 font-bold">
+                <span className={`font-bold ${isLiveMode ? 'text-emerald-400' : 'text-amber-400'}`}>
                   {formatCurrency(balance)}
                 </span>
               </div>
@@ -281,14 +245,14 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, live
               <Link
                 href="/dashboard/deposit"
                 onClick={() => setShowMobileMenu(false)}
-                className="flex-1 text-center text-xs bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 rounded transition-colors"
+                className="flex-1 text-center text-xs bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white py-1.5 rounded transition-colors"
               >
                 Deposit
               </Link>
               <Link
                 href="/dashboard/withdraw"
                 onClick={() => setShowMobileMenu(false)}
-                className="flex-1 text-center text-xs bg-purple-600 hover:bg-purple-700 text-white py-1.5 rounded transition-colors"
+                className="flex-1 text-center text-xs bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-white py-1.5 rounded transition-all"
               >
                 Withdraw
               </Link>

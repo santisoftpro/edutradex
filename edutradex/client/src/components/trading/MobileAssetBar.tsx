@@ -229,7 +229,7 @@ export function MobileAssetBar({
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search assets..."
-                        className="w-full pl-9 pr-4 py-2 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                        className="w-full pl-9 pr-4 py-2 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#1079ff]"
                       />
                     </div>
                   </div>
@@ -243,7 +243,7 @@ export function MobileAssetBar({
                         className={cn(
                           'px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px]',
                           category === cat
-                            ? 'bg-emerald-600 text-white'
+                            ? 'bg-[#1079ff] text-white'
                             : 'bg-[#252542] text-gray-400 active:bg-[#2d2d52]'
                         )}
                       >

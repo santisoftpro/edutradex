@@ -45,14 +45,14 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
             <div className={cn(
               'w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-semibold transition-all',
               currentStep >= step.num
-                ? 'bg-emerald-500 text-white'
+                ? 'bg-[#1079ff] text-white'
                 : 'bg-slate-700 text-slate-400'
             )}>
               {currentStep > step.num ? <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : step.num}
             </div>
             <span className={cn(
               'text-[10px] sm:text-xs mt-1',
-              currentStep >= step.num ? 'text-emerald-400' : 'text-slate-500'
+              currentStep >= step.num ? 'text-[#1079ff]' : 'text-slate-500'
             )}>
               {step.label}
             </span>
@@ -60,7 +60,7 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
           {index < steps.length - 1 && (
             <div className={cn(
               'flex-1 h-0.5 mx-1 sm:mx-2',
-              currentStep > step.num ? 'bg-emerald-500' : 'bg-slate-700'
+              currentStep > step.num ? 'bg-[#1079ff]' : 'bg-slate-700'
             )} />
           )}
         </div>
@@ -86,7 +86,7 @@ function CopyButton({ text }: { text: string }) {
       title="Copy"
     >
       {copied ? (
-        <Check className="h-3.5 w-3.5 text-emerald-400" />
+        <Check className="h-3.5 w-3.5 text-[#1079ff]" />
       ) : (
         <Copy className="h-3.5 w-3.5 text-slate-400" />
       )}
@@ -296,7 +296,7 @@ export default function DepositPage() {
   if (!isHydrated || isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -313,8 +313,8 @@ export default function DepositPage() {
         {/* Balance Card */}
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="p-1.5 sm:p-2 bg-emerald-600/20 rounded-lg">
-              <Wallet className="h-4 w-4 text-emerald-400" />
+            <div className="p-1.5 sm:p-2 bg-[#1079ff]/20 rounded-lg">
+              <Wallet className="h-4 w-4 text-[#1079ff]" />
             </div>
             <div>
               <p className="text-slate-400 text-[10px] sm:text-xs">Current Balance</p>
@@ -347,7 +347,7 @@ export default function DepositPage() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search payment method..."
-                    className="w-full pl-9 pr-3 py-2 sm:py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                    className="w-full pl-9 pr-3 py-2 sm:py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-[#1079ff]"
                   />
                 </div>
 
@@ -360,7 +360,7 @@ export default function DepositPage() {
                       className={cn(
                         'flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all',
                         activeCategory === cat.id
-                          ? 'bg-emerald-500 text-white'
+                          ? 'bg-[#1079ff] text-white'
                           : 'bg-slate-800/50 text-slate-400 hover:bg-slate-700 border border-slate-700'
                       )}
                     >
@@ -376,7 +376,7 @@ export default function DepositPage() {
                     <button
                       key={method.id}
                       onClick={() => handleMethodSelect(method)}
-                      className="flex items-center gap-2.5 sm:gap-3 p-3 sm:p-4 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-emerald-500/50 hover:bg-slate-800 transition-all text-left group"
+                      className="flex items-center gap-2.5 sm:gap-3 p-3 sm:p-4 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-[#1079ff]/50 hover:bg-slate-800 transition-all text-left group"
                     >
                       <div className={cn('w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0', method.iconBg)}>
                         {method.iconUrl ? (
@@ -404,7 +404,7 @@ export default function DepositPage() {
                           <span>{method.processingTime}</span>
                         </div>
                       </div>
-                      <ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-emerald-400 transition-colors shrink-0" />
+                      <ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-[#1079ff] transition-colors shrink-0" />
                     </button>
                   ))}
                 </div>
@@ -463,7 +463,7 @@ export default function DepositPage() {
                       onChange={(e) => setAmount(e.target.value)}
                       placeholder="0.00"
                       min={selectedMethod.minAmount}
-                      className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-base sm:text-lg placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                      className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-base sm:text-lg placeholder-slate-600 focus:outline-none focus:border-[#1079ff]"
                       required
                     />
                     <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
@@ -475,7 +475,7 @@ export default function DepositPage() {
                           className={cn(
                             'px-2.5 sm:px-3 py-1 rounded-lg text-[10px] sm:text-xs font-medium transition-all',
                             amount === quickAmount.toString()
-                              ? 'bg-emerald-500 text-white'
+                              ? 'bg-[#1079ff] text-white'
                               : 'bg-slate-900 text-slate-400 hover:bg-slate-700 border border-slate-700'
                           )}
                         >
@@ -495,15 +495,15 @@ export default function DepositPage() {
                           value={phoneNumber}
                           onChange={(e) => setPhoneNumber(e.target.value)}
                           placeholder="+255 7XX XXX XXX"
-                          className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                          className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-[#1079ff]"
                           required
                         />
                       </div>
 
                       {/* Payment Instructions */}
                       {selectedMethod.phoneNumber && (
-                        <div className="bg-emerald-900/20 border border-emerald-900/30 rounded-lg p-3">
-                          <p className="text-emerald-400 text-xs sm:text-sm font-medium mb-2">Send payment to:</p>
+                        <div className="bg-[#1079ff]/10 border border-[#1079ff]/30 rounded-lg p-3">
+                          <p className="text-[#1079ff] text-xs sm:text-sm font-medium mb-2">Send payment to:</p>
                           <div className="flex items-center justify-between bg-slate-900 rounded-lg px-3 py-2 gap-2">
                             <div className="min-w-0">
                               <span className="text-white font-mono text-sm">{selectedMethod.phoneNumber}</span>
@@ -578,7 +578,7 @@ export default function DepositPage() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full py-2 sm:py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {isSubmitting ? (
                       <>
@@ -667,7 +667,7 @@ export default function DepositPage() {
                   )}
                   <button
                     onClick={handleReset}
-                    className="px-5 sm:px-6 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-all"
+                    className="px-5 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-sm font-medium rounded-lg transition-all"
                   >
                     Make Another Deposit
                   </button>

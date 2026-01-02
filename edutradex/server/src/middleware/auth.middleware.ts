@@ -8,7 +8,11 @@ export interface AuthenticatedUser {
   email: string;
   name: string;
   role: string;
+  liveBalance: number;
   demoBalance: number;
+  activeAccountType: 'LIVE' | 'DEMO';
+  emailVerified: boolean;
+  kycStatus: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
 declare global {

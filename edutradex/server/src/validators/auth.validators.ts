@@ -90,9 +90,24 @@ export const verifyResetTokenSchema = z.object({
     .min(1, 'Reset token is required'),
 });
 
+export const changePasswordSchema = z.object({
+  currentPassword: z
+    .string()
+    .min(1, 'Current password is required'),
+  newPassword: z
+    .string()
+    .min(8, 'New password must be at least 8 characters')
+    .max(128, 'New password must be less than 128 characters')
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      'New password must contain at least one uppercase letter, one lowercase letter, and one number'
+    ),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ResetBalanceInput = z.infer<typeof resetBalanceSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type VerifyResetTokenInput = z.infer<typeof verifyResetTokenSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

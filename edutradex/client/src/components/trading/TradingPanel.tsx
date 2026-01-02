@@ -14,6 +14,7 @@ interface TradingPanelProps {
   isTradesPanelOpen?: boolean;
   initialDuration?: number;
   onDurationChange?: (duration: number) => void;
+  isDemoMode?: boolean;
 }
 
 const DURATIONS = [
@@ -31,7 +32,7 @@ const DURATIONS = [
 
 const QUICK_AMOUNTS = [5, 10, 25, 50, 100, 500, 1000, 5000];
 
-export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, isTradesPanelOpen = true, initialDuration, onDurationChange }: TradingPanelProps) {
+export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, isTradesPanelOpen = true, initialDuration, onDurationChange, isDemoMode = false }: TradingPanelProps) {
   const [amount, setAmount] = useState(10);
   const [duration, setDuration] = useState(60);
 
@@ -81,9 +82,17 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
   // Desktop Panel Only - Mobile uses MobileTradingPanel component
   return (
     <div className={cn(
-      "hidden md:flex w-56 bg-[#1a1a2e] border-l border-[#2d2d44] flex-col h-full",
-      !isTradesPanelOpen && "mr-[68px]"
+      "hidden md:flex w-56 bg-[#1a1a2e] border-l flex-col h-full",
+      !isTradesPanelOpen && "mr-[68px]",
+      isDemoMode ? "border-amber-500/30" : "border-[#2d2d44]"
     )}>
+      {/* Demo Mode Indicator */}
+      {isDemoMode && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 py-1.5 px-3 flex items-center justify-center gap-2">
+          <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+          <span className="text-amber-400 text-[10px] font-medium">DEMO MODE</span>
+        </div>
+      )}
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
         {/* Time Display */}
@@ -145,7 +154,7 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
                     setShowCustomDuration(false);
                   }
                 }}
-                className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors"
+                className="w-full py-1.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-xs font-medium rounded transition-all"
               >
                 Set ({customHours > 0 ? `${customHours}h ` : ''}{customMinutes}m {customSeconds}s)
               </button>
@@ -190,7 +199,7 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
               type="number"
               value={amount}
               onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))}
-              className="w-full pl-7 pr-3 py-2 bg-gradient-to-b from-[#252542] to-[#1f1f38] border border-[#3d3d5c] rounded-lg text-white text-lg font-bold text-center focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+              className="w-full pl-7 pr-3 py-2 bg-gradient-to-b from-[#252542] to-[#1f1f38] border border-[#3d3d5c] rounded-lg text-white text-lg font-bold text-center focus:outline-none focus:border-[#1079ff] focus:ring-1 focus:ring-[#1079ff]/50 transition-all"
             />
           </div>
 
@@ -203,7 +212,7 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
                 className={cn(
                   'py-1.5 rounded-md text-xs font-semibold transition-all',
                   amount === quickAmount
-                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
+                    ? 'bg-[#1079ff] text-white shadow-lg shadow-[#1079ff]/30'
                     : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
                 )}
               >
@@ -215,7 +224,7 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
           {/* Balance display */}
           <div className="flex items-center justify-between mt-2 px-0.5">
             <span className="text-gray-500 text-[10px]">Balance</span>
-            <span className="text-emerald-400 text-xs font-bold">{formatCurrency(balance)}</span>
+            <span className="text-[#1079ff] text-xs font-bold">{formatCurrency(balance)}</span>
           </div>
 
           {/* Balance Warning */}

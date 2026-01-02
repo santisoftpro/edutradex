@@ -96,7 +96,7 @@ export default function AffiliatePage() {
   const getCommissionTypeColor = (type: string) => {
     switch (type) {
       case 'TRADE_COMMISSION':
-        return 'bg-purple-500/20 text-purple-400';
+        return 'bg-[#1079ff]/20 text-[#1079ff]';
       default:
         return 'bg-gray-500/20 text-gray-400';
     }
@@ -105,7 +105,7 @@ export default function AffiliatePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#1079ff]"></div>
       </div>
     );
   }
@@ -119,10 +119,10 @@ export default function AffiliatePage() {
       </div>
 
       {/* Referral Link Card */}
-      <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl p-6 border border-blue-500/30">
+      <div className="bg-gradient-to-r from-[#1079ff]/20 to-[#092ab2]/20 rounded-xl p-6 border border-[#1079ff]/30">
         <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 bg-blue-500/20 rounded-lg">
-            <LinkIcon className="w-6 h-6 text-blue-400" />
+          <div className="p-2 bg-[#1079ff]/20 rounded-lg">
+            <LinkIcon className="w-6 h-6 text-[#1079ff]" />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-white">Your Referral Link</h2>
@@ -136,7 +136,7 @@ export default function AffiliatePage() {
           </div>
           <button
             onClick={() => copyToClipboard(getReferralLink())}
-            className="px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2"
+            className="px-4 py-3 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] rounded-lg transition-all flex items-center gap-2"
           >
             {copied ? (
               <Check className="w-5 h-5 text-white" />
@@ -150,7 +150,7 @@ export default function AffiliatePage() {
         <div className="mt-4 flex items-center gap-4">
           <div className="flex items-center gap-2 text-sm">
             <span className="text-gray-400">Your Code:</span>
-            <span className="font-mono text-blue-400 bg-blue-500/10 px-2 py-1 rounded">
+            <span className="font-mono text-[#1079ff] bg-[#1079ff]/10 px-2 py-1 rounded">
               {stats?.referralCode}
             </span>
             <button
@@ -168,8 +168,8 @@ export default function AffiliatePage() {
         <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50">
           <h3 className="text-lg font-semibold text-white mb-4">Commission Rate</h3>
           <div className="flex justify-center">
-            <div className="bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-lg p-6 text-center border border-purple-500/30 max-w-sm w-full">
-              <TrendingUp className="w-10 h-10 text-purple-400 mx-auto mb-3" />
+            <div className="bg-gradient-to-r from-[#1079ff]/20 to-[#092ab2]/20 rounded-lg p-6 text-center border border-[#1079ff]/30 max-w-sm w-full">
+              <TrendingUp className="w-10 h-10 text-[#1079ff] mx-auto mb-3" />
               <p className="text-3xl font-bold text-white">{settings.tradeCommission}%</p>
               <p className="text-sm text-gray-400 mt-1">Of Referral's Trading Profits</p>
               <p className="text-xs text-gray-500 mt-3">Calculated and credited every 24 hours</p>
@@ -186,8 +186,8 @@ export default function AffiliatePage() {
               <p className="text-sm text-gray-400">Total Referrals</p>
               <p className="text-2xl font-bold text-white mt-1">{stats?.totalReferrals || 0}</p>
             </div>
-            <div className="p-3 bg-blue-500/20 rounded-lg">
-              <Users className="w-6 h-6 text-blue-400" />
+            <div className="p-3 bg-[#1079ff]/20 rounded-lg">
+              <Users className="w-6 h-6 text-[#1079ff]" />
             </div>
           </div>
           <p className="text-xs text-gray-500 mt-2">
@@ -216,12 +216,12 @@ export default function AffiliatePage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400">This Month</p>
-              <p className="text-2xl font-bold text-purple-400 mt-1">
+              <p className="text-2xl font-bold text-[#1079ff] mt-1">
                 {formatCurrency(stats?.thisMonthEarnings || 0)}
               </p>
             </div>
-            <div className="p-3 bg-purple-500/20 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-purple-400" />
+            <div className="p-3 bg-[#1079ff]/20 rounded-lg">
+              <TrendingUp className="w-6 h-6 text-[#1079ff]" />
             </div>
           </div>
           <p className="text-xs text-gray-500 mt-2">
@@ -255,7 +255,7 @@ export default function AffiliatePage() {
               onClick={() => setActiveTab('overview')}
               className={`px-6 py-4 text-sm font-medium transition-colors ${
                 activeTab === 'overview'
-                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  ? 'text-[#1079ff] border-b-2 border-[#1079ff]'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -265,7 +265,7 @@ export default function AffiliatePage() {
               onClick={() => setActiveTab('referrals')}
               className={`px-6 py-4 text-sm font-medium transition-colors ${
                 activeTab === 'referrals'
-                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  ? 'text-[#1079ff] border-b-2 border-[#1079ff]'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -275,7 +275,7 @@ export default function AffiliatePage() {
               onClick={() => setActiveTab('commissions')}
               className={`px-6 py-4 text-sm font-medium transition-colors ${
                 activeTab === 'commissions'
-                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  ? 'text-[#1079ff] border-b-2 border-[#1079ff]'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -291,8 +291,8 @@ export default function AffiliatePage() {
                 <h3 className="text-lg font-semibold text-white mb-4">How It Works</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-slate-700/30 rounded-lg p-4">
-                    <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center mb-3">
-                      <span className="text-blue-400 font-bold">1</span>
+                    <div className="w-8 h-8 bg-[#1079ff]/20 rounded-full flex items-center justify-center mb-3">
+                      <span className="text-[#1079ff] font-bold">1</span>
                     </div>
                     <h4 className="font-medium text-white mb-1">Share Your Link</h4>
                     <p className="text-sm text-gray-400">
@@ -300,8 +300,8 @@ export default function AffiliatePage() {
                     </p>
                   </div>
                   <div className="bg-slate-700/30 rounded-lg p-4">
-                    <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center mb-3">
-                      <span className="text-blue-400 font-bold">2</span>
+                    <div className="w-8 h-8 bg-[#1079ff]/20 rounded-full flex items-center justify-center mb-3">
+                      <span className="text-[#1079ff] font-bold">2</span>
                     </div>
                     <h4 className="font-medium text-white mb-1">They Start Trading</h4>
                     <p className="text-sm text-gray-400">
@@ -309,8 +309,8 @@ export default function AffiliatePage() {
                     </p>
                   </div>
                   <div className="bg-slate-700/30 rounded-lg p-4">
-                    <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center mb-3">
-                      <span className="text-blue-400 font-bold">3</span>
+                    <div className="w-8 h-8 bg-[#1079ff]/20 rounded-full flex items-center justify-center mb-3">
+                      <span className="text-[#1079ff] font-bold">3</span>
                     </div>
                     <h4 className="font-medium text-white mb-1">Earn Profit Share</h4>
                     <p className="text-sm text-gray-400">

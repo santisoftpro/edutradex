@@ -74,7 +74,7 @@ export function PasswordConfirmModal({
   const colorClasses = {
     red: 'bg-red-600 hover:bg-red-700 focus:ring-red-500',
     amber: 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500',
-    emerald: 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500',
+    emerald: 'bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] focus:ring-[#1079ff]',
   };
 
   return (

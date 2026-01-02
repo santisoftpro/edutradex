@@ -101,7 +101,7 @@ export default function AdminCopyTradingPage() {
               onClick={toggleFakeActivity}
               disabled={isTogglingFakeActivity}
               className={cn(
-                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-800',
+                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#1079ff] focus:ring-offset-2 focus:ring-offset-slate-800',
                 fakeActivityEnabled ? 'bg-emerald-600' : 'bg-slate-600',
                 isTogglingFakeActivity && 'opacity-50 cursor-not-allowed'
               )}
@@ -167,7 +167,7 @@ export default function AdminCopyTradingPage() {
               className={cn(
                 'flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 -mb-px',
                 activeTab === tab.id
-                  ? 'border-emerald-500 text-emerald-400'
+                  ? 'border-[#1079ff] text-[#1079ff]'
                   : 'border-transparent text-slate-400 hover:text-white'
               )}
             >
@@ -204,7 +204,7 @@ function StatCard({
 }) {
   const colors = {
     emerald: 'bg-emerald-600/20 text-emerald-400',
-    blue: 'bg-blue-600/20 text-blue-400',
+    blue: 'bg-[#1079ff]/20 text-[#1079ff]',
     yellow: 'bg-yellow-600/20 text-yellow-400',
     purple: 'bg-purple-600/20 text-purple-400',
   };
@@ -280,7 +280,7 @@ function PendingLeadersTab({ onRefresh }: { onRefresh: () => void }) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -490,7 +490,7 @@ function AllLeadersTab() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by name..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
           />
         </div>
         <select
@@ -499,7 +499,7 @@ function AllLeadersTab() {
             setStatusFilter(e.target.value as LeaderStatus | '');
             setPage(1);
           }}
-          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
         >
           <option value="">All Status</option>
           <option value="PENDING">Pending</option>
@@ -753,7 +753,7 @@ function LeaderDetailModal({
                     step="0.1"
                     value={editStats.winRate}
                     onChange={(e) => setEditStats({ ...editStats, winRate: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -763,7 +763,7 @@ function LeaderDetailModal({
                     min="0"
                     value={editStats.totalTrades}
                     onChange={(e) => setEditStats({ ...editStats, totalTrades: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -773,7 +773,7 @@ function LeaderDetailModal({
                     min="0"
                     value={editStats.winningTrades}
                     onChange={(e) => setEditStats({ ...editStats, winningTrades: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
                 <div>
@@ -783,7 +783,7 @@ function LeaderDetailModal({
                     step="0.01"
                     value={editStats.totalProfit}
                     onChange={(e) => setEditStats({ ...editStats, totalProfit: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
                   />
                 </div>
               </div>
@@ -843,7 +843,7 @@ function LeaderDetailModal({
             <h3 className="text-sm font-medium text-slate-400 mb-3">Followers ({followers.length})</h3>
             {isLoadingFollowers ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
+                <Loader2 className="h-6 w-6 text-[#1079ff] animate-spin" />
               </div>
             ) : followers.length === 0 ? (
               <p className="text-slate-500 text-center py-8">No followers yet</p>
@@ -908,7 +908,7 @@ function ActivityTab() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }

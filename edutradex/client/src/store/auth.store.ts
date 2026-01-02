@@ -1,8 +1,16 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { api } from '@/lib/api';
+import { api, type LoginResponse, type TwoFactorPendingResponse } from '@/lib/api';
 import { getDeviceFingerprint } from '@/lib/fingerprint';
 import type { User, AuthResponse, AccountType } from '@/types';
+
+// Custom error for 2FA required
+export class TwoFactorRequiredError extends Error {
+  constructor(public tempToken: string, public userId: string) {
+    super('Two-factor authentication required');
+    this.name = 'TwoFactorRequiredError';
+  }
+}
 
 // Throttle state for preventing rapid API calls
 let lastRefreshTime = 0;
@@ -26,8 +34,10 @@ interface AuthActions {
   updateBalance: (newBalance: number) => void;
   updateLiveBalance: (newBalance: number) => void;
   updateDemoBalance: (newBalance: number) => void;
+  updatePracticeBalance: (newBalance: number) => void;
   resetBalance: () => Promise<void>;
   topUpDemoBalance: (amount: number) => Promise<void>;
+  topUpPracticeBalance: (amount?: number) => Promise<void>;
   refreshProfile: () => Promise<void>;
   switchAccount: (accountType: AccountType) => Promise<void>;
   setHydrated: () => void;
@@ -62,13 +72,22 @@ export const useAuthStore = create<AuthStore>()(
             console.warn('Failed to generate device fingerprint:', e);
           }
 
-          const response = await api.post<AuthResponse>('/auth/login', {
+          const response = await api.post<AuthResponse | TwoFactorPendingResponse>('/auth/login', {
             email,
             password,
             deviceFingerprint,
           });
 
-          const { user, token } = response.data;
+          // Check if 2FA is required (TwoFactorPendingResponse is inside data)
+          const responseData = response as AuthResponse;
+          if ('requires2FA' in responseData.data) {
+            const pending = responseData.data as unknown as TwoFactorPendingResponse;
+            set({ isLoading: false });
+            throw new TwoFactorRequiredError(pending.tempToken, pending.userId);
+          }
+
+          // Normal login response
+          const { user, token } = responseData.data;
           api.setToken(token);
 
           // Set user from server response - this is the source of truth
@@ -177,6 +196,13 @@ export const useAuthStore = create<AuthStore>()(
         }
       },
 
+      updatePracticeBalance: (newBalance: number) => {
+        const user = get().user;
+        if (user) {
+          set({ user: { ...user, practiceBalance: newBalance } });
+        }
+      },
+
       // Sync balance from server - this is the source of truth
       // Uses the same throttle as refreshProfile since they call the same API
       syncBalanceFromServer: async () => {
@@ -220,6 +246,18 @@ export const useAuthStore = create<AuthStore>()(
         }
       },
 
+      topUpPracticeBalance: async (amount?: number) => {
+        const response = await api.post<{ success: boolean; data: { practiceBalance: number } }>(
+          '/auth/topup-practice',
+          amount ? { amount } : {}
+        );
+        const { practiceBalance } = response.data;
+        const user = get().user;
+        if (user) {
+          set({ user: { ...user, practiceBalance } });
+        }
+      },
+
       switchAccount: async (accountType: AccountType) => {
         const response = await api.post<{ success: boolean; data: { user: User } }>(
           '/auth/switch-account',
@@ -232,7 +270,12 @@ export const useAuthStore = create<AuthStore>()(
       getActiveBalance: () => {
         const user = get().user;
         if (!user) return 0;
-        return user.demoBalance ?? 0;
+        // NOTE: Due to legacy naming:
+        // - 'LIVE' mode uses demoBalance (which is actually the real money)
+        // - 'DEMO' mode uses practiceBalance (which is the practice/demo money)
+        return user.activeAccountType === 'LIVE'
+          ? (user.demoBalance ?? 0)
+          : (user.practiceBalance ?? 0);
       },
 
       refreshProfile: async () => {
@@ -263,8 +306,10 @@ export const useAuthStore = create<AuthStore>()(
                   role: profile.role,
                   demoBalance: profile.demoBalance,
                   liveBalance: profile.liveBalance,
+                  practiceBalance: profile.practiceBalance,
                   activeAccountType: profile.activeAccountType,
                   emailVerified: profile.emailVerified,
+                  kycStatus: profile.kycStatus,
                 }
               });
             }

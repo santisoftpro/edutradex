@@ -47,7 +47,7 @@ export function MyLeaderProfile() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -71,7 +71,7 @@ export function MyLeaderProfile() {
         </p>
         <button
           onClick={() => setShowApplyForm(true)}
-          className="mt-6 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-medium"
+          className="mt-6 px-6 py-3 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg transition-all font-medium"
         >
           Apply to Become a Leader
         </button>
@@ -85,7 +85,7 @@ export function MyLeaderProfile() {
       <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
         <div className="flex items-start justify-between mb-6">
           <div className="flex items-center gap-4">
-            <div className="h-16 w-16 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-2xl">
+            <div className="h-16 w-16 bg-gradient-to-br from-[#1079ff] to-[#092ab2] rounded-full flex items-center justify-center text-white font-bold text-2xl">
               {leaderProfile.displayName.charAt(0).toUpperCase()}
             </div>
             <div>
@@ -151,7 +151,7 @@ export function MyLeaderProfile() {
         <div className="bg-slate-800 rounded-xl border border-slate-700">
           <div className="p-4 border-b border-slate-700">
             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Users className="h-5 w-5 text-emerald-400" />
+              <Users className="h-5 w-5 text-[#1079ff]" />
               Your Followers ({followers.length})
             </h3>
           </div>
@@ -250,7 +250,7 @@ function ApplyToBeLeaderForm({
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="e.g., ProTrader2024"
             maxLength={50}
-            className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
           />
         </div>
         <div>
@@ -263,7 +263,7 @@ function ApplyToBeLeaderForm({
             placeholder="Tell potential followers about your trading experience and strategy..."
             maxLength={500}
             rows={3}
-            className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+            className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff] resize-none"
           />
         </div>
         <div className="flex gap-3">
@@ -277,7 +277,7 @@ function ApplyToBeLeaderForm({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white rounded-lg transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] disabled:opacity-50 text-white rounded-lg transition-all"
           >
             {isSubmitting ? (
               <>
@@ -338,7 +338,7 @@ function EditProfileForm({
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           maxLength={50}
-          className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
         />
       </div>
       <div>
@@ -350,7 +350,7 @@ function EditProfileForm({
           onChange={(e) => setDescription(e.target.value)}
           maxLength={500}
           rows={3}
-          className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+          className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff] resize-none"
         />
       </div>
       <div className="flex items-center gap-3">
@@ -359,7 +359,7 @@ function EditProfileForm({
           id="isPublic"
           checked={isPublic}
           onChange={(e) => setIsPublic(e.target.checked)}
-          className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-600 focus:ring-emerald-500"
+          className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-[#1079ff] focus:ring-[#1079ff]"
         />
         <label htmlFor="isPublic" className="text-sm text-slate-300">
           Public profile (visible in leader discovery)
@@ -376,7 +376,7 @@ function EditProfileForm({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white rounded-lg transition-colors"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] disabled:opacity-50 text-white rounded-lg transition-all"
         >
           {isSubmitting ? (
             <>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { ArrowUp, ArrowDown, Clock, CheckCircle, XCircle, ListOrdered, History, ChevronRight, ChevronDown, Search } from 'lucide-react';
-import { useTradeStore, Trade } from '@/store/trade.store';
+import { Trade, useFilteredActiveTrades, useFilteredTrades } from '@/store/trade.store';
 import { PriceTick } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -34,7 +34,10 @@ export function TradesSidebar({ onToggle, latestPrices }: TradesSidebarProps) {
   const [activeTab, setActiveTab] = useState<TabType>('opened');
   const [isClient, setIsClient] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const { activeTrades, trades } = useTradeStore();
+
+  // Use filtered trades - only shows trades for current account type (LIVE or DEMO)
+  const activeTrades = useFilteredActiveTrades();
+  const trades = useFilteredTrades();
 
   // Prevent hydration mismatch - only render on client side
   useEffect(() => {

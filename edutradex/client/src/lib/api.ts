@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import type {
+  User,
   AdminUser,
   AdminUserDetail,
   PlatformStats,
@@ -43,7 +44,13 @@ import type {
   FollowerInfo,
   PendingCopyTrade,
   CopyMode,
+  UserProfile,
+  ProfileDevice,
+  LoginHistoryItem,
+  ProfileStats,
 } from '@/types';
+
+export type { PaginatedResponse };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -123,6 +130,45 @@ interface ApiResponse<T> {
     limit: number;
     offset: number;
   };
+}
+
+// Two-Factor Authentication Types
+export interface TwoFactorStatus {
+  enabled: boolean;
+  verifiedAt: string | null;
+  backupCodesRemaining: number;
+}
+
+export interface TwoFactorSetup {
+  qrCode: string;
+  secret: string;
+  otpauthUrl: string;
+  manualEntryKey: string;
+}
+
+export interface LoginResponse {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    liveBalance: number;
+    demoBalance: number;
+    activeAccountType: 'LIVE' | 'DEMO';
+    emailVerified: boolean;
+  };
+  token: string;
+  securityInfo?: {
+    isNewDevice: boolean;
+    isNewLocation: boolean;
+    requiresVerification: boolean;
+  };
+}
+
+export interface TwoFactorPendingResponse {
+  requires2FA: true;
+  tempToken: string;
+  userId: string;
 }
 
 class ApiClient {
@@ -767,8 +813,8 @@ class ApiClient {
   }
 
   // Get current user profile (refreshes balance from server)
-  async getProfile(): Promise<{ id: string; email: string; name: string; role: 'USER' | 'ADMIN'; liveBalance: number; demoBalance: number; activeAccountType: 'LIVE' | 'DEMO'; emailVerified: boolean }> {
-    const response = await this.get<ApiResponse<{ user: { id: string; email: string; name: string; role: 'USER' | 'ADMIN'; liveBalance: number; demoBalance: number; activeAccountType: 'LIVE' | 'DEMO'; emailVerified: boolean } }>>('/auth/me');
+  async getProfile(): Promise<{ id: string; email: string; name: string; role: 'USER' | 'ADMIN' | 'SUPERADMIN'; liveBalance: number; demoBalance: number; practiceBalance: number; activeAccountType: 'LIVE' | 'DEMO'; emailVerified: boolean; kycStatus: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED' }> {
+    const response = await this.get<ApiResponse<{ user: { id: string; email: string; name: string; role: 'USER' | 'ADMIN' | 'SUPERADMIN'; liveBalance: number; demoBalance: number; practiceBalance: number; activeAccountType: 'LIVE' | 'DEMO'; emailVerified: boolean; kycStatus: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED' } }>>('/auth/me');
     return response.data.user;
   }
 
@@ -1306,6 +1352,44 @@ class ApiClient {
   async verifyResetToken(token: string): Promise<boolean> {
     const response = await this.post<{ success: boolean; data: { valid: boolean } }>('/auth/verify-reset-token', { token });
     return response.data.valid;
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await this.post('/auth/change-password', { currentPassword, newPassword });
+  }
+
+  // Two-Factor Authentication (2FA) API Methods
+  async get2FAStatus(): Promise<TwoFactorStatus> {
+    const response = await this.get<ApiResponse<TwoFactorStatus>>('/auth/2fa/status');
+    return response.data;
+  }
+
+  async setup2FA(): Promise<TwoFactorSetup> {
+    const response = await this.post<ApiResponse<TwoFactorSetup>>('/auth/2fa/setup');
+    return response.data;
+  }
+
+  async verify2FASetup(token: string): Promise<{ backupCodes: string[] }> {
+    const response = await this.post<ApiResponse<{ backupCodes: string[] }>>('/auth/2fa/verify-setup', { token });
+    return response.data;
+  }
+
+  async disable2FA(password: string): Promise<void> {
+    await this.post('/auth/2fa/disable', { password });
+  }
+
+  async regenerateBackupCodes(password: string): Promise<{ backupCodes: string[] }> {
+    const response = await this.post<ApiResponse<{ backupCodes: string[] }>>('/auth/2fa/backup-codes', { password });
+    return response.data;
+  }
+
+  async verify2FALogin(tempToken: string, token?: string, backupCode?: string): Promise<LoginResponse> {
+    const response = await this.post<ApiResponse<LoginResponse>>('/auth/verify-2fa', {
+      tempToken,
+      token,
+      backupCode,
+    });
+    return response.data;
   }
 
   // KYC API Methods (User)
@@ -2185,4 +2269,107 @@ Object.assign(ApiClient.prototype, {
     }>>('/admin/impersonation/end', { adminId });
     return response.data;
   },
+
+  // ============= User Profile =============
+
+  async getFullProfile(): Promise<UserProfile> {
+    const response = await api.get<ApiResponse<UserProfile>>('/user/profile');
+    return response.data;
+  },
+
+  async getProfileStats(): Promise<ProfileStats> {
+    const response = await api.get<ApiResponse<ProfileStats>>('/user/stats');
+    return response.data;
+  },
+
+  async getUserDevices(): Promise<ProfileDevice[]> {
+    const response = await api.get<ApiResponse<ProfileDevice[]>>('/user/devices');
+    return response.data;
+  },
+
+  async removeDevice(deviceId: string): Promise<void> {
+    await api.delete(`/user/devices/${deviceId}`);
+  },
+
+  async trustDevice(deviceId: string): Promise<void> {
+    await api.post(`/user/devices/${deviceId}/trust`);
+  },
+
+  async getLoginHistory(options?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ data: LoginHistoryItem[]; total: number }> {
+    const params = new URLSearchParams();
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.offset) params.append('offset', options.offset.toString());
+    const queryStr = params.toString();
+
+    const response = await api.get<ApiResponse<LoginHistoryItem[]> & { pagination: { total: number } }>(
+      `/user/login-history${queryStr ? `?${queryStr}` : ''}`
+    );
+    return {
+      data: response.data,
+      total: response.pagination?.total || response.data.length,
+    };
+  },
 });
+
+// Type declarations for dynamically added methods
+interface ApiClient {
+  // SuperAdmin methods
+  getSuperAdminStats(): Promise<SuperAdminStats>;
+  getSuperAdminAdmins(options?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    role?: 'ADMIN' | 'SUPERADMIN' | '';
+    isActive?: boolean | '';
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<PaginatedResponse<SuperAdminUser>>;
+  createSuperAdminAdmin(data: CreateAdminInput): Promise<SuperAdminUser>;
+  updateSuperAdminAdmin(adminId: string, data: UpdateAdminInput): Promise<SuperAdminUser>;
+  deleteSuperAdminAdmin(adminId: string): Promise<void>;
+  toggleSuperAdminAdminStatus(adminId: string): Promise<SuperAdminUser>;
+  resetSuperAdminAdminPassword(adminId: string, newPassword: string): Promise<void>;
+  getSuperAdminSession(adminId: string): Promise<AdminSession | null>;
+  terminateSuperAdminSession(adminId: string): Promise<void>;
+  getAuditLogs(options?: {
+    page?: number;
+    limit?: number;
+    adminId?: string;
+    actionType?: string;
+    targetType?: string;
+    from?: string;
+    to?: string;
+    search?: string;
+  }): Promise<PaginatedResponse<AuditLog>>;
+  getAuditLogSummary(): Promise<AuditLogSummary>;
+  exportAuditLogs(options?: {
+    adminId?: string;
+    actionType?: string;
+    targetType?: string;
+    from?: string;
+    to?: string;
+  }): Promise<string>;
+  // User Impersonation
+  impersonateUser(userId: string, adminPassword: string): Promise<{
+    user: User;
+    token: string;
+    originalAdminId: string;
+  }>;
+  endImpersonation(adminId: string): Promise<{
+    user: User;
+    token: string;
+  }>;
+  // User Profile
+  getFullProfile(): Promise<UserProfile>;
+  getProfileStats(): Promise<ProfileStats>;
+  getUserDevices(): Promise<ProfileDevice[]>;
+  removeDevice(deviceId: string): Promise<void>;
+  trustDevice(deviceId: string): Promise<void>;
+  getLoginHistory(options?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ data: LoginHistoryItem[]; total: number }>;
+}

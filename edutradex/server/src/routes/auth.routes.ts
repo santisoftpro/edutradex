@@ -11,13 +11,19 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   verifyResetTokenSchema,
+  changePasswordSchema,
   type RegisterInput,
   type LoginInput,
   type ResetBalanceInput,
   type ForgotPasswordInput,
   type ResetPasswordInput,
   type VerifyResetTokenInput,
+  type ChangePasswordInput,
 } from '../validators/auth.validators.js';
+import {
+  verify2FALoginSchema,
+  type Verify2FALoginInput,
+} from '../validators/two-factor.validators.js';
 import { logger } from '../utils/logger.js';
 
 const router = Router();
@@ -115,6 +121,43 @@ router.post(
       res.status(500).json({
         success: false,
         error: 'Login failed',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/verify-2fa
+ * Complete login with 2FA verification
+ */
+router.post(
+  '/verify-2fa',
+  loginRateLimiter,
+  validateBody(verify2FALoginSchema),
+  async (req: Request<object, object, Verify2FALoginInput>, res: Response): Promise<void> => {
+    try {
+      const { tempToken, token, backupCode } = req.body;
+
+      const result = await authService.verify2FA(tempToken, token, backupCode);
+
+      res.json({
+        success: true,
+        data: result,
+        message: 'Login successful',
+      });
+    } catch (error) {
+      if (error instanceof AuthServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+
+      logger.error('2FA verification error', { error });
+      res.status(500).json({
+        success: false,
+        error: '2FA verification failed',
       });
     }
   }
@@ -234,6 +277,53 @@ router.post(
       res.status(500).json({
         success: false,
         error: 'Failed to top up demo balance',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/topup-practice
+ * Reset/replenish practice balance for demo trading
+ * This is a FREE feature - users can reset their practice balance anytime
+ */
+router.post(
+  '/topup-practice',
+  authMiddleware,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.userId) {
+        res.status(401).json({
+          success: false,
+          error: 'User not authenticated',
+        });
+        return;
+      }
+
+      // Amount is optional - defaults to 10000 if not provided
+      const { amount } = req.body;
+      const topUpAmount = amount && typeof amount === 'number' && amount > 0 ? amount : undefined;
+
+      const result = await authService.topUpPracticeBalance(req.userId, topUpAmount);
+
+      res.json({
+        success: true,
+        data: result,
+        message: `Practice balance reset to $${result.practiceBalance.toLocaleString()}`,
+      });
+    } catch (error) {
+      if (error instanceof AuthServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+
+      logger.error('Practice top-up error', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to reset practice balance',
       });
     }
   }
@@ -479,6 +569,52 @@ router.post(
       res.status(500).json({
         success: false,
         error: 'Failed to verify token',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/change-password
+ * Change password for authenticated user
+ */
+router.post(
+  '/change-password',
+  authMiddleware,
+  validateBody(changePasswordSchema),
+  async (req: Request<object, object, ChangePasswordInput>, res: Response): Promise<void> => {
+    try {
+      if (!req.userId) {
+        res.status(401).json({
+          success: false,
+          error: 'User not authenticated',
+        });
+        return;
+      }
+
+      await authService.changePassword(
+        req.userId,
+        req.body.currentPassword,
+        req.body.newPassword
+      );
+
+      res.json({
+        success: true,
+        message: 'Password changed successfully. Please log in again.',
+      });
+    } catch (error) {
+      if (error instanceof AuthServiceError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+
+      logger.error('Change password error', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to change password',
       });
     }
   }

@@ -187,7 +187,7 @@ function EditMarketModal({
               min="50"
               max="100"
               step="1"
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
             />
           </div>
 
@@ -201,7 +201,7 @@ function EditMarketModal({
               onChange={(e) => setMinTradeAmount(e.target.value)}
               min="1"
               step="0.01"
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
             />
           </div>
 
@@ -215,7 +215,7 @@ function EditMarketModal({
               onChange={(e) => setMaxTradeAmount(e.target.value)}
               min="1"
               step="0.01"
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
             />
           </div>
 
@@ -226,7 +226,7 @@ function EditMarketModal({
             <select
               value={volatilityMode}
               onChange={(e) => setVolatilityMode(e.target.value as 'LOW' | 'MEDIUM' | 'HIGH')}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#1079ff]"
             >
               <option value="LOW">Low</option>
               <option value="MEDIUM">Medium</option>
@@ -244,7 +244,7 @@ function EditMarketModal({
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
+              className="px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg font-medium transition-all"
             >
               Save Changes
             </button>
@@ -334,7 +334,7 @@ export default function MarketsPage() {
   if (isLoading && marketConfigs.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -350,7 +350,7 @@ export default function MarketsPage() {
               clearError();
               fetchMarketConfigs();
             }}
-            className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+            className="mt-4 px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg transition-all"
           >
             Retry
           </button>
@@ -369,7 +369,7 @@ export default function MarketsPage() {
         <button
           onClick={handleInitialize}
           disabled={isInitializing}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg font-medium transition-all disabled:opacity-50"
         >
           <RefreshCw className={cn('h-4 w-4', isInitializing && 'animate-spin')} />
           Initialize All Markets

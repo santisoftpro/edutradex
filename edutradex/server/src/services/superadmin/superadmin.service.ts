@@ -373,7 +373,7 @@ class SuperAdminService {
       targetId: adminId,
       description: `Updated admin ${existing.name}`,
       previousValue: { name: existing.name, email: existing.email },
-      newValue: input,
+      newValue: { ...input } as Record<string, unknown>,
       ipAddress
     });
 

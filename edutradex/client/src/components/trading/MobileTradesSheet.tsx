@@ -12,7 +12,7 @@ import {
   ChevronDown,
   Search,
 } from 'lucide-react';
-import { useTradeStore, Trade } from '@/store/trade.store';
+import { useFilteredActiveTrades, useFilteredTrades, Trade } from '@/store/trade.store';
 import { PriceTick } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -40,18 +40,21 @@ export function MobileTradesSheet({ isOpen, onClose, latestPrices }: MobileTrade
   const [activeTab, setActiveTab] = useState<TabType>('opened');
   const [isClient, setIsClient] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const { activeTrades, trades } = useTradeStore();
+
+  // Use filtered trades - only shows trades for current account type (LIVE or DEMO)
+  const activeTrades = useFilteredActiveTrades();
+  const allTrades = useFilteredTrades();
 
   // Prevent hydration mismatch - only render on client side
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  const closedTrades = trades
+  const closedTrades = allTrades
     .filter(t => t.status === 'won' || t.status === 'lost')
     .slice(0, 20);
 
-  const filteredActiveTrades = useMemo(() => {
+  const searchedActiveTrades = useMemo(() => {
     if (!searchQuery.trim()) return activeTrades;
     const query = searchQuery.toLowerCase().trim();
     return activeTrades.filter((trade) =>
@@ -59,7 +62,7 @@ export function MobileTradesSheet({ isOpen, onClose, latestPrices }: MobileTrade
     );
   }, [activeTrades, searchQuery]);
 
-  const filteredClosedTrades = useMemo(() => {
+  const searchedClosedTrades = useMemo(() => {
     if (!searchQuery.trim()) return closedTrades;
     const query = searchQuery.toLowerCase().trim();
     return closedTrades.filter((trade) =>
@@ -148,9 +151,9 @@ export function MobileTradesSheet({ isOpen, onClose, latestPrices }: MobileTrade
         {/* Content */}
         <div className="flex-1 overflow-y-auto pb-safe">
           {activeTab === 'opened' ? (
-            <MobileOpenedTrades trades={filteredActiveTrades} latestPrices={latestPrices} searchQuery={searchQuery} />
+            <MobileOpenedTrades trades={searchedActiveTrades} latestPrices={latestPrices} searchQuery={searchQuery} />
           ) : (
-            <MobileClosedTrades trades={filteredClosedTrades} searchQuery={searchQuery} />
+            <MobileClosedTrades trades={searchedClosedTrades} searchQuery={searchQuery} />
           )}
         </div>
       </div>

@@ -22,8 +22,9 @@ model User {
   name              String
   role              String       @default("USER") // "USER", "ADMIN", "SUPERADMIN"
   liveBalance       Float        @default(0)
-  demoBalance       Float        @default(0)
-  activeAccountType String       @default("LIVE")
+  demoBalance       Float        @default(0)        // NOTE: This is actually the REAL money balance (legacy naming)
+  practiceBalance   Float        @default(10000)    // Demo/practice balance for risk-free trading
+  activeAccountType String       @default("LIVE")   // "LIVE" uses demoBalance, "DEMO" uses practiceBalance
   isActive          Boolean      @default(true)
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
@@ -80,6 +81,12 @@ model User {
   loginAttempts         LoginAttempt[]
   riskProfile           UserRiskProfile?
   securityAlerts        SecurityAlert[]
+
+  // Two-Factor Authentication
+  twoFactorEnabled      Boolean      @default(false)
+  twoFactorSecret       String?      // Encrypted TOTP secret
+  twoFactorVerifiedAt   DateTime?    // When 2FA was last verified
+  backupCodes           String[]     @default([]) // Hashed backup codes
 
   @@index([email])
   @@index([role])

@@ -217,7 +217,7 @@ export function AssetSelector({ selectedAsset, onSelectAsset, currentPrice, curr
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search assets..."
-                  className="w-full pl-9 pr-4 py-2 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                  className="w-full pl-9 pr-4 py-2 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm placeholder-gray-500 focus:outline-none focus:border-[#1079ff]"
                 />
               </div>
             </div>
@@ -231,7 +231,7 @@ export function AssetSelector({ selectedAsset, onSelectAsset, currentPrice, curr
                   className={cn(
                     'px-2 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1',
                     category === cat
-                      ? cat === 'favorites' ? 'bg-yellow-600 text-white' : 'bg-emerald-600 text-white'
+                      ? cat === 'favorites' ? 'bg-yellow-600 text-white' : 'bg-[#1079ff] text-white'
                       : 'bg-[#252542] text-gray-400 hover:text-white'
                   )}
                 >

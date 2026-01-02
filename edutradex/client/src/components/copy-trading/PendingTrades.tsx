@@ -81,7 +81,7 @@ export function PendingTrades({ onRefreshStats }: PendingTradesProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -218,7 +218,7 @@ function PendingTradeCard({
           <button
             onClick={onApprove}
             disabled={isProcessing}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg transition-all disabled:opacity-50"
           >
             {isProcessing ? (
               <Loader2 className="h-4 w-4 animate-spin" />

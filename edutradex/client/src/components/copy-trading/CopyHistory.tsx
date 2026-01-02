@@ -77,7 +77,7 @@ export function CopyHistory() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -152,7 +152,7 @@ export function CopyHistory() {
                 className={cn(
                   'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
                   filter === opt.value
-                    ? 'bg-emerald-600 text-white'
+                    ? 'bg-[#1079ff] text-white'
                     : 'text-slate-400 hover:text-white hover:bg-slate-700'
                 )}
               >

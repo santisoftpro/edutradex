@@ -33,7 +33,7 @@ function StatCard({
 }) {
   const colorClasses: Record<string, string> = {
     emerald: 'bg-emerald-600/20 text-emerald-500',
-    blue: 'bg-blue-600/20 text-blue-500',
+    blue: 'bg-[#1079ff]/20 text-[#1079ff]',
     purple: 'bg-purple-600/20 text-purple-500',
     amber: 'bg-amber-600/20 text-amber-500',
     red: 'bg-red-600/20 text-red-500',
@@ -91,7 +91,7 @@ export default function AdminDashboardPage() {
   if (isLoading && !platformStats) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
       </div>
     );
   }
@@ -107,7 +107,7 @@ export default function AdminDashboardPage() {
               fetchPlatformStats();
               fetchRecentActivity(10);
             }}
-            className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+            className="mt-4 px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg transition-all"
           >
             Retry
           </button>

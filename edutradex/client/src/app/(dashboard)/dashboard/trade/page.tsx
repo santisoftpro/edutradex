@@ -8,7 +8,6 @@ import { PriceChart, PriceChartHandle } from '@/components/trading/PriceChart';
 import { ActiveTrades } from '@/components/trading/ActiveTrades';
 import { TradesSidebar } from '@/components/trading/TradesSidebar';
 import { RightMenu } from '@/components/trading/RightMenu';
-import { Header } from '@/components/layout/Header';
 import { MobileAssetBar } from '@/components/trading/MobileAssetBar';
 import { MobileTradingPanel } from '@/components/trading/MobileTradingPanel';
 import { MobileTradesSheet } from '@/components/trading/MobileTradesSheet';
@@ -16,7 +15,7 @@ import { MobileChartSettingsSheet } from '@/components/trading/MobileChartSettin
 import { MobileCopyTradingSheet } from '@/components/trading/MobileCopyTradingSheet';
 import { FavoritePairsBar } from '@/components/trading/FavoritePairsBar';
 import { useAuthStore } from '@/store/auth.store';
-import { useTradeStore } from '@/store/trade.store';
+import { useTradeStore, useActiveTradesCount } from '@/store/trade.store';
 import { useChartStore } from '@/store/chart.store';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { api, PriceTick } from '@/lib/api';
@@ -26,8 +25,9 @@ const SELECTED_ASSET_KEY = 'optigobroker-selected-asset';
 const SELECTED_DURATION_KEY = 'optigobroker-selected-duration';
 
 export default function TradePage() {
-  const { user, syncBalanceFromServer, updateBalance, isHydrated } = useAuthStore();
-  const { placeTrade, syncFromApi, activeTrades } = useTradeStore();
+  const { user, syncBalanceFromServer, updateDemoBalance, updatePracticeBalance, getActiveBalance, switchAccount, isHydrated } = useAuthStore();
+  const { placeTrade, syncFromApi } = useTradeStore();
+  const activeTradesCount = useActiveTradesCount(); // Filtered by current account type
   const { isConnected, latestPrices, subscribe, unsubscribe, subscribeAll } = useWebSocket();
   const [selectedAsset, setSelectedAsset] = useState('EUR/USD');
   const [currentPrice, setCurrentPrice] = useState<PriceTick | null>(null);
@@ -40,6 +40,13 @@ export default function TradePage() {
   const [drawnLinesCount, setDrawnLinesCount] = useState(0);
   const hasSubscribedAllRef = useRef(false);
   const priceChartRef = useRef<PriceChartHandle>(null);
+
+  // Force LIVE mode when on this page
+  useEffect(() => {
+    if (user && user.activeAccountType !== 'LIVE') {
+      switchAccount('LIVE');
+    }
+  }, [user, switchAccount]);
 
   // Chart settings from store
   const {
@@ -178,8 +185,16 @@ export default function TradePage() {
           marketType,
         });
 
-        // Optimistically deduct balance immediately (prevents stale balance issues)
-        updateBalance(user.demoBalance - amount);
+        // Optimistically deduct from the correct balance based on account type
+        // NOTE: Due to legacy naming:
+        // - 'LIVE' mode uses demoBalance (which is actually the real money)
+        // - 'DEMO' mode uses practiceBalance (which is the practice/demo money)
+        const currentBalance = getActiveBalance();
+        if (user.activeAccountType === 'LIVE') {
+          updateDemoBalance(currentBalance - amount);
+        } else {
+          updatePracticeBalance(currentBalance - amount);
+        }
 
         toast.success(`Trade placed: ${direction} on ${selectedAsset} for $${amount}`, {
           duration: 3000,
@@ -205,14 +220,14 @@ export default function TradePage() {
         });
       }
     },
-    [user, selectedAsset, currentPrice, syncBalanceFromServer, updateBalance, placeTrade]
+    [user, selectedAsset, currentPrice, syncBalanceFromServer, updateDemoBalance, updatePracticeBalance, getActiveBalance, placeTrade]
   );
 
   if (!user) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-[#0f0f1a]">
         <div className="text-center">
-          <div className="h-10 w-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="h-10 w-10 border-4 border-[#1079ff] border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="mt-4 text-slate-400">Loading trading platform...</p>
         </div>
       </div>
@@ -237,12 +252,7 @@ export default function TradePage() {
       </div>
 
       {/* ===== MOBILE LAYOUT ===== */}
-      {/* Mobile Header - Same as other pages */}
-      <div className="md:hidden">
-        <Header />
-      </div>
-
-      {/* Mobile Asset Bar */}
+      {/* Mobile Asset Bar - replaces header on trade page */}
       <MobileAssetBar
         selectedAsset={selectedAsset}
         onSelectAsset={handleSelectAsset}
@@ -272,7 +282,7 @@ export default function TradePage() {
 
         {/* Desktop Trading Panel */}
         <TradingPanel
-          balance={user.demoBalance}
+          balance={getActiveBalance()}
           onTrade={handleTrade}
           currentPrice={currentPrice?.price}
           isTradesPanelOpen={isTradesPanelOpen}
@@ -300,14 +310,14 @@ export default function TradePage() {
       {/* ===== MOBILE FIXED BOTTOM ELEMENTS ===== */}
       {/* Mobile Trading Panel - unified with integrated navigation */}
       <MobileTradingPanel
-        balance={user.demoBalance}
+        balance={getActiveBalance()}
         onTrade={handleTrade}
         onDurationChange={handleSelectDuration}
         initialDuration={selectedDuration}
         isLoading={placingTrades.size > 0}
         onOpenTrades={() => setIsMobileTradesOpen(true)}
         onOpenCopyTrading={() => setIsMobileCopyTradingOpen(true)}
-        activeTradesCount={activeTrades.length}
+        activeTradesCount={activeTradesCount}
       />
 
       {/* Mobile Trades Sheet */}
