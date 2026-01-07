@@ -15,12 +15,14 @@ import {
   Trash2,
   PenTool,
   ChevronRight,
+  ChevronDown,
   BarChart3,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type ChartType = 'candlestick' | 'line' | 'area' | 'bars' | 'heikin-ashi';
-type DrawingTool = 'none' | 'trendline' | 'horizontal' | 'fibonacci';
+type DrawingTool = 'none' | 'trendline' | 'horizontal' | 'fibonacci' | 'rectangle' | 'ray';
 
 interface TimeframeOption {
   label: string;
@@ -33,6 +35,8 @@ interface IndicatorConfig {
   type: 'overlay' | 'panel';
   enabled: boolean;
   color?: string;
+  secondaryColor?: string;
+  parameters: Record<string, number>;
 }
 
 interface MobileChartSettingsSheetProps {
@@ -47,6 +51,7 @@ interface MobileChartSettingsSheetProps {
   // Indicators
   indicators: IndicatorConfig[];
   onToggleIndicator: (id: string) => void;
+  onUpdateIndicatorParams: (id: string, params: Record<string, number>) => void;
   // Volume
   showVolume: boolean;
   onToggleVolume: () => void;
@@ -94,6 +99,8 @@ const DRAWING_TOOLS: { id: DrawingTool; name: string; icon: React.ReactNode; hin
   { id: 'trendline', name: 'Trend Line', icon: <TrendingUp className="w-5 h-5" />, hint: 'Click 2 points' },
   { id: 'horizontal', name: 'Horizontal', icon: <Minus className="w-5 h-5" />, hint: 'Click to place' },
   { id: 'fibonacci', name: 'Fibonacci', icon: <GitBranch className="w-5 h-5" />, hint: 'Click 2 points' },
+  { id: 'ray', name: 'Ray', icon: <TrendingUp className="w-5 h-5 rotate-45" />, hint: 'Extended line' },
+  { id: 'rectangle', name: 'Rectangle', icon: <BarChart3 className="w-5 h-5" />, hint: 'Click 2 corners' },
 ];
 
 type SettingsTab = 'main' | 'timeframe' | 'chartType' | 'indicators' | 'drawing';
@@ -107,6 +114,7 @@ function MobileChartSettingsSheetComponent({
   onChartTypeChange,
   indicators,
   onToggleIndicator,
+  onUpdateIndicatorParams,
   showVolume,
   onToggleVolume,
   drawingTool,
@@ -115,6 +123,7 @@ function MobileChartSettingsSheetComponent({
   onClearDrawings,
 }: MobileChartSettingsSheetProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('main');
+  const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
 
   const activeIndicatorCount = indicators.filter(i => i.enabled).length;
 
@@ -406,41 +415,81 @@ function MobileChartSettingsSheetComponent({
           {activeTab === 'indicators' && (
             <div className="space-y-1.5">
               {indicators.map((indicator) => (
-                <button
-                  key={indicator.id}
-                  onClick={() => onToggleIndicator(indicator.id)}
-                  className={cn(
-                    'w-full flex items-center justify-between p-2.5 rounded-lg transition-all',
-                    indicator.enabled
-                      ? 'bg-blue-500/20'
-                      : 'bg-[#252542] active:bg-[#2d2d52]'
+                <div key={indicator.id} className="rounded-lg overflow-hidden">
+                  <div
+                    className={cn(
+                      'flex items-center justify-between p-2.5 transition-all',
+                      indicator.enabled
+                        ? 'bg-blue-500/20'
+                        : 'bg-[#252542]'
+                    )}
+                  >
+                    <button
+                      onClick={() => onToggleIndicator(indicator.id)}
+                      className="flex items-center gap-2 flex-1"
+                    >
+                      <div
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: indicator.color }}
+                      />
+                      <span className={cn(
+                        'font-medium text-sm',
+                        indicator.enabled ? 'text-blue-400' : 'text-gray-300'
+                      )}>
+                        {indicator.name}
+                      </span>
+                      <span className="text-[10px] text-gray-500 uppercase">
+                        {indicator.type}
+                      </span>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      {Object.keys(indicator.parameters).length > 0 && (
+                        <button
+                          onClick={() => setExpandedIndicator(expandedIndicator === indicator.id ? null : indicator.id)}
+                          className={cn(
+                            'p-1.5 rounded-lg transition-colors',
+                            expandedIndicator === indicator.id ? 'bg-blue-500/30 text-blue-400' : 'bg-[#1a1a2e] text-gray-500'
+                          )}
+                        >
+                          <Settings className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onToggleIndicator(indicator.id)}
+                        className={cn(
+                          'w-10 h-6 rounded-full transition-colors relative flex-shrink-0',
+                          indicator.enabled ? 'bg-blue-500' : 'bg-gray-600'
+                        )}
+                      >
+                        <div className={cn(
+                          'absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform',
+                          indicator.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                        )} />
+                      </button>
+                    </div>
+                  </div>
+                  {expandedIndicator === indicator.id && Object.keys(indicator.parameters).length > 0 && (
+                    <div className="px-3 py-2 bg-[#151528] space-y-2 border-t border-[#2d2d44]">
+                      {Object.entries(indicator.parameters).map(([key, value]) => (
+                        <div key={key} className="flex items-center justify-between gap-2">
+                          <label className="text-xs text-gray-400 capitalize">{key}</label>
+                          <input
+                            type="number"
+                            value={value}
+                            onChange={(e) => {
+                              const newValue = parseInt(e.target.value) || 0;
+                              if (newValue > 0) {
+                                onUpdateIndicatorParams(indicator.id, { [key]: newValue });
+                              }
+                            }}
+                            className="w-20 px-2 py-1.5 text-sm bg-[#1a1a2e] border border-[#3d3d5c] rounded-lg text-gray-300 text-center focus:outline-none focus:border-blue-500"
+                            min="1"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   )}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: indicator.color }}
-                    />
-                    <span className={cn(
-                      'font-medium text-sm',
-                      indicator.enabled ? 'text-blue-400' : 'text-gray-300'
-                    )}>
-                      {indicator.name}
-                    </span>
-                    <span className="text-[10px] text-gray-500 uppercase">
-                      {indicator.type}
-                    </span>
-                  </div>
-                  <div className={cn(
-                    'w-10 h-6 rounded-full transition-colors relative',
-                    indicator.enabled ? 'bg-blue-500' : 'bg-gray-600'
-                  )}>
-                    <div className={cn(
-                      'absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform',
-                      indicator.enabled ? 'translate-x-4' : 'translate-x-0.5'
-                    )} />
-                  </div>
-                </button>
+                </div>
               ))}
             </div>
           )}

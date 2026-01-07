@@ -259,3 +259,270 @@ export function updateEMAWithCandle(
   const multiplier = 2 / (period + 1);
   return (newClose - prevEMA) * multiplier + prevEMA;
 }
+
+/**
+ * Stochastic Oscillator
+ * %K = 100 × (C - L14) / (H14 - L14)
+ * %D = SMA(%K, dSmooth)
+ */
+export interface StochasticPoint {
+  time: number;
+  k: number;
+  d: number;
+}
+
+export function calculateStochastic(
+  candles: CandleData[],
+  kPeriod: number = 14,
+  kSmooth: number = 3,
+  dSmooth: number = 3
+): StochasticPoint[] {
+  const result: StochasticPoint[] = [];
+  const minCandles = kPeriod + kSmooth + dSmooth - 2;
+
+  if (candles.length < minCandles) return result;
+
+  // Calculate raw %K values
+  const rawK: IndicatorPoint[] = [];
+  for (let i = kPeriod - 1; i < candles.length; i++) {
+    let highestHigh = -Infinity;
+    let lowestLow = Infinity;
+
+    for (let j = 0; j < kPeriod; j++) {
+      const candle = candles[i - j];
+      highestHigh = Math.max(highestHigh, candle.high);
+      lowestLow = Math.min(lowestLow, candle.low);
+    }
+
+    const range = highestHigh - lowestLow;
+    const k = range === 0 ? 50 : ((candles[i].close - lowestLow) / range) * 100;
+
+    rawK.push({ time: candles[i].time, value: k });
+  }
+
+  // Smooth %K with SMA
+  const smoothedK: IndicatorPoint[] = [];
+  for (let i = kSmooth - 1; i < rawK.length; i++) {
+    let sum = 0;
+    for (let j = 0; j < kSmooth; j++) {
+      sum += rawK[i - j].value;
+    }
+    smoothedK.push({ time: rawK[i].time, value: sum / kSmooth });
+  }
+
+  // Calculate %D (SMA of smoothed %K)
+  for (let i = dSmooth - 1; i < smoothedK.length; i++) {
+    let sum = 0;
+    for (let j = 0; j < dSmooth; j++) {
+      sum += smoothedK[i - j].value;
+    }
+    const d = sum / dSmooth;
+
+    result.push({
+      time: smoothedK[i].time,
+      k: smoothedK[i].value,
+      d: d,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Average True Range (ATR)
+ * TR = max(H-L, |H-Cprev|, |L-Cprev|)
+ * ATR = EMA of TR
+ */
+export function calculateATR(
+  candles: CandleData[],
+  period: number = 14
+): IndicatorPoint[] {
+  const result: IndicatorPoint[] = [];
+
+  if (candles.length < period + 1) return result;
+
+  // Calculate True Range for each candle
+  const trueRanges: number[] = [];
+  for (let i = 1; i < candles.length; i++) {
+    const current = candles[i];
+    const prev = candles[i - 1];
+
+    const highLow = current.high - current.low;
+    const highClose = Math.abs(current.high - prev.close);
+    const lowClose = Math.abs(current.low - prev.close);
+
+    trueRanges.push(Math.max(highLow, highClose, lowClose));
+  }
+
+  // First ATR is SMA of first 'period' true ranges
+  let atr = trueRanges.slice(0, period).reduce((a, b) => a + b, 0) / period;
+
+  result.push({
+    time: candles[period].time,
+    value: atr,
+  });
+
+  // Calculate subsequent ATRs using EMA smoothing
+  const multiplier = 2 / (period + 1);
+  for (let i = period; i < trueRanges.length; i++) {
+    atr = (trueRanges[i] - atr) * multiplier + atr;
+    result.push({
+      time: candles[i + 1].time,
+      value: atr,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Volume Weighted Average Price (VWAP)
+ * VWAP = Cumulative(TypicalPrice × Volume) / Cumulative(Volume)
+ * TypicalPrice = (High + Low + Close) / 3
+ */
+export interface CandleDataWithVolume extends CandleData {
+  volume: number;
+}
+
+export function calculateVWAP(candles: CandleDataWithVolume[]): IndicatorPoint[] {
+  const result: IndicatorPoint[] = [];
+
+  if (candles.length === 0) return result;
+
+  let cumulativeTPV = 0; // Cumulative (Typical Price × Volume)
+  let cumulativeVolume = 0;
+
+  for (let i = 0; i < candles.length; i++) {
+    const candle = candles[i];
+    const typicalPrice = (candle.high + candle.low + candle.close) / 3;
+    const volume = candle.volume || 1; // Default to 1 if no volume data
+
+    cumulativeTPV += typicalPrice * volume;
+    cumulativeVolume += volume;
+
+    const vwap = cumulativeVolume > 0 ? cumulativeTPV / cumulativeVolume : typicalPrice;
+
+    result.push({
+      time: candle.time,
+      value: vwap,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Ichimoku Cloud (Ichimoku Kinko Hyo)
+ *
+ * Components:
+ * - Tenkan-sen (Conversion Line): (9-period high + 9-period low) / 2
+ * - Kijun-sen (Base Line): (26-period high + 26-period low) / 2
+ * - Senkou Span A (Leading Span A): (Tenkan + Kijun) / 2, plotted 26 periods ahead
+ * - Senkou Span B (Leading Span B): (52-period high + 52-period low) / 2, plotted 26 periods ahead
+ * - Chikou Span (Lagging Span): Close plotted 26 periods behind
+ */
+export interface IchimokuPoint {
+  time: number;
+  tenkan: number;
+  kijun: number;
+  senkouA: number;
+  senkouB: number;
+  chikou: number;
+}
+
+function getHighLowAverage(candles: CandleData[], endIndex: number, period: number): number {
+  let highest = -Infinity;
+  let lowest = Infinity;
+
+  const startIndex = Math.max(0, endIndex - period + 1);
+  for (let i = startIndex; i <= endIndex; i++) {
+    highest = Math.max(highest, candles[i].high);
+    lowest = Math.min(lowest, candles[i].low);
+  }
+
+  return (highest + lowest) / 2;
+}
+
+export function calculateIchimoku(
+  candles: CandleData[],
+  tenkanPeriod: number = 9,
+  kijunPeriod: number = 26,
+  senkouPeriod: number = 52
+): IchimokuPoint[] {
+  const result: IchimokuPoint[] = [];
+
+  // Need at least senkouPeriod candles to calculate all components
+  if (candles.length < senkouPeriod) return result;
+
+  // Calculate from senkouPeriod - 1 onwards
+  for (let i = senkouPeriod - 1; i < candles.length; i++) {
+    const tenkan = getHighLowAverage(candles, i, tenkanPeriod);
+    const kijun = getHighLowAverage(candles, i, kijunPeriod);
+    const senkouB = getHighLowAverage(candles, i, senkouPeriod);
+    const senkouA = (tenkan + kijun) / 2;
+
+    // Chikou is the current close (will be plotted 26 periods behind in the chart)
+    const chikou = candles[i].close;
+
+    result.push({
+      time: candles[i].time,
+      tenkan,
+      kijun,
+      senkouA,
+      senkouB,
+      chikou,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Get Ichimoku cloud data shifted for Senkou spans (plotted 26 periods ahead)
+ * Returns separate arrays for current display and future projection
+ */
+export interface IchimokuCloudData {
+  tenkan: IndicatorPoint[];
+  kijun: IndicatorPoint[];
+  senkouA: IndicatorPoint[];
+  senkouB: IndicatorPoint[];
+  chikou: IndicatorPoint[];
+}
+
+export function getIchimokuCloudData(
+  candles: CandleData[],
+  tenkanPeriod: number = 9,
+  kijunPeriod: number = 26,
+  senkouPeriod: number = 52,
+  displacement: number = 26
+): IchimokuCloudData {
+  const ichimoku = calculateIchimoku(candles, tenkanPeriod, kijunPeriod, senkouPeriod);
+
+  const tenkan: IndicatorPoint[] = [];
+  const kijun: IndicatorPoint[] = [];
+  const senkouA: IndicatorPoint[] = [];
+  const senkouB: IndicatorPoint[] = [];
+  const chikou: IndicatorPoint[] = [];
+
+  // Calculate the time interval between candles
+  const timeInterval = candles.length >= 2 ? candles[1].time - candles[0].time : 60;
+
+  for (let i = 0; i < ichimoku.length; i++) {
+    const point = ichimoku[i];
+
+    // Tenkan and Kijun at current time
+    tenkan.push({ time: point.time, value: point.tenkan });
+    kijun.push({ time: point.time, value: point.kijun });
+
+    // Senkou spans shifted forward by displacement periods
+    const futureTime = point.time + (displacement * timeInterval);
+    senkouA.push({ time: futureTime, value: point.senkouA });
+    senkouB.push({ time: futureTime, value: point.senkouB });
+
+    // Chikou shifted backward by displacement periods
+    const pastTime = point.time - (displacement * timeInterval);
+    chikou.push({ time: pastTime, value: point.chikou });
+  }
+
+  return { tenkan, kijun, senkouA, senkouB, chikou };
+}

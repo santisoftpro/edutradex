@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowUp, ArrowDown, DollarSign, Zap, Edit3, Loader2 } from 'lucide-react';
+import { ArrowUp, ArrowDown, DollarSign, Zap, Edit3, Loader2, AlertCircle } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { getDefaultTradeAmount } from '@/lib/settings';
+import { validateTrade } from '@/schemas/trade.schema';
 
 interface TradingPanelProps {
   balance: number;
@@ -56,8 +57,10 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
   const [customSeconds, setCustomSeconds] = useState(0);
 
   const potentialProfit = amount * (payoutPercent / 100);
-  const insufficientBalance = amount > balance;
-  const invalidAmount = amount <= 0;
+
+  // Use Zod validation
+  const validation = validateTrade(amount, duration, balance);
+  const canTrade = validation.valid && !isLoading;
 
   const handleDurationChange = (newDuration: number) => {
     setDuration(newDuration);
@@ -67,7 +70,7 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
   };
 
   const handleTrade = (direction: 'UP' | 'DOWN') => {
-    if (amount > 0 && amount <= balance) {
+    if (canTrade) {
       onTrade(direction, amount, duration);
     }
   };
@@ -227,11 +230,12 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
             <span className="text-[#1079ff] text-xs font-bold">{formatCurrency(balance)}</span>
           </div>
 
-          {/* Balance Warning */}
-          {insufficientBalance && (
-            <div className="mt-2 py-1.5 px-2 bg-red-500/10 border border-red-500/30 rounded-lg">
+          {/* Validation Error */}
+          {!validation.valid && validation.error && (
+            <div className="mt-2 py-1.5 px-2 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-1.5">
+              <AlertCircle className="h-3 w-3 text-red-400 shrink-0" />
               <span className="text-red-400 text-[10px] font-medium">
-                Insufficient balance
+                {validation.error}
               </span>
             </div>
           )}
@@ -263,7 +267,7 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
       <div className="p-3 border-t border-[#2d2d44] space-y-2 flex-shrink-0">
         <button
           onClick={() => handleTrade('UP')}
-          disabled={isLoading || amount > balance || amount <= 0}
+          disabled={!canTrade}
           className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-emerald-900 disabled:to-emerald-900 disabled:cursor-not-allowed rounded-lg font-bold text-white text-sm flex items-center justify-center gap-1.5 transition-all duration-200 shadow-lg shadow-emerald-900/50 hover:shadow-emerald-500/40 active:scale-[0.98] group"
         >
           {isLoading ? (
@@ -278,7 +282,7 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
 
         <button
           onClick={() => handleTrade('DOWN')}
-          disabled={isLoading || amount > balance || amount <= 0}
+          disabled={!canTrade}
           className="w-full py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:from-red-900 disabled:to-red-900 disabled:cursor-not-allowed rounded-lg font-bold text-white text-sm flex items-center justify-center gap-1.5 transition-all duration-200 shadow-lg shadow-red-900/50 hover:shadow-red-500/40 active:scale-[0.98] group"
         >
           {isLoading ? (

@@ -6,7 +6,6 @@ import Link from 'next/link';
 import {
   Shield,
   LogOut,
-  User,
   ChevronDown,
   Bell,
   Menu,
@@ -15,15 +14,13 @@ import {
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
 import { api } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import { UserAvatar, Dropdown, DropdownItem, DropdownHeader, Badge } from '@/components/ui';
 
 export function AdminHeader() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
-  const [showDropdown, setShowDropdown] = useState(false);
   const [pendingDeposits, setPendingDeposits] = useState(0);
   const [pendingWithdrawals, setPendingWithdrawals] = useState(0);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const totalPending = pendingDeposits + pendingWithdrawals;
@@ -73,121 +70,95 @@ export function AdminHeader() {
       {/* Desktop Actions */}
       <div className="hidden md:flex items-center gap-4">
         {/* Notification Bell */}
-        <div className="relative">
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-          >
-            <Bell className="h-5 w-5" />
+        <Dropdown
+          contentClassName="w-72"
+          trigger={
+            <button className="relative p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
+              <Bell className="h-5 w-5" />
+              {totalPending > 0 && (
+                <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-pulse">
+                  {totalPending > 9 ? '9+' : totalPending}
+                </span>
+              )}
+            </button>
+          }
+        >
+          <DropdownHeader className="flex items-center justify-between">
+            <span className="font-semibold text-white">Notifications</span>
             {totalPending > 0 && (
-              <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-pulse">
-                {totalPending > 9 ? '9+' : totalPending}
-              </span>
+              <Badge variant="error" size="sm">{totalPending} pending</Badge>
             )}
-          </button>
-
-          {showNotifications && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowNotifications(false)} />
-              <div className="absolute right-0 top-full mt-2 w-72 bg-slate-700 rounded-lg shadow-lg border border-slate-600 z-20 overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-600 flex items-center justify-between">
-                  <span className="font-semibold text-white">Notifications</span>
-                  {totalPending > 0 && (
-                    <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                      {totalPending} pending
-                    </span>
-                  )}
-                </div>
-                {totalPending > 0 ? (
-                  <div className="divide-y divide-slate-600">
-                    {pendingDeposits > 0 && (
-                      <Link
-                        href="/admin/deposits"
-                        onClick={() => setShowNotifications(false)}
-                        className="block p-4 hover:bg-slate-600 transition-colors"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 bg-amber-900/50 rounded-lg shrink-0">
-                            <Bell className="h-4 w-4 text-amber-400" />
-                          </div>
-                          <div>
-                            <p className="text-white font-medium">Pending Deposits</p>
-                            <p className="text-sm text-slate-400 mt-0.5">
-                              {pendingDeposits} deposit{pendingDeposits > 1 ? 's' : ''} awaiting approval
-                            </p>
-                          </div>
-                        </div>
-                      </Link>
-                    )}
-                    {pendingWithdrawals > 0 && (
-                      <Link
-                        href="/admin/withdrawals"
-                        onClick={() => setShowNotifications(false)}
-                        className="block p-4 hover:bg-slate-600 transition-colors"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 bg-purple-900/50 rounded-lg shrink-0">
-                            <Bell className="h-4 w-4 text-purple-400" />
-                          </div>
-                          <div>
-                            <p className="text-white font-medium">Pending Withdrawals</p>
-                            <p className="text-sm text-slate-400 mt-0.5">
-                              {pendingWithdrawals} withdrawal{pendingWithdrawals > 1 ? 's' : ''} awaiting approval
-                            </p>
-                          </div>
-                        </div>
-                      </Link>
-                    )}
+          </DropdownHeader>
+          {totalPending > 0 ? (
+            <div className="divide-y divide-slate-600">
+              {pendingDeposits > 0 && (
+                <Link
+                  href="/admin/deposits"
+                  className="block p-4 hover:bg-slate-600 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-amber-900/50 rounded-lg shrink-0">
+                      <Bell className="h-4 w-4 text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="text-white font-medium">Pending Deposits</p>
+                      <p className="text-sm text-slate-400 mt-0.5">
+                        {pendingDeposits} deposit{pendingDeposits > 1 ? 's' : ''} awaiting approval
+                      </p>
+                    </div>
                   </div>
-                ) : (
-                  <div className="p-4 text-center text-slate-400">
-                    No pending notifications
+                </Link>
+              )}
+              {pendingWithdrawals > 0 && (
+                <Link
+                  href="/admin/withdrawals"
+                  className="block p-4 hover:bg-slate-600 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-purple-900/50 rounded-lg shrink-0">
+                      <Bell className="h-4 w-4 text-purple-400" />
+                    </div>
+                    <div>
+                      <p className="text-white font-medium">Pending Withdrawals</p>
+                      <p className="text-sm text-slate-400 mt-0.5">
+                        {pendingWithdrawals} withdrawal{pendingWithdrawals > 1 ? 's' : ''} awaiting approval
+                      </p>
+                    </div>
                   </div>
-                )}
-              </div>
-            </>
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="p-4 text-center text-slate-400">
+              No pending notifications
+            </div>
           )}
-        </div>
+        </Dropdown>
 
         <div className="hidden lg:flex items-center gap-2 bg-red-900/30 border border-red-900/50 rounded-lg px-4 py-2">
           <span className="text-red-400 font-medium text-sm">Administrator</span>
         </div>
 
-        <div className="relative">
-          <button
-            onClick={() => setShowDropdown(!showDropdown)}
-            className="flex items-center gap-2 hover:bg-slate-700 rounded-lg px-3 py-2 transition-colors"
-          >
-            <div className="h-8 w-8 bg-red-600 rounded-full flex items-center justify-center">
-              <User className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-white font-medium">{user.name}</span>
-            <ChevronDown className="h-4 w-4 text-slate-400" />
-          </button>
-
-          {showDropdown && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowDropdown(false)}
-              />
-              <div className="absolute right-0 top-full mt-2 w-48 bg-slate-700 rounded-lg shadow-lg border border-slate-600 py-2 z-20">
-                <div className="px-4 py-2 border-b border-slate-600">
-                  <p className="text-sm text-slate-400">Signed in as</p>
-                  <p className="text-white font-medium truncate">{user.email}</p>
-                  <p className="text-xs text-red-400 mt-1">Admin Account</p>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-left text-red-400 hover:bg-slate-600 transition-colors"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sign Out
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        <Dropdown
+          contentClassName="w-48"
+          trigger={
+            <button className="flex items-center gap-2 hover:bg-slate-700 rounded-lg px-3 py-2 transition-colors">
+              <UserAvatar variant="admin" size="sm" />
+              <span className="text-white font-medium">{user.name}</span>
+              <ChevronDown className="h-4 w-4 text-slate-400" />
+            </button>
+          }
+        >
+          <DropdownHeader>
+            <p className="text-sm text-slate-400">Signed in as</p>
+            <p className="text-white font-medium truncate">{user.email}</p>
+            <p className="text-xs text-red-400 mt-1">Admin Account</p>
+          </DropdownHeader>
+          <DropdownItem onClick={handleLogout} variant="danger">
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </DropdownItem>
+        </Dropdown>
       </div>
 
       {/* Mobile Menu Overlay */}
@@ -208,9 +179,9 @@ export function AdminHeader() {
                     <p className="text-white font-medium">Pending Deposits</p>
                     <p className="text-xs text-amber-400">{pendingDeposits} awaiting approval</p>
                   </div>
-                  <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+                  <Badge variant="error" size="sm" className="animate-pulse">
                     {pendingDeposits}
-                  </span>
+                  </Badge>
                 </Link>
               )}
 
@@ -226,23 +197,21 @@ export function AdminHeader() {
                     <p className="text-white font-medium">Pending Withdrawals</p>
                     <p className="text-xs text-purple-400">{pendingWithdrawals} awaiting approval</p>
                   </div>
-                  <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+                  <Badge variant="error" size="sm" className="animate-pulse">
                     {pendingWithdrawals}
-                  </span>
+                  </Badge>
                 </Link>
               )}
 
               {/* User Info */}
               <div className="p-3 bg-slate-700/50 rounded-lg">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 bg-red-600 rounded-full flex items-center justify-center">
-                    <User className="h-5 w-5 text-white" />
-                  </div>
+                  <UserAvatar variant="admin" size="md" />
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-medium truncate">{user.name}</p>
                     <p className="text-xs text-slate-400 truncate">{user.email}</p>
                   </div>
-                  <span className="text-xs bg-red-900/50 text-red-400 px-2 py-1 rounded">Admin</span>
+                  <Badge variant="admin" size="sm">Admin</Badge>
                 </div>
               </div>
 

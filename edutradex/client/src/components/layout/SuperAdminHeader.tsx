@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Crown,
   LogOut,
-  User,
   ChevronDown,
   Menu,
   X,
@@ -13,12 +13,11 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
-import Link from 'next/link';
+import { UserAvatar, Dropdown, DropdownItem, DropdownHeader, Badge } from '@/components/ui';
 
 export function SuperAdminHeader() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
-  const [showDropdown, setShowDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const handleLogout = () => {
@@ -51,49 +50,30 @@ export function SuperAdminHeader() {
           <span className="text-amber-400 font-medium text-sm">SuperAdmin</span>
         </div>
 
-        <div className="relative">
-          <button
-            onClick={() => setShowDropdown(!showDropdown)}
-            className="flex items-center gap-2 hover:bg-slate-700 rounded-lg px-3 py-2 transition-colors"
-          >
-            <div className="h-8 w-8 bg-amber-600 rounded-full flex items-center justify-center">
-              <Crown className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-white font-medium">{user.name}</span>
-            <ChevronDown className="h-4 w-4 text-slate-400" />
-          </button>
-
-          {showDropdown && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowDropdown(false)}
-              />
-              <div className="absolute right-0 top-full mt-2 w-48 bg-slate-700 rounded-lg shadow-lg border border-slate-600 py-2 z-20">
-                <div className="px-4 py-2 border-b border-slate-600">
-                  <p className="text-sm text-slate-400">Signed in as</p>
-                  <p className="text-white font-medium truncate">{user.email}</p>
-                  <p className="text-xs text-amber-400 mt-1">SuperAdmin Account</p>
-                </div>
-                <Link
-                  href="/admin"
-                  className="w-full flex items-center gap-2 px-4 py-2 text-left text-slate-300 hover:bg-slate-600 transition-colors"
-                  onClick={() => setShowDropdown(false)}
-                >
-                  <Shield className="h-4 w-4" />
-                  Admin Panel
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-left text-red-400 hover:bg-slate-600 transition-colors"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sign Out
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        <Dropdown
+          contentClassName="w-48"
+          trigger={
+            <button className="flex items-center gap-2 hover:bg-slate-700 rounded-lg px-3 py-2 transition-colors">
+              <UserAvatar variant="superadmin" size="sm" />
+              <span className="text-white font-medium">{user.name}</span>
+              <ChevronDown className="h-4 w-4 text-slate-400" />
+            </button>
+          }
+        >
+          <DropdownHeader>
+            <p className="text-sm text-slate-400">Signed in as</p>
+            <p className="text-white font-medium truncate">{user.email}</p>
+            <p className="text-xs text-amber-400 mt-1">SuperAdmin Account</p>
+          </DropdownHeader>
+          <DropdownItem href="/admin">
+            <Shield className="h-4 w-4" />
+            Admin Panel
+          </DropdownItem>
+          <DropdownItem onClick={handleLogout} variant="danger">
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </DropdownItem>
+        </Dropdown>
       </div>
 
       {/* Mobile Menu Overlay */}
@@ -105,14 +85,12 @@ export function SuperAdminHeader() {
               {/* User Info */}
               <div className="p-3 bg-slate-700/50 rounded-lg">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 bg-amber-600 rounded-full flex items-center justify-center">
-                    <Crown className="h-5 w-5 text-white" />
-                  </div>
+                  <UserAvatar variant="superadmin" size="md" />
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-medium truncate">{user.name}</p>
                     <p className="text-xs text-slate-400 truncate">{user.email}</p>
                   </div>
-                  <span className="text-xs bg-amber-900/50 text-amber-400 px-2 py-1 rounded">SuperAdmin</span>
+                  <Badge variant="superadmin" size="sm">SuperAdmin</Badge>
                 </div>
               </div>
 

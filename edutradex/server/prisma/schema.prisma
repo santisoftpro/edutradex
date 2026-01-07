@@ -132,6 +132,8 @@ model Trade {
   @@index([userId, openedAt])
   @@index([status, result])
   @@index([closedAt])
+  // Composite index for scheduler query: WHERE status = 'OPEN' AND expiresAt <= NOW()
+  @@index([status, expiresAt], name: "idx_trade_status_expires")
 }
 
 model Session {
@@ -411,6 +413,8 @@ model PendingCopyTrade {
   @@index([followerId])
   @@index([status])
   @@index([expiresAt])
+  // Composite index for expiry queries: WHERE status = 'PENDING' AND expiresAt < NOW()
+  @@index([status, expiresAt], name: "idx_pending_copy_status_expires")
 }
 
 model ReferralCommission {
@@ -973,15 +977,17 @@ model AdminSession {
 // Token Blacklist - For invalidating tokens before expiry
 model TokenBlacklist {
   id          String    @id @default(uuid())
-  tokenHash   String    @unique  // Hashed token (we don't store raw tokens)
+  tokenHash   String    @unique  // Hashed token (we don't store raw tokens) - @unique creates index automatically
   userId      String
   reason      String    // LOGOUT, SESSION_TERMINATED, SECURITY_BREACH, PASSWORD_CHANGED, IMPERSONATION_ENDED
   expiresAt   DateTime  // When the token would have expired anyway (for cleanup)
   createdAt   DateTime  @default(now())
 
-  @@index([tokenHash])
+  // Composite index for the most frequent query: WHERE tokenHash = ? AND expiresAt > NOW()
+  // This allows PostgreSQL to use a single index scan instead of filtering
+  @@index([tokenHash, expiresAt], name: "idx_token_blacklist_hash_expiry")
   @@index([userId])
-  @@index([expiresAt])
+  @@index([expiresAt])  // For cleanup queries: DELETE WHERE expiresAt < NOW()
 }
 
 // ==========================================

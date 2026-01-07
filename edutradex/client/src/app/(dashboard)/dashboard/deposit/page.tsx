@@ -23,6 +23,8 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { useDepositUpdates } from '@/hooks/useDepositUpdates';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import { createDepositSchema } from '@/schemas/deposit.schema';
 import type { Deposit, PaymentMethod as PaymentMethodType } from '@/types';
 
 type Step = 1 | 2 | 3;
@@ -159,6 +161,17 @@ export default function DepositPage() {
   const [amount, setAmount] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
 
+  // Create dynamic schema based on selected payment method
+  const depositSchema = selectedMethod
+    ? createDepositSchema(
+        selectedMethod.minAmount || 1,
+        selectedMethod.maxAmount || 100000,
+        selectedMethod.type === 'MOBILE_MONEY'
+      )
+    : createDepositSchema(1, 100000, false);
+
+  const { errors, validate, clearErrors } = useFormValidation(depositSchema);
+
   const balance = user?.demoBalance || 0;
 
   const filteredMethods = paymentMethods.filter(method => {
@@ -234,8 +247,21 @@ export default function DepositPage() {
     if (!selectedMethod) return;
 
     const amountNum = parseFloat(amount);
-    if (isNaN(amountNum) || amountNum < selectedMethod.minAmount) {
-      toast.error(`Minimum deposit is $${selectedMethod.minAmount}`);
+
+    // Build validation data
+    const validationData: Record<string, unknown> = { amount: amountNum };
+    if (selectedMethod.type === 'MOBILE_MONEY') {
+      validationData.phone = phoneNumber;
+    }
+
+    // Validate with Zod
+    const result = validate(validationData);
+    if (!result.success) {
+      // Show first error as toast
+      const firstError = Object.values(result.errors || {})[0];
+      if (firstError) {
+        toast.error(firstError);
+      }
       return;
     }
 
@@ -243,11 +269,6 @@ export default function DepositPage() {
     try {
       let depositResult;
       if (selectedMethod.type === 'MOBILE_MONEY') {
-        if (!phoneNumber || phoneNumber.length < 10) {
-          toast.error('Please enter a valid phone number');
-          setIsSubmitting(false);
-          return;
-        }
         depositResult = await api.createMobileMoneyDeposit({
           amount: amountNum,
           phoneNumber,
@@ -267,6 +288,7 @@ export default function DepositPage() {
 
       setStep(3);
       toast.success('Deposit request submitted!');
+      clearErrors();
       fetchData();
       refreshProfile();
     } catch (error) {
@@ -463,9 +485,15 @@ export default function DepositPage() {
                       onChange={(e) => setAmount(e.target.value)}
                       placeholder="0.00"
                       min={selectedMethod.minAmount}
-                      className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-base sm:text-lg placeholder-slate-600 focus:outline-none focus:border-[#1079ff]"
+                      className={cn(
+                        "w-full px-3 py-2 sm:py-2.5 bg-slate-900 border rounded-lg text-white text-base sm:text-lg placeholder-slate-600 focus:outline-none focus:border-[#1079ff]",
+                        errors.amount ? "border-red-500" : "border-slate-700"
+                      )}
                       required
                     />
+                    {errors.amount && (
+                      <p className="mt-1 text-xs text-red-400">{errors.amount}</p>
+                    )}
                     <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
                       {QUICK_AMOUNTS.filter(a => a >= selectedMethod.minAmount).map((quickAmount) => (
                         <button
@@ -495,9 +523,15 @@ export default function DepositPage() {
                           value={phoneNumber}
                           onChange={(e) => setPhoneNumber(e.target.value)}
                           placeholder="+255 7XX XXX XXX"
-                          className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-[#1079ff]"
+                          className={cn(
+                            "w-full px-3 py-2 sm:py-2.5 bg-slate-900 border rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-[#1079ff]",
+                            errors.phone ? "border-red-500" : "border-slate-700"
+                          )}
                           required
                         />
+                        {errors.phone && (
+                          <p className="mt-1 text-xs text-red-400">{errors.phone}</p>
+                        )}
                       </div>
 
                       {/* Payment Instructions */}

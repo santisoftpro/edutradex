@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
   LogOut,
-  User,
   ChevronDown,
   Wallet,
   Menu,
@@ -22,7 +21,6 @@ import {
   Users,
   Receipt,
   Gift,
-  TrendingUp,
   BadgeDollarSign,
   UserCircle,
 } from 'lucide-react';
@@ -31,6 +29,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { formatCurrency, cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { AccountSwitcher } from '@/components/trading/AccountSwitcher';
+import { UserAvatar, Dropdown, DropdownItem, DropdownDivider, Badge } from '@/components/ui';
 
 interface NavSection {
   title: string;
@@ -92,30 +91,12 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout, getActiveBalance } = useAuthStore();
-  const [showDropdown, setShowDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
   const balance = getActiveBalance();
   const isLiveMode = user?.activeAccountType === 'LIVE';
   const hideLogoOnMobile = pathname?.startsWith('/dashboard/trade');
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
-    };
-
-    if (showDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showDropdown]);
 
   const handleLogout = () => {
     logout();
@@ -174,12 +155,9 @@ export function Header() {
               <span className="text-white font-semibold text-sm">
                 {formatCurrency(balance)}
               </span>
-              <span className={cn(
-                'text-[10px] font-bold px-1 py-0.5 rounded',
-                isLiveMode ? 'bg-emerald-500/30 text-emerald-300' : 'bg-amber-500/30 text-amber-300'
-              )}>
+              <Badge variant={isLiveMode ? 'live' : 'demo'} size="xs">
                 {isLiveMode ? 'LIVE' : 'DEMO'}
-              </span>
+              </Badge>
             </div>
           </div>
 
@@ -199,87 +177,57 @@ export function Header() {
           <NotificationBell />
 
           {/* Profile Dropdown */}
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setShowDropdown(!showDropdown)}
-              className={cn(
-                'flex items-center gap-2 rounded-xl px-2 md:px-3 py-1.5 transition-all duration-200',
-                showDropdown
-                  ? 'bg-slate-700 ring-2 ring-[#1079ff]/30'
-                  : 'hover:bg-slate-700/50'
-              )}
-            >
-              <div className="h-8 w-8 bg-gradient-to-br from-[#1079ff] to-[#092ab2] rounded-full flex items-center justify-center shadow-lg shadow-[#1079ff]/20">
-                <User className="h-4 w-4 text-white" />
-              </div>
-              <span className="hidden md:block text-white font-medium text-sm max-w-[120px] truncate">
-                {user.name}
-              </span>
-              <ChevronDown className={cn(
-                'hidden md:block h-4 w-4 text-slate-400 transition-transform duration-200',
-                showDropdown && 'rotate-180'
-              )} />
-            </button>
-
-            {showDropdown && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-slate-800 rounded-xl shadow-xl border border-slate-700/50 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                {/* User Info Section */}
-                <div className="p-4 bg-gradient-to-br from-slate-700/50 to-slate-800/50 border-b border-slate-700/50">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 bg-gradient-to-br from-[#1079ff] to-[#092ab2] rounded-full flex items-center justify-center shadow-lg shadow-[#1079ff]/20">
-                      <User className="h-6 w-6 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white font-semibold truncate">{user.name}</p>
-                      <p className="text-sm text-slate-400 truncate">{user.email}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Links */}
-                <div className="p-2">
-                  <Link
-                    href="/dashboard/profile"
-                    onClick={() => setShowDropdown(false)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-700/50 hover:text-white transition-colors"
-                  >
-                    <UserCircle className="h-4 w-4" />
-                    <span className="text-sm font-medium">View Profile</span>
-                  </Link>
-                  <Link
-                    href="/dashboard/settings"
-                    onClick={() => setShowDropdown(false)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-700/50 hover:text-white transition-colors"
-                  >
-                    <Settings className="h-4 w-4" />
-                    <span className="text-sm font-medium">Settings</span>
-                  </Link>
-                  <Link
-                    href="/dashboard/support"
-                    onClick={() => setShowDropdown(false)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-700/50 hover:text-white transition-colors"
-                  >
-                    <HelpCircle className="h-4 w-4" />
-                    <span className="text-sm font-medium">Help & Support</span>
-                  </Link>
-                </div>
-
-                {/* Logout */}
-                <div className="p-2 border-t border-slate-700/50">
-                  <button
-                    onClick={() => {
-                      setShowDropdown(false);
-                      handleLogout();
-                    }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-400 hover:bg-red-900/20 transition-colors"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    <span className="text-sm font-medium">Sign Out</span>
-                  </button>
+          <Dropdown
+            contentClassName="w-64"
+            trigger={
+              <button
+                className="flex items-center gap-2 rounded-xl px-2 md:px-3 py-1.5 transition-all duration-200 hover:bg-slate-700/50"
+              >
+                <UserAvatar variant="user" size="sm" />
+                <span className="hidden md:block text-white font-medium text-sm max-w-[120px] truncate">
+                  {user.name}
+                </span>
+                <ChevronDown className="hidden md:block h-4 w-4 text-slate-400" />
+              </button>
+            }
+          >
+            {/* User Info Section */}
+            <div className="p-4 bg-gradient-to-br from-slate-700/50 to-slate-800/50 border-b border-slate-700/50">
+              <div className="flex items-center gap-3">
+                <UserAvatar variant="user" size="lg" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-semibold truncate">{user.name}</p>
+                  <p className="text-sm text-slate-400 truncate">{user.email}</p>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+
+            {/* Quick Links */}
+            <div className="p-2">
+              <DropdownItem href="/dashboard/profile">
+                <UserCircle className="h-4 w-4" />
+                <span className="text-sm font-medium">View Profile</span>
+              </DropdownItem>
+              <DropdownItem href="/dashboard/settings">
+                <Settings className="h-4 w-4" />
+                <span className="text-sm font-medium">Settings</span>
+              </DropdownItem>
+              <DropdownItem href="/dashboard/support">
+                <HelpCircle className="h-4 w-4" />
+                <span className="text-sm font-medium">Help & Support</span>
+              </DropdownItem>
+            </div>
+
+            <DropdownDivider />
+
+            {/* Logout */}
+            <div className="p-2">
+              <DropdownItem onClick={handleLogout} variant="danger">
+                <LogOut className="h-4 w-4" />
+                <span className="text-sm font-medium">Sign Out</span>
+              </DropdownItem>
+            </div>
+          </Dropdown>
         </div>
       </header>
 
@@ -291,7 +239,7 @@ export function Header() {
             onClick={() => setShowMobileMenu(false)}
           />
 
-          <div className="fixed inset-y-0 left-0 w-80 max-w-[85vw] bg-gradient-to-b from-slate-800 to-slate-900 z-50 md:hidden flex flex-col animate-slide-in shadow-2xl">
+          <div className="fixed inset-y-0 left-0 w-80 max-w-[85vw] bg-gradient-to-b from-slate-800 to-slate-900 z-50 md:hidden flex flex-col animate-slide-in-left shadow-2xl">
             {/* Menu Header */}
             <div className="flex items-center justify-between h-16 px-4 border-b border-slate-700/50">
               <Link
@@ -314,9 +262,7 @@ export function Header() {
             {/* User Profile Card */}
             <div className="mx-4 mt-4 rounded-xl bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600/30 p-4">
               <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#1079ff] to-[#092ab2] flex items-center justify-center shadow-lg shadow-[#1079ff]/20">
-                  <User className="h-6 w-6 text-white" />
-                </div>
+                <UserAvatar variant="user" size="lg" />
                 <div className="flex-1 min-w-0">
                   <p className="text-white font-semibold truncate">{user.name}</p>
                   <p className="text-sm text-slate-400 truncate">{user.email}</p>
@@ -332,12 +278,9 @@ export function Header() {
               )}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-slate-400 font-medium">Available Balance</span>
-                  <span className={cn(
-                    'text-[10px] font-bold px-1.5 py-0.5 rounded',
-                    isLiveMode ? 'bg-emerald-500/30 text-emerald-300' : 'bg-amber-500/30 text-amber-300'
-                  )}>
+                  <Badge variant={isLiveMode ? 'live' : 'demo'} size="xs">
                     {isLiveMode ? 'LIVE' : 'DEMO'}
-                  </span>
+                  </Badge>
                 </div>
                 <p className={cn(
                   'mt-1 text-xl font-bold tracking-tight',
@@ -448,20 +391,6 @@ export function Header() {
           </div>
         </>
       )}
-
-      <style jsx global>{`
-        @keyframes slide-in {
-          from {
-            transform: translateX(-100%);
-          }
-          to {
-            transform: translateX(0);
-          }
-        }
-        .animate-slide-in {
-          animation: slide-in 0.25s ease-out;
-        }
-      `}</style>
     </>
   );
 }

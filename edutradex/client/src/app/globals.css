@@ -298,3 +298,69 @@ div[style*="position: absolute"][style*="inset: 0px"][style*="pointer-events: no
 .price-transition {
   transition: color 0.15s ease-out;
 }
+
+/* ============================================
+   CANDLESTICK LOADER ANIMATIONS
+   ============================================ */
+
+@keyframes candle-pulse-1 {
+  0%, 100% { transform: scaleY(1); opacity: 0.7; }
+  50% { transform: scaleY(1.15); opacity: 1; }
+}
+
+@keyframes candle-pulse-2 {
+  0%, 100% { transform: scaleY(1); opacity: 0.7; }
+  50% { transform: scaleY(0.85); opacity: 1; }
+}
+
+@keyframes candle-pulse-3 {
+  0%, 100% { transform: scaleY(1); opacity: 0.7; }
+  50% { transform: scaleY(1.2); opacity: 1; }
+}
+
+@keyframes candle-pulse-4 {
+  0%, 100% { transform: scaleY(1); opacity: 0.7; }
+  50% { transform: scaleY(0.9); opacity: 1; }
+}
+
+@keyframes candle-pulse-5 {
+  0%, 100% { transform: scaleY(1); opacity: 0.7; }
+  50% { transform: scaleY(1.1); opacity: 1; }
+}
+
+.animate-candle-1 {
+  animation: candle-pulse-1 1.2s ease-in-out infinite;
+}
+
+.animate-candle-2 {
+  animation: candle-pulse-2 1.2s ease-in-out infinite 0.15s;
+}
+
+.animate-candle-3 {
+  animation: candle-pulse-3 1.2s ease-in-out infinite 0.3s;
+}
+
+.animate-candle-4 {
+  animation: candle-pulse-4 1.2s ease-in-out infinite 0.45s;
+}
+
+.animate-candle-5 {
+  animation: candle-pulse-5 1.2s ease-in-out infinite 0.6s;
+}
+
+/* ============================================
+   SLIDE ANIMATIONS
+   ============================================ */
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.25s ease-out;
+}

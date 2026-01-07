@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Smartphone,
   Bitcoin,
@@ -20,6 +20,8 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { useWithdrawalUpdates } from '@/hooks/useWithdrawalUpdates';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import { createWithdrawalSchema } from '@/schemas/withdrawal.schema';
 import type { Withdrawal, PaymentMethod as PaymentMethodType } from '@/types';
 
 type Step = 1 | 2 | 3 | 4;
@@ -214,6 +216,19 @@ export default function WithdrawPage() {
 
   const balance = user?.demoBalance || 0;
 
+  // Create dynamic schema based on deposit method and balance
+  const isMobileMoneyMethod = depositMethod?.type === 'MOBILE_MONEY' || !!depositMethod?.mobileProvider;
+  const withdrawalSchema = useMemo(() => {
+    return createWithdrawalSchema(
+      depositMethod?.minAmount || 1,
+      depositMethod?.maxAmount || 100000,
+      balance,
+      isMobileMoneyMethod
+    );
+  }, [depositMethod?.minAmount, depositMethod?.maxAmount, balance, isMobileMoneyMethod]);
+
+  const { errors, validate } = useFormValidation(withdrawalSchema);
+
   const getQuickAmounts = () => {
     if (balance <= 0) return [];
     const amounts = [];
@@ -306,36 +321,34 @@ export default function WithdrawPage() {
     }
   }, [resendCountdown]);
 
-  const isMobileMoney = depositMethod?.type === 'MOBILE_MONEY' || depositMethod?.mobileProvider;
-
   const validateForm = (): boolean => {
     if (!depositMethod) return false;
 
     const amountNum = parseFloat(amount);
-    if (isNaN(amountNum) || amountNum < (depositMethod.minAmount || 1)) {
-      toast.error(`Minimum withdrawal is $${depositMethod.minAmount || 1}`);
-      return false;
-    }
 
-    if (amountNum > balance) {
-      toast.error('Insufficient balance');
-      return false;
-    }
-
-    if (isMobileMoney) {
-      if (!phoneNumber || phoneNumber.length < 10) {
-        toast.error('Please enter a valid phone number');
-        return false;
-      }
+    // Build validation data
+    const validationData: Record<string, unknown> = { amount: amountNum };
+    if (isMobileMoneyMethod) {
+      validationData.phone = phoneNumber;
     } else {
-      if (!walletAddress || walletAddress.length < 20) {
-        toast.error('Please enter a valid wallet address');
-        return false;
+      validationData.walletAddress = walletAddress;
+    }
+
+    // Validate with Zod
+    const result = validate(validationData);
+    if (!result.success) {
+      // Show first error as toast
+      const firstError = Object.values(result.errors || {})[0];
+      if (firstError) {
+        toast.error(firstError);
       }
-      if (!depositMethod.network) {
-        toast.error('Network information is missing. Please contact support.');
-        return false;
-      }
+      return false;
+    }
+
+    // Additional check for network (not in schema since it's from payment method)
+    if (!isMobileMoneyMethod && !depositMethod.network) {
+      toast.error('Network information is missing. Please contact support.');
+      return false;
     }
 
     return true;
@@ -398,7 +411,7 @@ export default function WithdrawPage() {
       setIsSubmitting(true);
 
       let withdrawal: Withdrawal;
-      if (isMobileMoney) {
+      if (isMobileMoneyMethod) {
         withdrawal = await api.createMobileMoneyWithdrawal({
           amount: parseFloat(amount),
           phoneNumber,
@@ -657,7 +670,7 @@ export default function WithdrawPage() {
                         <img src={depositMethod.iconUrl} alt={depositMethod.name} className="w-8 h-8 object-contain" />
                       ) : (
                         <span className="text-white font-bold text-sm">
-                          {isMobileMoney
+                          {isMobileMoneyMethod
                             ? getProviderIconText(depositMethod.mobileProvider)
                             : depositMethod.cryptoCurrency?.slice(0, 3) || '?'}
                         </span>
@@ -666,14 +679,14 @@ export default function WithdrawPage() {
                     <div className="flex-1">
                       <p className="text-white font-semibold">{depositMethod.name}</p>
                       <p className="text-slate-400 text-sm">
-                        {isMobileMoney ? 'Mobile Money' : 'Cryptocurrency'}
+                        {isMobileMoneyMethod ? 'Mobile Money' : 'Cryptocurrency'}
                       </p>
                       {depositMethod.network && (
                         <p className="text-[#1079ff] text-xs">Network: {depositMethod.network}</p>
                       )}
                     </div>
                     <div className="text-right">
-                      {isMobileMoney ? (
+                      {isMobileMoneyMethod ? (
                         <Smartphone className="h-6 w-6 text-[#1079ff]" />
                       ) : (
                         <Bitcoin className="h-6 w-6 text-[#1079ff]" />
@@ -713,7 +726,7 @@ export default function WithdrawPage() {
                         <img src={depositMethod.iconUrl} alt={depositMethod.name} className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
                       ) : (
                         <span className="text-white font-bold text-[10px] sm:text-xs">
-                          {isMobileMoney
+                          {isMobileMoneyMethod
                             ? getProviderIconText(depositMethod.mobileProvider)
                             : depositMethod.cryptoCurrency?.slice(0, 3) || '?'}
                         </span>
@@ -738,8 +751,14 @@ export default function WithdrawPage() {
                       placeholder="0.00"
                       min={depositMethod.minAmount}
                       max={balance}
-                      className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-base sm:text-lg placeholder-slate-600 focus:outline-none focus:border-[#1079ff]"
+                      className={cn(
+                        "w-full px-3 py-2 sm:py-2.5 bg-slate-900 border rounded-lg text-white text-base sm:text-lg placeholder-slate-600 focus:outline-none focus:border-[#1079ff]",
+                        errors.amount ? "border-red-500" : "border-slate-700"
+                      )}
                     />
+                    {errors.amount && (
+                      <p className="mt-1 text-xs text-red-400">{errors.amount}</p>
+                    )}
                     {quickAmounts.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
                         {quickAmounts.map((quickAmount, index) => (
@@ -761,7 +780,7 @@ export default function WithdrawPage() {
                     )}
                   </div>
 
-                  {isMobileMoney ? (
+                  {isMobileMoneyMethod ? (
                     <div>
                       <label className="block text-xs sm:text-sm text-slate-400 mb-1.5">Phone Number</label>
                       <input
@@ -769,11 +788,18 @@ export default function WithdrawPage() {
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
                         placeholder="+255 7XX XXX XXX"
-                        className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-[#1079ff]"
+                        className={cn(
+                          "w-full px-3 py-2 sm:py-2.5 bg-slate-900 border rounded-lg text-white text-sm placeholder-slate-600 focus:outline-none focus:border-[#1079ff]",
+                          errors.phone ? "border-red-500" : "border-slate-700"
+                        )}
                       />
-                      <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
-                        Phone number registered with {depositMethod.name}
-                      </p>
+                      {errors.phone ? (
+                        <p className="mt-1 text-xs text-red-400">{errors.phone}</p>
+                      ) : (
+                        <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
+                          Phone number registered with {depositMethod.name}
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <div>
@@ -785,16 +811,25 @@ export default function WithdrawPage() {
                         value={walletAddress}
                         onChange={(e) => setWalletAddress(e.target.value)}
                         placeholder="Enter wallet address"
-                        className="w-full px-3 py-2 sm:py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-600 focus:outline-none focus:border-[#1079ff] font-mono text-xs sm:text-sm"
+                        className={cn(
+                          "w-full px-3 py-2 sm:py-2.5 bg-slate-900 border rounded-lg text-white placeholder-slate-600 focus:outline-none focus:border-[#1079ff] font-mono text-xs sm:text-sm",
+                          errors.walletAddress ? "border-red-500" : "border-slate-700"
+                        )}
                       />
-                      {depositMethod.network && (
-                        <p className="text-[10px] sm:text-xs text-[#1079ff] mt-1">
-                          Network: <span className="font-medium">{depositMethod.network}</span>
-                        </p>
+                      {errors.walletAddress ? (
+                        <p className="mt-1 text-xs text-red-400">{errors.walletAddress}</p>
+                      ) : (
+                        <>
+                          {depositMethod.network && (
+                            <p className="text-[10px] sm:text-xs text-[#1079ff] mt-1">
+                              Network: <span className="font-medium">{depositMethod.network}</span>
+                            </p>
+                          )}
+                          <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
+                            Double-check your address. Incorrect addresses may result in loss of funds.
+                          </p>
+                        </>
                       )}
-                      <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
-                        Double-check your address. Incorrect addresses may result in loss of funds.
-                      </p>
                     </div>
                   )}
 

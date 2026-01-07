@@ -56,6 +56,7 @@ export default function TradePage() {
     setChartType,
     indicators,
     toggleIndicator,
+    updateIndicatorParams,
     showVolume,
     toggleVolume,
     drawingTool,
@@ -227,8 +228,62 @@ export default function TradePage() {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-[#0f0f1a]">
         <div className="text-center">
-          <div className="h-10 w-10 border-4 border-[#1079ff] border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="mt-4 text-slate-400">Loading trading platform...</p>
+          {/* Animated Candlestick Loader */}
+          <div className="flex items-end justify-center gap-1.5 h-16 mb-4">
+            {/* Candle 1 - Blue */}
+            <div className="flex flex-col items-center animate-[candlePulse1_1.2s_ease-in-out_infinite]">
+              <div className="w-0.5 h-2 bg-blue-500/60 rounded-full" />
+              <div className="w-3 h-8 bg-gradient-to-t from-blue-600 to-blue-400 rounded-sm shadow-lg shadow-blue-500/20" />
+              <div className="w-0.5 h-1.5 bg-blue-500/60 rounded-full" />
+            </div>
+            {/* Candle 2 - Red */}
+            <div className="flex flex-col items-center animate-[candlePulse2_1.2s_ease-in-out_infinite_0.15s]">
+              <div className="w-0.5 h-3 bg-red-500/60 rounded-full" />
+              <div className="w-3 h-6 bg-gradient-to-t from-red-600 to-red-400 rounded-sm shadow-lg shadow-red-500/20" />
+              <div className="w-0.5 h-2 bg-red-500/60 rounded-full" />
+            </div>
+            {/* Candle 3 - Blue */}
+            <div className="flex flex-col items-center animate-[candlePulse3_1.2s_ease-in-out_infinite_0.3s]">
+              <div className="w-0.5 h-1.5 bg-blue-500/60 rounded-full" />
+              <div className="w-3 h-10 bg-gradient-to-t from-blue-600 to-blue-400 rounded-sm shadow-lg shadow-blue-500/20" />
+              <div className="w-0.5 h-2.5 bg-blue-500/60 rounded-full" />
+            </div>
+            {/* Candle 4 - Red */}
+            <div className="flex flex-col items-center animate-[candlePulse4_1.2s_ease-in-out_infinite_0.45s]">
+              <div className="w-0.5 h-2.5 bg-red-500/60 rounded-full" />
+              <div className="w-3 h-5 bg-gradient-to-t from-red-600 to-red-400 rounded-sm shadow-lg shadow-red-500/20" />
+              <div className="w-0.5 h-1.5 bg-red-500/60 rounded-full" />
+            </div>
+            {/* Candle 5 - Blue */}
+            <div className="flex flex-col items-center animate-[candlePulse5_1.2s_ease-in-out_infinite_0.6s]">
+              <div className="w-0.5 h-1 bg-blue-500/60 rounded-full" />
+              <div className="w-3 h-12 bg-gradient-to-t from-blue-600 to-blue-400 rounded-sm shadow-lg shadow-blue-500/20" />
+              <div className="w-0.5 h-2 bg-blue-500/60 rounded-full" />
+            </div>
+          </div>
+          <p className="text-slate-400 text-sm font-medium">Loading trading platform...</p>
+          <style jsx>{`
+            @keyframes candlePulse1 {
+              0%, 100% { transform: scaleY(1); opacity: 0.7; }
+              50% { transform: scaleY(1.15); opacity: 1; }
+            }
+            @keyframes candlePulse2 {
+              0%, 100% { transform: scaleY(1); opacity: 0.7; }
+              50% { transform: scaleY(0.85); opacity: 1; }
+            }
+            @keyframes candlePulse3 {
+              0%, 100% { transform: scaleY(1); opacity: 0.7; }
+              50% { transform: scaleY(1.2); opacity: 1; }
+            }
+            @keyframes candlePulse4 {
+              0%, 100% { transform: scaleY(1); opacity: 0.7; }
+              50% { transform: scaleY(0.9); opacity: 1; }
+            }
+            @keyframes candlePulse5 {
+              0%, 100% { transform: scaleY(1); opacity: 0.7; }
+              50% { transform: scaleY(1.1); opacity: 1; }
+            }
+          `}</style>
         </div>
       </div>
     );
@@ -337,6 +392,7 @@ export default function TradePage() {
         onChartTypeChange={setChartType}
         indicators={indicators}
         onToggleIndicator={toggleIndicator}
+        onUpdateIndicatorParams={updateIndicatorParams}
         showVolume={showVolume}
         onToggleVolume={toggleVolume}
         drawingTool={drawingTool}
