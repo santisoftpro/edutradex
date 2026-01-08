@@ -134,6 +134,8 @@ model Trade {
   @@index([closedAt])
   // Composite index for scheduler query: WHERE status = 'OPEN' AND expiresAt <= NOW()
   @@index([status, expiresAt], name: "idx_trade_status_expires")
+  // Composite index for leader stats aggregation: WHERE userId = $1 AND status = 'CLOSED' AND isCopyTrade = false
+  @@index([userId, status, isCopyTrade], name: "idx_trade_leader_stats")
 }
 
 model Session {
@@ -387,6 +389,8 @@ model CopiedTrade {
   @@index([leaderId])
   @@index([originalTradeId])
   @@index([copiedTradeId])
+  // Composite index for paginated copy history: WHERE followerId = ANY($1) ORDER BY createdAt DESC
+  @@index([followerId, createdAt], name: "idx_copied_trade_follower_created")
 }
 
 model PendingCopyTrade {

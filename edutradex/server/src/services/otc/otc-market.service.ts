@@ -293,9 +293,10 @@ export class OTCMarketService {
       this.savePriceHistory();
     }, PRICE_HISTORY_SAVE_INTERVAL_MS);
 
-    // Start cleanup loop
+    // Start cleanup loop - cleans expired trades and old price history
     this.cleanupInterval = setInterval(() => {
       this.riskEngine.cleanupExpiredTrades();
+      this.cleanupOldPriceHistory();
     }, CLEANUP_INTERVAL_MS);
 
     // Start diagnostic logging loop
@@ -517,52 +518,122 @@ export class OTCMarketService {
 
   /**
    * Save price history to database (for charts)
-   * Uses properly tracked candle OHLC values from price generator
+   * Uses batched INSERT for optimal performance - single query for all symbols
    */
   private async savePriceHistory(): Promise<void> {
-    for (const [symbol, config] of this.configs) {
-      // Get properly tracked candle OHLC data
+    const batchData: Array<{
+      configId: string;
+      symbol: string;
+      price: number;
+      bid: number;
+      ask: number;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volume: number;
+      priceMode: string;
+      volatilityState: number;
+    }> = [];
+
+    // Collect all candle data first
+    const configs = Array.from(this.configs.entries());
+    for (const [symbol, config] of configs) {
       const candleData = this.priceGenerator.getCandleOHLC(symbol);
       if (!candleData) continue;
 
-      // Respect is24Hours setting - if enabled, always use OTC mode
       const priceMode = config.is24Hours
         ? 'OTC'
         : this.scheduler.getPriceMode(symbol, config.marketType);
 
-      // Generate realistic volume based on price movement
-      const volume = this.priceGenerator.generateVolume(symbol);
+      batchData.push({
+        configId: config.id,
+        symbol,
+        price: candleData.close,
+        bid: candleData.close - config.pipSize,
+        ask: candleData.close + config.pipSize,
+        open: candleData.open,
+        high: candleData.high,
+        low: candleData.low,
+        close: candleData.close,
+        volume: this.priceGenerator.generateVolume(symbol),
+        priceMode,
+        volatilityState: this.priceGenerator.getState(symbol)?.volatilityState || 0
+      });
 
-      try {
-        await query(`
-          INSERT INTO "OTCPriceHistory" (
-            id, "configId", symbol, price, bid, ask,
-            open, high, low, close, volume, "priceMode", "volatilityState"
-          ) VALUES (
-            gen_random_uuid(), $1, $2, $3, $4, $5,
-            $6, $7, $8, $9, $10, $11, $12
-          )
-        `, [
-          config.id,
-          symbol,
-          candleData.close,                              // Current price
-          candleData.close - config.pipSize,             // Bid
-          candleData.close + config.pipSize,             // Ask
-          candleData.open,                               // Properly tracked open
-          candleData.high,                               // Properly tracked high
-          candleData.low,                                // Properly tracked low
-          candleData.close,                              // Close (current price)
-          volume,                                        // Realistic volume
-          priceMode,
-          this.priceGenerator.getState(symbol)?.volatilityState || 0
-        ]);
+      // Reset candle for next period
+      this.priceGenerator.resetCandle(symbol);
+    }
 
-        // Reset candle for next period - start fresh OHLC tracking
-        this.priceGenerator.resetCandle(symbol);
+    if (batchData.length === 0) return;
 
-      } catch (error) {
-        logger.error('[OTCMarket] Failed to save price history', { symbol, error });
+    // Build batched INSERT query - single round-trip to database
+    try {
+      const values: string[] = [];
+      const params: (string | number)[] = [];
+      let paramIndex = 1;
+
+      for (const data of batchData) {
+        values.push(`(gen_random_uuid(), $${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7}, $${paramIndex + 8}, $${paramIndex + 9}, $${paramIndex + 10}, $${paramIndex + 11})`);
+        params.push(
+          data.configId, data.symbol, data.price, data.bid, data.ask,
+          data.open, data.high, data.low, data.close,
+          data.volume, data.priceMode, data.volatilityState
+        );
+        paramIndex += 12;
       }
+
+      await query(`
+        INSERT INTO "OTCPriceHistory" (
+          id, "configId", symbol, price, bid, ask,
+          open, high, low, close, volume, "priceMode", "volatilityState"
+        ) VALUES ${values.join(', ')}
+      `, params);
+
+    } catch (error) {
+      logger.error('[OTCMarket] Failed to save price history batch', { count: batchData.length, error });
+    }
+  }
+
+  /**
+   * Cleanup old price history data to keep database performant
+   * Retains last 24 hours of data per symbol (sufficient for charts)
+   *
+   * Uses batched DELETE to avoid long-running transactions and reduce lock contention.
+   * Deleting 1000 rows at a time keeps each transaction fast (~50-100ms).
+   */
+  private async cleanupOldPriceHistory(): Promise<void> {
+    const BATCH_SIZE = 1000;
+    const MAX_BATCHES = 10; // Safety limit: max 10,000 rows per cleanup cycle
+    let totalDeleted = 0;
+
+    try {
+      for (let i = 0; i < MAX_BATCHES; i++) {
+        // Delete a batch of old records using CTID for efficient deletion
+        const result = await query(
+          `DELETE FROM "OTCPriceHistory"
+           WHERE ctid IN (
+             SELECT ctid FROM "OTCPriceHistory"
+             WHERE timestamp < NOW() - INTERVAL '24 hours'
+             LIMIT $1
+           )`,
+          [BATCH_SIZE]
+        );
+
+        const deletedCount = result?.rowCount || 0;
+        totalDeleted += deletedCount;
+
+        // Stop if we deleted fewer than batch size (no more old records)
+        if (deletedCount < BATCH_SIZE) {
+          break;
+        }
+      }
+
+      if (totalDeleted > 0) {
+        logger.info('[OTCMarket] Cleaned up old price history', { deletedCount: totalDeleted });
+      }
+    } catch (error) {
+      logger.error('[OTCMarket] Failed to cleanup old price history', { error });
     }
   }
 
