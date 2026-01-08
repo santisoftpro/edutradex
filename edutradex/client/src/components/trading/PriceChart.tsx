@@ -18,7 +18,7 @@ import {
   MouseEventParams,
   SeriesType,
 } from 'lightweight-charts';
-import { ChevronDown, BarChart3, X, Check, TrendingUp, Minus, GitBranch, Trash2, CandlestickChart, LineChart, AreaChart, BarChart, Undo2, PenTool, Camera, Magnet, Settings, Bell, Layout } from 'lucide-react';
+import { ChevronDown, BarChart3, X, Check, TrendingUp, Minus, GitBranch, Trash2, CandlestickChart, LineChart, AreaChart, BarChart, Undo2, PenTool, Camera, Magnet, Settings, Layout } from 'lucide-react';
 import { PriceTick, api, OHLCBar } from '@/lib/api';
 import {
   calculateSMA,
@@ -2747,8 +2747,8 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                       <span className="w-4 h-4 rounded-full" style={{ backgroundColor: indicator.color }} />
                       <span className="text-white text-base">{indicator.name}</span>
                     </div>
-                    <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                      {indicator.enabled && <Check className="h-4 w-4 text-emerald-400" />}
+                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center">
+                      {indicator.enabled && <Check className="h-4 w-4 text-blue-400" />}
                     </div>
                   </button>
                 ))}
@@ -2768,8 +2768,8 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                       <span className="w-4 h-4 rounded-full" style={{ backgroundColor: indicator.color }} />
                       <span className="text-white text-base">{indicator.name}</span>
                     </div>
-                    <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                      {indicator.enabled && <Check className="h-4 w-4 text-emerald-400" />}
+                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center">
+                      {indicator.enabled && <Check className="h-4 w-4 text-blue-400" />}
                     </div>
                   </button>
                 ))}
@@ -2785,9 +2785,9 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
         <div className="relative">
           <button
             onClick={() => setShowTimeframeMenu(!showTimeframeMenu)}
-            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-xl text-white text-sm font-semibold shadow-lg hover:border-emerald-500/50 transition-all backdrop-blur-sm"
+            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-xl text-white text-sm font-semibold shadow-lg hover:border-blue-500/50 transition-all backdrop-blur-sm"
           >
-            <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span className="min-w-[28px]">{selectedTimeframe.label}</span>
@@ -2800,7 +2800,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
               <div className="absolute top-full left-0 mt-2 w-72 bg-gradient-to-b from-[#1e1e38] to-[#151528] border border-[#3d3d5c] rounded-xl shadow-2xl z-20 overflow-hidden backdrop-blur-xl">
                 {/* Header */}
                 <div className="px-3 py-2 border-b border-[#2d2d44] bg-[#1a1a2e]/50">
-                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Select Timeframe</span>
+                  <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Select Timeframe</span>
                 </div>
                 {/* Seconds */}
                 <div className="p-2.5 border-b border-[#2d2d44]">
@@ -2812,7 +2812,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                         onClick={() => { setSelectedTimeframe(tf); setShowTimeframeMenu(false); }}
                         className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                           selectedTimeframe.label === tf.label
-                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                            ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
                             : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
                         }`}
                       >
@@ -2831,7 +2831,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                         onClick={() => { setSelectedTimeframe(tf); setShowTimeframeMenu(false); }}
                         className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                           selectedTimeframe.label === tf.label
-                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                            ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
                             : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
                         }`}
                       >
@@ -2850,7 +2850,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                         onClick={() => { setSelectedTimeframe(tf); setShowTimeframeMenu(false); }}
                         className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                           selectedTimeframe.label === tf.label
-                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                            ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
                             : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
                         }`}
                       >
@@ -2869,7 +2869,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                         onClick={() => { setSelectedTimeframe(tf); setShowTimeframeMenu(false); }}
                         className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                           selectedTimeframe.label === tf.label
-                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                            ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
                             : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
                         }`}
                       >
@@ -2895,7 +2895,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
             </svg>
             <span className="md:hidden">Indicators</span>
             {indicators.filter((i) => i.enabled).length > 0 && (
-              <span className="px-1.5 py-0.5 bg-gradient-to-r from-emerald-500 to-emerald-400 text-white rounded-md text-[10px] font-bold shadow-lg shadow-emerald-500/30">
+              <span className="px-1.5 py-0.5 bg-gradient-to-r from-blue-500 to-blue-400 text-white rounded-md text-[10px] font-bold shadow-lg shadow-blue-500/30">
                 {indicators.filter((i) => i.enabled).length}
               </span>
             )}
@@ -2924,7 +2924,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                           />
                           <span className="flex-1 text-left">{indicator.name}</span>
                           {indicator.enabled && (
-                            <svg className="w-4 h-4 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                             </svg>
                           )}
@@ -2984,7 +2984,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                           />
                           <span className="flex-1 text-left">{indicator.name}</span>
                           {indicator.enabled && (
-                            <svg className="w-4 h-4 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                             </svg>
                           )}
@@ -3034,7 +3034,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
         <div className="relative">
           <button
             onClick={() => setShowChartTypeMenu(!showChartTypeMenu)}
-            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:border-purple-500/50 transition-all shadow-lg backdrop-blur-sm"
+            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:border-blue-500/50 transition-all shadow-lg backdrop-blur-sm"
             title="Chart Type"
           >
             {getChartTypeIcon(chartType)}
@@ -3047,7 +3047,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
               <div className="fixed inset-0 z-[10]" onClick={() => setShowChartTypeMenu(false)} />
               <div className="absolute top-full left-0 mt-2 w-44 bg-gradient-to-b from-[#1e1e38] to-[#151528] border border-[#3d3d5c] rounded-xl shadow-2xl z-20 overflow-hidden">
                 <div className="px-3 py-2 border-b border-[#2d2d44] bg-[#1a1a2e]/50">
-                  <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Chart Type</span>
+                  <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Chart Type</span>
                 </div>
                 {CHART_TYPES.map((ct) => (
                   <button
@@ -3055,7 +3055,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                     onClick={() => { setChartType(ct.id); setShowChartTypeMenu(false); }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-all ${
                       chartType === ct.id
-                        ? 'bg-purple-500/20 text-purple-400'
+                        ? 'bg-blue-500/20 text-blue-400'
                         : 'text-gray-400 hover:bg-[#252542] hover:text-white'
                     }`}
                   >
@@ -3075,8 +3075,8 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
             onClick={() => setShowTemplateMenu(!showTemplateMenu)}
             className={`flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border rounded-xl text-sm font-semibold transition-all shadow-lg backdrop-blur-sm ${
               activeTemplateId
-                ? 'border-pink-500/50 text-pink-400'
-                : 'border-[#3d3d5c] text-gray-400 hover:text-white hover:border-pink-500/30'
+                ? 'border-blue-500/50 text-blue-400'
+                : 'border-[#3d3d5c] text-gray-400 hover:text-white hover:border-blue-500/30'
             }`}
             title="Chart Templates"
           >
@@ -3089,7 +3089,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
               <div className="fixed inset-0 z-[10]" onClick={() => setShowTemplateMenu(false)} />
               <div className="absolute top-full left-0 mt-2 w-52 bg-gradient-to-b from-[#1e1e38] to-[#151528] border border-[#3d3d5c] rounded-xl shadow-2xl z-20 overflow-hidden">
                 <div className="px-3 py-2 border-b border-[#2d2d44] bg-[#1a1a2e]/50">
-                  <span className="text-xs font-bold text-pink-400 uppercase tracking-wider">Templates</span>
+                  <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Templates</span>
                 </div>
                 {CHART_TEMPLATES.map((template) => (
                   <button
@@ -3097,7 +3097,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                     onClick={() => { applyTemplate(template.id); setShowTemplateMenu(false); }}
                     className={`w-full flex flex-col items-start px-3 py-2.5 text-sm transition-all ${
                       activeTemplateId === template.id
-                        ? 'bg-pink-500/20 text-pink-400'
+                        ? 'bg-blue-500/20 text-blue-400'
                         : 'text-gray-400 hover:bg-[#252542] hover:text-white'
                     }`}
                   >
@@ -3113,35 +3113,13 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
           )}
         </div>
 
-        {/* Price Alert Button */}
-        <button
-          onClick={() => {
-            if (currentPrice) {
-              storeAddPriceAlert(symbol, currentPrice.price);
-            }
-          }}
-          className={`flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border rounded-xl text-sm font-semibold transition-all shadow-lg backdrop-blur-sm ${
-            priceAlerts.length > 0
-              ? 'border-amber-500/50 text-amber-400'
-              : 'border-[#3d3d5c] text-gray-400 hover:text-white hover:border-amber-500/30'
-          }`}
-          title="Add Price Alert at Current Price"
-        >
-          <Bell className="w-4 h-4" />
-          {priceAlerts.length > 0 && (
-            <span className="px-1.5 py-0.5 bg-amber-500/30 text-amber-400 rounded text-xs font-bold">
-              {priceAlerts.length}
-            </span>
-          )}
-        </button>
-
         {/* Volume Toggle */}
         <button
           onClick={toggleVolume}
           className={`flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border rounded-xl text-sm font-semibold transition-all shadow-lg backdrop-blur-sm ${
             showVolume
-              ? 'border-cyan-500/50 text-cyan-400'
-              : 'border-[#3d3d5c] text-gray-400 hover:text-white hover:border-cyan-500/30'
+              ? 'border-blue-500/50 text-blue-400'
+              : 'border-[#3d3d5c] text-gray-400 hover:text-white hover:border-blue-500/30'
           }`}
           title="Toggle Volume"
         >
@@ -3154,8 +3132,8 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
           onClick={() => setMagnetMode(!magnetMode)}
           className={`flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border rounded-xl text-sm font-semibold transition-all shadow-lg backdrop-blur-sm ${
             magnetMode
-              ? 'border-yellow-500/50 text-yellow-400'
-              : 'border-[#3d3d5c] text-gray-400 hover:text-white hover:border-yellow-500/30'
+              ? 'border-blue-500/50 text-blue-400'
+              : 'border-[#3d3d5c] text-gray-400 hover:text-white hover:border-blue-500/30'
           }`}
           title="Magnet Mode - Snap crosshair to OHLC values"
         >
@@ -3165,7 +3143,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
         {/* Screenshot Button */}
         <button
           onClick={handleScreenshot}
-          className="flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-xl text-sm font-semibold text-gray-400 hover:text-white hover:border-green-500/30 transition-all shadow-lg backdrop-blur-sm"
+          className="flex items-center gap-2 px-3 py-2 bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-xl text-sm font-semibold text-gray-400 hover:text-white hover:border-blue-500/30 transition-all shadow-lg backdrop-blur-sm"
           title="Download Chart Screenshot"
         >
           <Camera className="w-4 h-4" />
@@ -3177,7 +3155,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
             onClick={() => setShowDrawingMenu(!showDrawingMenu)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all text-sm font-medium shadow-lg ${
               drawingTool !== 'none'
-                ? 'bg-orange-500/30 text-orange-400 border border-orange-500/50'
+                ? 'bg-blue-500/30 text-blue-400 border border-blue-500/50'
                 : 'bg-gradient-to-b from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] text-gray-400 hover:text-white'
             }`}
             title="Drawing Tools"
@@ -3191,7 +3169,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                drawingTool === 'ray' ? 'Ray' : 'Rectangle'}
             </span>
             {drawnLines.length > 0 && (
-              <span className="px-1.5 py-0.5 bg-orange-500/30 text-orange-400 rounded text-xs font-bold">
+              <span className="px-1.5 py-0.5 bg-blue-500/30 text-blue-400 rounded text-xs font-bold">
                 {drawnLines.length}
               </span>
             )}
@@ -3205,7 +3183,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
               <div className="absolute right-0 top-full mt-2 w-56 bg-[#1a1a2e] border border-[#3d3d5c] rounded-xl shadow-2xl z-[20] overflow-hidden">
                 {/* Drawing Tools Section */}
                 <div className="p-2">
-                  <p className="px-2 py-1 text-[10px] font-bold text-purple-400 uppercase tracking-wider">Drawing Tools</p>
+                  <p className="px-2 py-1 text-[10px] font-bold text-blue-400 uppercase tracking-wider">Drawing Tools</p>
 
                   <button
                     onClick={() => {
@@ -3214,7 +3192,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
                       drawingTool === 'trendline'
-                        ? 'bg-orange-500/20 text-orange-400'
+                        ? 'bg-blue-500/20 text-blue-400'
                         : 'text-gray-300 hover:bg-[#252542] hover:text-white'
                     }`}
                     title="Trend Line - Click 2 points"
@@ -3225,7 +3203,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                       <div className="text-[10px] text-gray-500">Click 2 points</div>
                     </div>
                     <span className="hidden md:inline text-sm font-medium">Trend Line</span>
-                    {drawingTool === 'trendline' && <Check className="w-4 h-4 text-orange-400" />}
+                    {drawingTool === 'trendline' && <Check className="w-4 h-4 text-blue-400" />}
                   </button>
 
                   <button
@@ -3235,7 +3213,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
                       drawingTool === 'horizontal'
-                        ? 'bg-orange-500/20 text-orange-400'
+                        ? 'bg-blue-500/20 text-blue-400'
                         : 'text-gray-300 hover:bg-[#252542] hover:text-white'
                     }`}
                     title="Horizontal Line - Click to place"
@@ -3246,7 +3224,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                       <div className="text-[10px] text-gray-500">Click to place</div>
                     </div>
                     <span className="hidden md:inline text-sm font-medium">Horizontal Line</span>
-                    {drawingTool === 'horizontal' && <Check className="w-4 h-4 text-orange-400" />}
+                    {drawingTool === 'horizontal' && <Check className="w-4 h-4 text-blue-400" />}
                   </button>
 
                   <button
@@ -3256,7 +3234,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
                       drawingTool === 'fibonacci'
-                        ? 'bg-orange-500/20 text-orange-400'
+                        ? 'bg-blue-500/20 text-blue-400'
                         : 'text-gray-300 hover:bg-[#252542] hover:text-white'
                     }`}
                     title="Fibonacci - Click high & low"
@@ -3267,7 +3245,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                       <div className="text-[10px] text-gray-500">Click high & low</div>
                     </div>
                     <span className="hidden md:inline text-sm font-medium">Fibonacci</span>
-                    {drawingTool === 'fibonacci' && <Check className="w-4 h-4 text-orange-400" />}
+                    {drawingTool === 'fibonacci' && <Check className="w-4 h-4 text-blue-400" />}
                   </button>
 
                   <button
@@ -3277,7 +3255,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
                       drawingTool === 'ray'
-                        ? 'bg-orange-500/20 text-orange-400'
+                        ? 'bg-blue-500/20 text-blue-400'
                         : 'text-gray-300 hover:bg-[#252542] hover:text-white'
                     }`}
                     title="Ray - Extended trend line"
@@ -3288,7 +3266,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                       <div className="text-[10px] text-gray-500">Extended line</div>
                     </div>
                     <span className="hidden md:inline text-sm font-medium">Ray</span>
-                    {drawingTool === 'ray' && <Check className="w-4 h-4 text-orange-400" />}
+                    {drawingTool === 'ray' && <Check className="w-4 h-4 text-blue-400" />}
                   </button>
 
                   <button
@@ -3298,7 +3276,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
                       drawingTool === 'rectangle'
-                        ? 'bg-orange-500/20 text-orange-400'
+                        ? 'bg-blue-500/20 text-blue-400'
                         : 'text-gray-300 hover:bg-[#252542] hover:text-white'
                     }`}
                     title="Rectangle - Click 2 corners"
@@ -3309,7 +3287,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                       <div className="text-[10px] text-gray-500">Click 2 corners</div>
                     </div>
                     <span className="hidden md:inline text-sm font-medium">Rectangle</span>
-                    {drawingTool === 'rectangle' && <Check className="w-4 h-4 text-orange-400" />}
+                    {drawingTool === 'rectangle' && <Check className="w-4 h-4 text-blue-400" />}
                   </button>
                 </div>
 
@@ -3344,7 +3322,7 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
                             storeUndoDrawing(symbol);
                           }
                         }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-yellow-400 hover:bg-yellow-500/10 transition-all"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-all"
                       >
                         <Undo2 className="w-4 h-4" />
                         <span className="text-sm font-medium">Undo Last</span>

@@ -191,8 +191,8 @@ function MobileChartSettingsSheetComponent({
                 className="w-full flex items-center justify-between p-2.5 bg-[#252542] rounded-lg active:bg-[#2d2d52] transition-colors"
               >
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                    <Clock className="w-4 h-4 text-emerald-400" />
+                  <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                    <Clock className="w-4 h-4 text-blue-400" />
                   </div>
                   <div className="text-left">
                     <p className="text-white font-medium text-sm">Timeframe</p>
@@ -200,7 +200,7 @@ function MobileChartSettingsSheetComponent({
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-emerald-400 font-semibold text-sm">{selectedTimeframe.label}</span>
+                  <span className="text-blue-400 font-semibold text-sm">{selectedTimeframe.label}</span>
                   <ChevronRight className="w-4 h-4 text-gray-500" />
                 </div>
               </button>
@@ -211,8 +211,8 @@ function MobileChartSettingsSheetComponent({
                 className="w-full flex items-center justify-between p-2.5 bg-[#252542] rounded-lg active:bg-[#2d2d52] transition-colors"
               >
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                    <CandlestickChart className="w-4 h-4 text-purple-400" />
+                  <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                    <CandlestickChart className="w-4 h-4 text-blue-400" />
                   </div>
                   <div className="text-left">
                     <p className="text-white font-medium text-sm">Chart Type</p>
@@ -220,7 +220,7 @@ function MobileChartSettingsSheetComponent({
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-purple-400 font-medium text-sm capitalize">{chartType.replace('-', ' ')}</span>
+                  <span className="text-blue-400 font-medium text-sm capitalize">{chartType.replace('-', ' ')}</span>
                   <ChevronRight className="w-4 h-4 text-gray-500" />
                 </div>
               </button>
@@ -255,8 +255,8 @@ function MobileChartSettingsSheetComponent({
                 className="w-full flex items-center justify-between p-2.5 bg-[#252542] rounded-lg active:bg-[#2d2d52] transition-colors"
               >
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">
-                    <PenTool className="w-4 h-4 text-orange-400" />
+                  <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                    <PenTool className="w-4 h-4 text-blue-400" />
                   </div>
                   <div className="text-left">
                     <p className="text-white font-medium text-sm">Drawing Tools</p>
@@ -265,7 +265,7 @@ function MobileChartSettingsSheetComponent({
                 </div>
                 <div className="flex items-center gap-1.5">
                   {drawnLinesCount > 0 && (
-                    <span className="px-1.5 py-0.5 bg-orange-500 text-white text-[10px] rounded-full font-medium">
+                    <span className="px-1.5 py-0.5 bg-blue-500 text-white text-[10px] rounded-full font-medium">
                       {drawnLinesCount}
                     </span>
                   )}
@@ -281,9 +281,9 @@ function MobileChartSettingsSheetComponent({
                 <div className="flex items-center gap-2.5">
                   <div className={cn(
                     'w-8 h-8 rounded-lg flex items-center justify-center',
-                    showVolume ? 'bg-cyan-500/20' : 'bg-gray-500/20'
+                    showVolume ? 'bg-blue-500/20' : 'bg-gray-500/20'
                   )}>
-                    <BarChart className={cn('w-4 h-4', showVolume ? 'text-cyan-400' : 'text-gray-400')} />
+                    <BarChart className={cn('w-4 h-4', showVolume ? 'text-blue-400' : 'text-gray-400')} />
                   </div>
                   <div className="text-left">
                     <p className="text-white font-medium text-sm">Volume</p>
@@ -292,7 +292,7 @@ function MobileChartSettingsSheetComponent({
                 </div>
                 <div className={cn(
                   'w-10 h-6 rounded-full transition-colors relative',
-                  showVolume ? 'bg-cyan-500' : 'bg-gray-600'
+                  showVolume ? 'bg-blue-500' : 'bg-gray-600'
                 )}>
                   <div className={cn(
                     'absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform',
@@ -316,7 +316,7 @@ function MobileChartSettingsSheetComponent({
                       className={cn(
                         'px-3.5 py-2 rounded-lg text-xs font-semibold transition-all',
                         selectedTimeframe.label === tf.label
-                          ? 'bg-emerald-500 text-white'
+                          ? 'bg-blue-500 text-white'
                           : 'bg-[#252542] text-gray-400 active:bg-[#2d2d52]'
                       )}
                     >
@@ -337,7 +337,7 @@ function MobileChartSettingsSheetComponent({
                       className={cn(
                         'px-3.5 py-2 rounded-lg text-xs font-semibold transition-all',
                         selectedTimeframe.label === tf.label
-                          ? 'bg-emerald-500 text-white'
+                          ? 'bg-blue-500 text-white'
                           : 'bg-[#252542] text-gray-400 active:bg-[#2d2d52]'
                       )}
                     >
@@ -358,7 +358,7 @@ function MobileChartSettingsSheetComponent({
                       className={cn(
                         'px-3.5 py-2 rounded-lg text-xs font-semibold transition-all',
                         selectedTimeframe.label === tf.label
-                          ? 'bg-emerald-500 text-white'
+                          ? 'bg-blue-500 text-white'
                           : 'bg-[#252542] text-gray-400 active:bg-[#2d2d52]'
                       )}
                     >
@@ -379,7 +379,7 @@ function MobileChartSettingsSheetComponent({
                       className={cn(
                         'px-3.5 py-2 rounded-lg text-xs font-semibold transition-all',
                         selectedTimeframe.label === tf.label
-                          ? 'bg-emerald-500 text-white'
+                          ? 'bg-blue-500 text-white'
                           : 'bg-[#252542] text-gray-400 active:bg-[#2d2d52]'
                       )}
                     >
@@ -400,7 +400,7 @@ function MobileChartSettingsSheetComponent({
                   className={cn(
                     'w-full flex items-center gap-2.5 p-2.5 rounded-lg transition-all',
                     chartType === type.id
-                      ? 'bg-purple-500/20 text-purple-400'
+                      ? 'bg-blue-500/20 text-blue-400'
                       : 'bg-[#252542] text-gray-300 active:bg-[#2d2d52]'
                   )}
                 >
@@ -504,7 +504,7 @@ function MobileChartSettingsSheetComponent({
                     className={cn(
                       'w-full flex items-center gap-2.5 p-2.5 rounded-lg transition-all',
                       drawingTool === tool.id
-                        ? 'bg-orange-500/20 text-orange-400'
+                        ? 'bg-blue-500/20 text-blue-400'
                         : 'bg-[#252542] text-gray-300 active:bg-[#2d2d52]'
                     )}
                   >
