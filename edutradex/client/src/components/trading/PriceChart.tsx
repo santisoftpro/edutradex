@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, memo, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, memo, useCallback, useState, forwardRef, useImperativeHandle, useMemo } from 'react';
 import {
   createChart,
   IChartApi,
@@ -34,7 +34,8 @@ import {
   CandleDataWithVolume,
 } from '@/lib/indicators';
 import { useChartStore, IndicatorConfig, DrawingTool, DrawnLine, CHART_TEMPLATES, PriceAlert } from '@/store/chart.store';
-import { useTradeStore } from '@/store/trade.store';
+import { useTradeStore, useFilteredActiveTrades, Trade } from '@/store/trade.store';
+import { ArrowUp, ArrowDown } from 'lucide-react';
 
 interface PriceChartProps {
   symbol: string;
@@ -234,6 +235,66 @@ function convertToHeikinAshi(candles: CandleData[]): CandleData[] {
   return result;
 }
 
+/**
+ * Trade Marker Pill - Pocket Option Style
+ * Displays at entry price level with direction arrow, amount, and countdown
+ * Color changes based on real-time profit/loss status
+ */
+function TradeMarkerPill({ trade, currentPrice }: { trade: Trade; currentPrice?: number }) {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    const expiresAt = new Date(trade.expiresAt).getTime();
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, expiresAt - now);
+      const seconds = Math.ceil(remaining / 1000);
+
+      if (seconds < 60) {
+        setTimeLeft(`${seconds.toString().padStart(2, '0')}s`);
+      } else {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [trade.expiresAt]);
+
+  const isUp = trade.direction === 'UP';
+
+  // Calculate if trade is currently winning based on price movement
+  const isWinning = currentPrice
+    ? isUp
+      ? currentPrice > trade.entryPrice  // UP wins if price went up
+      : currentPrice < trade.entryPrice  // DOWN wins if price went down
+    : isUp; // Fallback to direction color if no current price
+
+  return (
+    <div
+      className={`
+        flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded
+        text-white text-[11px] font-medium shadow-lg backdrop-blur-sm
+        transition-colors duration-300
+        ${isWinning ? 'bg-emerald-500/90' : 'bg-red-500/90'}
+      `}
+    >
+      {isUp ? (
+        <ArrowUp className="w-3 h-3" strokeWidth={3} />
+      ) : (
+        <ArrowDown className="w-3 h-3" strokeWidth={3} />
+      )}
+      <span className="font-semibold">${trade.amount}</span>
+      <span className="font-mono text-[10px] opacity-90">{timeLeft}</span>
+    </div>
+  );
+}
+
 const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
   function PriceChartComponent({ symbol, currentPrice, onDrawingsChange }, ref) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -323,14 +384,18 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
   // Trade markers refs
   const tradePriceLinesRef = useRef<Map<string, { entry: IPriceLine | undefined; target: IPriceLine | undefined }>>(new Map());
 
+  // Trade marker positions state (Pocket Option style - positioned at entry price)
+  const [tradeMarkerPositions, setTradeMarkerPositions] = useState<Map<string, number>>(new Map());
+
   // Hydration check - prevent SSR mismatch
   useEffect(() => {
     setIsClient(true);
   }, []);
 
   // Get active trades for the current symbol (only after hydration)
-  const allActiveTrades = useTradeStore((state) => state.activeTrades);
-  const activeTrades = isClient ? allActiveTrades.filter((t) => t.symbol === symbol) : [];
+  // Using filtered trades by account type
+  const filteredActiveTrades = useFilteredActiveTrades();
+  const activeTrades = isClient ? filteredActiveTrades.filter((t) => t.symbol === symbol) : [];
 
   // Volume series ref
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
@@ -2395,14 +2460,15 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
           const entryColor = isUp ? '#22c55e' : '#ef4444';
           const targetColor = isUp ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
 
-          // Entry price line
+          // Entry price line - axis label disabled to prevent clutter
+          // Trade info shown in horizontal bar at top instead (ChartTradeBar component)
           const entryLine = mainSeriesRef.current?.createPriceLine({
             price: trade.entryPrice,
             color: entryColor,
-            lineWidth: 2,
+            lineWidth: 1,
             lineStyle: 2, // Dashed
-            axisLabelVisible: true,
-            title: `${isUp ? '▲' : '▼'} $${trade.amount}`,
+            axisLabelVisible: false,
+            title: '',
           });
 
           // Target price line (small offset to show direction)
@@ -2432,6 +2498,118 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
       }
     });
   }, [activeTrades, symbol, isClient]);
+
+  // Calculate trade marker Y positions (Pocket Option style)
+  // Use ref to track active trade IDs to prevent infinite loops
+  const activeTradeIdsRef = useRef<string>('');
+
+  useEffect(() => {
+    // Create stable ID string to compare
+    const tradeIds = activeTrades.map(t => t.id).sort().join(',');
+
+    // Skip if nothing changed
+    if (tradeIds === activeTradeIdsRef.current && tradeMarkerPositions.size > 0) {
+      return;
+    }
+    activeTradeIdsRef.current = tradeIds;
+
+    if (!mainSeriesRef.current || !chartRef.current || activeTrades.length === 0) {
+      if (tradeMarkerPositions.size > 0) {
+        setTradeMarkerPositions(new Map());
+      }
+      return;
+    }
+
+    const calculatePositions = () => {
+      const series = mainSeriesRef.current;
+      if (!series) return;
+
+      const newPositions = new Map<string, number>();
+      let hasChanges = false;
+
+      activeTrades.forEach((trade) => {
+        try {
+          const y = series.priceToCoordinate(trade.entryPrice);
+          if (y !== null && y !== undefined && !isNaN(y) && y > 0) {
+            newPositions.set(trade.id, y);
+            const oldY = tradeMarkerPositions.get(trade.id);
+            if (oldY === undefined || Math.abs(oldY - y) > 1) {
+              hasChanges = true;
+            }
+          }
+        } catch {
+          // Price might be out of visible range
+        }
+      });
+
+      // Only update state if positions actually changed
+      if (hasChanges || newPositions.size !== tradeMarkerPositions.size) {
+        setTradeMarkerPositions(newPositions);
+      }
+    };
+
+    // Calculate initial positions after a short delay to ensure chart is ready
+    const initTimeout = setTimeout(calculatePositions, 100);
+
+    // Subscribe to visible range changes to recalculate positions
+    const chart = chartRef.current;
+    const timeScale = chart.timeScale();
+
+    let rafId: number | null = null;
+    const handleRangeChange = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(calculatePositions);
+    };
+
+    timeScale.subscribeVisibleLogicalRangeChange(handleRangeChange);
+
+    // Recalculate periodically (catches zoom via scroll wheel)
+    const recalcInterval = setInterval(calculatePositions, 1000);
+
+    return () => {
+      clearTimeout(initTimeout);
+      if (rafId) cancelAnimationFrame(rafId);
+      timeScale.unsubscribeVisibleLogicalRangeChange(handleRangeChange);
+      clearInterval(recalcInterval);
+    };
+  }, [activeTrades.length, isClient]); // Only depend on length, not the array reference
+
+  // Group trades by similar Y positions (within 30px) for horizontal arrangement
+  const groupedTradeMarkers = useMemo(() => {
+    if (activeTrades.length === 0) return [];
+
+    const GROUPING_THRESHOLD = 30; // pixels
+    const groups: { y: number; trades: typeof activeTrades }[] = [];
+
+    // Sort trades by creation time (newest first for right-to-left display)
+    const sortedTrades = [...activeTrades].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    sortedTrades.forEach((trade) => {
+      const y = tradeMarkerPositions.get(trade.id);
+      if (y === undefined || y < 0) return;
+
+      // Find existing group within threshold
+      const existingGroup = groups.find(
+        (g) => Math.abs(g.y - y) <= GROUPING_THRESHOLD
+      );
+
+      if (existingGroup) {
+        existingGroup.trades.push(trade);
+        // Update group Y to average
+        const totalY = existingGroup.trades.reduce(
+          (sum, t) => sum + (tradeMarkerPositions.get(t.id) || 0),
+          0
+        );
+        existingGroup.y = totalY / existingGroup.trades.length;
+      } else {
+        groups.push({ y, trades: [trade] });
+      }
+    });
+
+    return groups;
+  }, [activeTrades, tradeMarkerPositions]);
 
   // Format countdown display
   const formatCountdown = (seconds: number) => {
@@ -3235,6 +3413,29 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
           ref={chartContainerRef}
           className="absolute inset-0"
         />
+
+        {/* Trade Markers - Pocket Option Style (positioned at entry price, right-aligned) */}
+        {groupedTradeMarkers.map((group, groupIndex) => (
+          <div
+            key={`trade-group-${groupIndex}`}
+            className="absolute z-20 flex items-center gap-1 pointer-events-none"
+            style={{
+              top: `${group.y}px`,
+              right: '90px', // Position from right (before price scale)
+              transform: 'translateY(-50%)',
+              flexDirection: 'row-reverse', // Newest on right, extends left
+            }}
+          >
+            {group.trades.slice(0, 10).map((trade) => (
+              <TradeMarkerPill key={trade.id} trade={trade} currentPrice={currentPrice?.price} />
+            ))}
+            {group.trades.length > 10 && (
+              <div className="flex-shrink-0 px-2 py-1 bg-[#1a1a2e]/90 rounded text-[10px] text-gray-400 font-medium">
+                +{group.trades.length - 10}
+              </div>
+            )}
+          </div>
+        ))}
 
         {/* Symbol Watermark */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-[1]">

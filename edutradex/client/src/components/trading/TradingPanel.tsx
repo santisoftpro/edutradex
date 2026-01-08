@@ -8,14 +8,17 @@ import { validateTrade } from '@/schemas/trade.schema';
 
 interface TradingPanelProps {
   balance: number;
-  onTrade: (direction: 'UP' | 'DOWN', amount: number, duration: number) => void;
+  onTrade: (direction: 'UP' | 'DOWN', amount?: number, duration?: number) => void;
   isLoading?: boolean;
   currentPrice?: number;
   payoutPercent?: number;
   isTradesPanelOpen?: boolean;
   initialDuration?: number;
   onDurationChange?: (duration: number) => void;
+  amount?: number;
+  onAmountChange?: (amount: number) => void;
   isDemoMode?: boolean;
+  showShortcuts?: boolean;
 }
 
 const DURATIONS = [
@@ -33,17 +36,35 @@ const DURATIONS = [
 
 const QUICK_AMOUNTS = [5, 10, 25, 50, 100, 500, 1000, 5000];
 
-export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, isTradesPanelOpen = true, initialDuration, onDurationChange, isDemoMode = false }: TradingPanelProps) {
-  const [amount, setAmount] = useState(10);
+export function TradingPanel({
+  balance,
+  onTrade,
+  isLoading,
+  payoutPercent = 98,
+  isTradesPanelOpen = true,
+  initialDuration,
+  onDurationChange,
+  amount: controlledAmount,
+  onAmountChange,
+  isDemoMode = false,
+  showShortcuts = false,
+}: TradingPanelProps) {
+  const [internalAmount, setInternalAmount] = useState(10);
   const [duration, setDuration] = useState(60);
 
-  // Load default amount from settings on mount
+  // Use controlled or internal amount
+  const amount = controlledAmount ?? internalAmount;
+  const setAmount = onAmountChange ?? setInternalAmount;
+
+  // Load default amount from settings on mount (only if not controlled)
   useEffect(() => {
-    const defaultAmount = getDefaultTradeAmount();
-    if (defaultAmount && defaultAmount !== amount) {
-      setAmount(defaultAmount);
+    if (controlledAmount === undefined) {
+      const defaultAmount = getDefaultTradeAmount();
+      if (defaultAmount && defaultAmount !== internalAmount) {
+        setInternalAmount(defaultAmount);
+      }
     }
-  }, []);
+  }, [controlledAmount]);
 
   // Sync duration from parent after hydration to avoid SSR mismatch
   useEffect(() => {
@@ -85,67 +106,68 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
   // Desktop Panel Only - Mobile uses MobileTradingPanel component
   return (
     <div className={cn(
-      "hidden md:flex w-56 bg-[#1a1a2e] border-l flex-col h-full",
+      "hidden md:flex w-60 bg-gradient-to-b from-[#1a1a2e] to-[#151528] border-l flex-col h-full",
       !isTradesPanelOpen && "mr-[68px]",
-      isDemoMode ? "border-amber-500/30" : "border-[#2d2d44]"
+      isDemoMode ? "border-amber-500/30" : "border-[#2d2d44]/80"
     )}>
       {/* Demo Mode Indicator */}
       {isDemoMode && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 py-1.5 px-3 flex items-center justify-center gap-2">
-          <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
-          <span className="text-amber-400 text-[10px] font-medium">DEMO MODE</span>
+        <div className="bg-gradient-to-r from-amber-500/15 to-amber-600/10 border-b border-amber-500/20 py-2 px-4 flex items-center justify-center gap-2">
+          <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+          <span className="text-amber-400 text-xs font-semibold tracking-wide">DEMO MODE</span>
         </div>
       )}
+
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
-        {/* Time Display */}
-        <div className="p-3 border-b border-[#2d2d44]">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wide">Expiration</span>
+        {/* Time Display Section */}
+        <div className="p-4 border-b border-[#2d2d44]/60">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Expiration</span>
             <button
               onClick={() => setShowCustomDuration(!showCustomDuration)}
-              className="flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors"
+              className="flex items-center gap-1.5 text-[#1079ff] hover:text-[#3a93ff] transition-colors"
               title="Custom time"
             >
-              <Edit3 className="h-3 w-3" />
-              <span className="text-[10px]">Custom</span>
+              <Edit3 className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">Custom</span>
             </button>
           </div>
 
           {showCustomDuration ? (
-            <div className="space-y-2">
-              <div className="flex gap-1">
+            <div className="space-y-3">
+              <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="text-[10px] text-gray-500 block mb-1">Hours</label>
+                  <label className="text-[10px] text-slate-500 block mb-1.5 font-medium">Hours</label>
                   <input
                     type="number"
                     min="0"
                     max="24"
                     value={customHours}
                     onChange={(e) => setCustomHours(Math.max(0, Math.min(24, Number(e.target.value))))}
-                    className="w-full px-1 py-1.5 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm text-center focus:outline-none focus:border-blue-500"
+                    className="w-full px-2 py-2 bg-[#252542] border border-[#3d3d5c] rounded-lg text-white text-sm text-center font-semibold focus:outline-none focus:border-[#1079ff] focus:ring-1 focus:ring-[#1079ff]/30 transition-all"
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="text-[10px] text-gray-500 block mb-1">Min</label>
+                  <label className="text-[10px] text-slate-500 block mb-1.5 font-medium">Min</label>
                   <input
                     type="number"
                     min="0"
                     max="59"
                     value={customMinutes}
                     onChange={(e) => setCustomMinutes(Math.max(0, Math.min(59, Number(e.target.value))))}
-                    className="w-full px-1 py-1.5 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm text-center focus:outline-none focus:border-blue-500"
+                    className="w-full px-2 py-2 bg-[#252542] border border-[#3d3d5c] rounded-lg text-white text-sm text-center font-semibold focus:outline-none focus:border-[#1079ff] focus:ring-1 focus:ring-[#1079ff]/30 transition-all"
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="text-[10px] text-gray-500 block mb-1">Sec</label>
+                  <label className="text-[10px] text-slate-500 block mb-1.5 font-medium">Sec</label>
                   <input
                     type="number"
                     min="0"
                     max="59"
                     value={customSeconds}
                     onChange={(e) => setCustomSeconds(Math.max(0, Math.min(59, Number(e.target.value))))}
-                    className="w-full px-1 py-1.5 bg-[#252542] border border-[#3d3d5c] rounded text-white text-sm text-center focus:outline-none focus:border-blue-500"
+                    className="w-full px-2 py-2 bg-[#252542] border border-[#3d3d5c] rounded-lg text-white text-sm text-center font-semibold focus:outline-none focus:border-[#1079ff] focus:ring-1 focus:ring-[#1079ff]/30 transition-all"
                   />
                 </div>
               </div>
@@ -157,20 +179,23 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
                     setShowCustomDuration(false);
                   }
                 }}
-                className="w-full py-1.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-xs font-medium rounded transition-all"
+                className="w-full py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#2389ff] hover:to-[#1079ff] text-white text-sm font-semibold rounded-lg transition-all shadow-lg shadow-[#1079ff]/20"
               >
                 Set ({customHours > 0 ? `${customHours}h ` : ''}{customMinutes}m {customSeconds}s)
               </button>
             </div>
           ) : (
-            <div className="text-xl font-mono font-bold text-white text-center py-2 bg-gradient-to-b from-[#252542] to-[#1f1f38] rounded-lg border border-[#3d3d5c]">
-              {formatDuration(duration)}
+            <div className="relative">
+              <div className="text-2xl font-mono font-bold text-white text-center py-3 bg-gradient-to-b from-[#252542] to-[#1f1f38] rounded-xl border border-[#3d3d5c]/80 shadow-inner">
+                {formatDuration(duration)}
+              </div>
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-12 h-1 bg-gradient-to-r from-transparent via-[#1079ff]/50 to-transparent rounded-full" />
             </div>
           )}
 
           {/* Duration buttons */}
-          <div className="grid grid-cols-5 gap-1 mt-2">
-            {DURATIONS.slice(0, 10).map((d) => (
+          <div className="grid grid-cols-5 gap-1.5 mt-3">
+            {DURATIONS.slice(0, 5).map((d) => (
               <button
                 key={d.value}
                 onClick={() => {
@@ -178,10 +203,29 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
                   setShowCustomDuration(false);
                 }}
                 className={cn(
-                  'py-1.5 rounded-md text-[10px] font-semibold transition-all',
+                  'py-2 rounded-lg text-xs font-semibold transition-all',
                   duration === d.value && !showCustomDuration
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                    : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
+                    ? 'bg-[#1079ff] text-white shadow-lg shadow-[#1079ff]/40'
+                    : 'bg-[#252542]/80 text-slate-400 hover:bg-[#2d2d52] hover:text-white border border-transparent hover:border-[#3d3d5c]'
+                )}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-5 gap-1.5 mt-1.5">
+            {DURATIONS.slice(5, 10).map((d) => (
+              <button
+                key={d.value}
+                onClick={() => {
+                  handleDurationChange(d.value);
+                  setShowCustomDuration(false);
+                }}
+                className={cn(
+                  'py-2 rounded-lg text-xs font-semibold transition-all',
+                  duration === d.value && !showCustomDuration
+                    ? 'bg-[#1079ff] text-white shadow-lg shadow-[#1079ff]/40'
+                    : 'bg-[#252542]/80 text-slate-400 hover:bg-[#2d2d52] hover:text-white border border-transparent hover:border-[#3d3d5c]'
                 )}
               >
                 {d.label}
@@ -190,51 +234,60 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
           </div>
         </div>
 
-        {/* Amount Input */}
-        <div className="p-3 border-b border-[#2d2d44]">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400 text-[10px] font-medium uppercase tracking-wide">Amount</span>
-            <DollarSign className="h-3.5 w-3.5 text-gray-500" />
+        {/* Amount Input Section */}
+        <div className="p-4 border-b border-[#2d2d44]/60">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Amount</span>
+            <DollarSign className="h-4 w-4 text-slate-500" />
           </div>
+
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg font-medium">$</span>
             <input
               type="number"
               value={amount}
               onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))}
-              className="w-full pl-7 pr-3 py-2 bg-gradient-to-b from-[#252542] to-[#1f1f38] border border-[#3d3d5c] rounded-lg text-white text-lg font-bold text-center focus:outline-none focus:border-[#1079ff] focus:ring-1 focus:ring-[#1079ff]/50 transition-all"
+              className="w-full pl-9 pr-4 py-3 bg-gradient-to-b from-[#252542] to-[#1f1f38] border border-[#3d3d5c]/80 rounded-xl text-white text-xl font-bold text-center focus:outline-none focus:border-[#1079ff] focus:ring-2 focus:ring-[#1079ff]/30 transition-all shadow-inner"
             />
           </div>
 
           {/* Quick Amount Buttons */}
-          <div className="grid grid-cols-3 gap-1.5 mt-2">
-            {QUICK_AMOUNTS.map((quickAmount) => (
+          <div className="grid grid-cols-3 gap-2 mt-3">
+            {QUICK_AMOUNTS.map((quickAmount, index) => (
               <button
                 key={quickAmount}
                 onClick={() => setAmount(quickAmount)}
                 className={cn(
-                  'py-1.5 rounded-md text-xs font-semibold transition-all',
+                  'py-2.5 rounded-lg text-sm font-semibold transition-all relative',
                   amount === quickAmount
-                    ? 'bg-[#1079ff] text-white shadow-lg shadow-[#1079ff]/30'
-                    : 'bg-[#252542] text-gray-400 hover:bg-[#2d2d52] hover:text-white'
+                    ? 'bg-[#1079ff] text-white shadow-lg shadow-[#1079ff]/40'
+                    : 'bg-[#252542]/80 text-slate-400 hover:bg-[#2d2d52] hover:text-white border border-transparent hover:border-[#3d3d5c]'
                 )}
               >
-                ${quickAmount}
+                ${quickAmount >= 1000 ? `${quickAmount/1000}k` : quickAmount}
+                {showShortcuts && index < 8 && (
+                  <span className={cn(
+                    'absolute top-1 right-1.5 text-[9px] font-mono',
+                    amount === quickAmount ? 'text-white/40' : 'text-slate-600'
+                  )}>
+                    {index + 1}
+                  </span>
+                )}
               </button>
             ))}
           </div>
 
           {/* Balance display */}
-          <div className="flex items-center justify-between mt-2 px-0.5">
-            <span className="text-gray-500 text-[10px]">Balance</span>
-            <span className="text-[#1079ff] text-xs font-bold">{formatCurrency(balance)}</span>
+          <div className="flex items-center justify-between mt-3 px-1">
+            <span className="text-slate-500 text-xs font-medium">Balance</span>
+            <span className="text-[#1079ff] text-sm font-bold">{formatCurrency(balance)}</span>
           </div>
 
           {/* Validation Error */}
           {!validation.valid && validation.error && (
-            <div className="mt-2 py-1.5 px-2 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-1.5">
-              <AlertCircle className="h-3 w-3 text-red-400 shrink-0" />
-              <span className="text-red-400 text-[10px] font-medium">
+            <div className="mt-3 py-2 px-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+              <span className="text-red-400 text-xs font-medium">
                 {validation.error}
               </span>
             </div>
@@ -242,33 +295,37 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
         </div>
 
         {/* Payout Display */}
-        <div className="p-3">
-          <div className="bg-gradient-to-br from-emerald-900/30 to-emerald-800/10 rounded-lg p-2.5 border border-emerald-500/20">
+        <div className="p-4">
+          <div className="bg-gradient-to-br from-[#1079ff]/10 to-[#092ab2]/5 rounded-xl p-3 border border-[#1079ff]/20">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Zap className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="text-gray-400 text-[10px] font-medium">Payout</span>
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-[#1079ff]/20 flex items-center justify-center">
+                  <Zap className="h-4 w-4 text-[#1079ff]" />
+                </div>
+                <span className="text-slate-400 text-xs font-semibold">Payout</span>
               </div>
-              <span className="text-lg font-bold text-emerald-400">+{payoutPercent}%</span>
+              <span className="text-xl font-bold text-emerald-400">+{payoutPercent}%</span>
             </div>
-            <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-emerald-500/20 text-[10px]">
-              <span className="text-gray-400">Profit</span>
-              <span className="text-emerald-300 font-semibold">+${potentialProfit.toFixed(2)}</span>
-            </div>
-            <div className="flex items-center justify-between mt-0.5 text-[10px]">
-              <span className="text-gray-400">Return</span>
-              <span className="text-emerald-400 font-bold">${(amount + potentialProfit).toFixed(2)}</span>
+            <div className="mt-3 pt-3 border-t border-[#1079ff]/20 space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500">Potential Profit</span>
+                <span className="text-emerald-400 font-semibold">+${potentialProfit.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500">Total Return</span>
+                <span className="text-white font-bold">${(amount + potentialProfit).toFixed(2)}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Trade Buttons - Fixed at bottom */}
-      <div className="p-3 border-t border-[#2d2d44] space-y-2 flex-shrink-0">
+      <div className="p-4 border-t border-[#2d2d44]/60 space-y-2.5 flex-shrink-0 bg-gradient-to-t from-[#151528] to-transparent">
         <button
           onClick={() => handleTrade('UP')}
           disabled={!canTrade}
-          className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-emerald-900 disabled:to-emerald-900 disabled:cursor-not-allowed rounded-lg font-bold text-white text-sm flex items-center justify-center gap-1.5 transition-all duration-200 shadow-lg shadow-emerald-900/50 hover:shadow-emerald-500/40 active:scale-[0.98] group"
+          className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-emerald-900/50 disabled:to-emerald-900/50 disabled:cursor-not-allowed rounded-xl font-bold text-white text-base flex items-center justify-center gap-2 transition-all duration-200 shadow-lg shadow-emerald-900/50 hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] group relative"
         >
           {isLoading ? (
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -276,6 +333,9 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
             <>
               <ArrowUp className="h-5 w-5 group-hover:-translate-y-0.5 transition-transform" strokeWidth={3} />
               BUY
+              {showShortcuts && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-emerald-200/50 font-mono">W</span>
+              )}
             </>
           )}
         </button>
@@ -283,7 +343,7 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
         <button
           onClick={() => handleTrade('DOWN')}
           disabled={!canTrade}
-          className="w-full py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:from-red-900 disabled:to-red-900 disabled:cursor-not-allowed rounded-lg font-bold text-white text-sm flex items-center justify-center gap-1.5 transition-all duration-200 shadow-lg shadow-red-900/50 hover:shadow-red-500/40 active:scale-[0.98] group"
+          className="w-full py-3.5 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:from-red-900/50 disabled:to-red-900/50 disabled:cursor-not-allowed rounded-xl font-bold text-white text-base flex items-center justify-center gap-2 transition-all duration-200 shadow-lg shadow-red-900/50 hover:shadow-red-500/40 hover:scale-[1.02] active:scale-[0.98] group relative"
         >
           {isLoading ? (
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -291,9 +351,20 @@ export function TradingPanel({ balance, onTrade, isLoading, payoutPercent = 98, 
             <>
               <ArrowDown className="h-5 w-5 group-hover:translate-y-0.5 transition-transform" strokeWidth={3} />
               SELL
+              {showShortcuts && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-red-200/50 font-mono">S</span>
+              )}
             </>
           )}
         </button>
+
+        {/* Keyboard Shortcuts Help */}
+        {showShortcuts && (
+          <div className="pt-2 flex items-center justify-center gap-4 text-[10px] text-slate-500">
+            <span><kbd className="px-1.5 py-0.5 bg-[#252542] rounded text-slate-400 font-mono">1-8</kbd> Amount</span>
+            <span><kbd className="px-1.5 py-0.5 bg-[#252542] rounded text-slate-400 font-mono">Q/E</kbd> Time</span>
+          </div>
+        )}
       </div>
     </div>
   );

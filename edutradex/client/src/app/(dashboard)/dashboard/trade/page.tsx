@@ -13,16 +13,20 @@ import { MobileTradingPanel } from '@/components/trading/MobileTradingPanel';
 import { MobileTradesSheet } from '@/components/trading/MobileTradesSheet';
 import { MobileChartSettingsSheet } from '@/components/trading/MobileChartSettingsSheet';
 import { MobileCopyTradingSheet } from '@/components/trading/MobileCopyTradingSheet';
-import { FavoritePairsBar } from '@/components/trading/FavoritePairsBar';
 import { useAuthStore } from '@/store/auth.store';
 import { useTradeStore, useActiveTradesCount } from '@/store/trade.store';
 import { useChartStore } from '@/store/chart.store';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { useTradingShortcuts } from '@/hooks/useTradingShortcuts';
 import { api, PriceTick } from '@/lib/api';
 import { playBuySound, playSellSound } from '@/lib/sounds';
 
 const SELECTED_ASSET_KEY = 'optigobroker-selected-asset';
 const SELECTED_DURATION_KEY = 'optigobroker-selected-duration';
+const SELECTED_AMOUNT_KEY = 'optigobroker-selected-amount';
+
+const QUICK_AMOUNTS = [5, 10, 25, 50, 100, 500, 1000, 5000];
+const DURATIONS = [5, 15, 30, 60, 180, 300, 600, 900, 1800, 3600];
 
 export default function TradePage() {
   const { user, syncBalanceFromServer, updateDemoBalance, updatePracticeBalance, getActiveBalance, switchAccount, isHydrated } = useAuthStore();
@@ -36,6 +40,7 @@ export default function TradePage() {
   const [isChartSettingsOpen, setIsChartSettingsOpen] = useState(false);
   const [isMobileCopyTradingOpen, setIsMobileCopyTradingOpen] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(300);
+  const [selectedAmount, setSelectedAmount] = useState(10);
   const [placingTrades, setPlacingTrades] = useState<Set<string>>(new Set());
   const [drawnLinesCount, setDrawnLinesCount] = useState(0);
   const hasSubscribedAllRef = useRef(false);
@@ -82,6 +87,10 @@ export default function TradePage() {
     if (savedDuration) {
       setSelectedDuration(parseInt(savedDuration, 10));
     }
+    const savedAmount = localStorage.getItem(SELECTED_AMOUNT_KEY);
+    if (savedAmount) {
+      setSelectedAmount(parseInt(savedAmount, 10));
+    }
   }, []);
 
   // Subscribe to ALL assets for live prices in the dropdown
@@ -114,6 +123,23 @@ export default function TradePage() {
   const handleSelectDuration = useCallback((duration: number) => {
     setSelectedDuration(duration);
     localStorage.setItem(SELECTED_DURATION_KEY, duration.toString());
+  }, []);
+
+  // Save selected amount to localStorage when it changes
+  const handleSelectAmount = useCallback((amount: number) => {
+    setSelectedAmount(amount);
+    localStorage.setItem(SELECTED_AMOUNT_KEY, amount.toString());
+  }, []);
+
+  // Handle duration navigation (Q/E keys)
+  const handleDurationNav = useCallback((direction: number) => {
+    setSelectedDuration(prev => {
+      const currentIndex = DURATIONS.indexOf(prev);
+      const newIndex = Math.max(0, Math.min(DURATIONS.length - 1, currentIndex + direction));
+      const newDuration = DURATIONS[newIndex];
+      localStorage.setItem(SELECTED_DURATION_KEY, newDuration.toString());
+      return newDuration;
+    });
   }, []);
 
   useEffect(() => {
@@ -156,8 +182,23 @@ export default function TradePage() {
   };
 
   const handleTrade = useCallback(
-    async (direction: 'UP' | 'DOWN', amount: number, duration: number) => {
+    async (direction: 'UP' | 'DOWN', amount?: number, duration?: number) => {
       if (!user) return;
+
+      // Use provided values or fall back to state
+      const tradeAmount = amount ?? selectedAmount;
+      const tradeDuration = duration ?? selectedDuration;
+
+      // Validate before placing trade
+      const balance = getActiveBalance();
+      if (tradeAmount > balance) {
+        toast.error('Insufficient balance', { duration: 3000 });
+        return;
+      }
+      if (tradeAmount <= 0) {
+        toast.error('Invalid trade amount', { duration: 3000 });
+        return;
+      }
 
       // Generate unique key for this trade action
       const tradeKey = `${direction}-${Date.now()}`;
@@ -180,8 +221,8 @@ export default function TradePage() {
         const trade = await placeTrade({
           symbol: selectedAsset,
           direction,
-          amount,
-          duration,
+          amount: tradeAmount,
+          duration: tradeDuration,
           entryPrice,
           marketType,
         });
@@ -192,12 +233,12 @@ export default function TradePage() {
         // - 'DEMO' mode uses practiceBalance (which is the practice/demo money)
         const currentBalance = getActiveBalance();
         if (user.activeAccountType === 'LIVE') {
-          updateDemoBalance(currentBalance - amount);
+          updateDemoBalance(currentBalance - tradeAmount);
         } else {
-          updatePracticeBalance(currentBalance - amount);
+          updatePracticeBalance(currentBalance - tradeAmount);
         }
 
-        toast.success(`Trade placed: ${direction} on ${selectedAsset} for $${amount}`, {
+        toast.success(`Trade placed: ${direction} on ${selectedAsset} for $${tradeAmount}`, {
           duration: 3000,
         });
 
@@ -221,8 +262,18 @@ export default function TradePage() {
         });
       }
     },
-    [user, selectedAsset, currentPrice, syncBalanceFromServer, updateDemoBalance, updatePracticeBalance, getActiveBalance, placeTrade]
+    [user, selectedAsset, selectedAmount, selectedDuration, currentPrice, syncBalanceFromServer, updateDemoBalance, updatePracticeBalance, getActiveBalance, placeTrade]
   );
+
+  // Keyboard shortcuts for trading
+  useTradingShortcuts({
+    onBuy: useCallback(() => handleTrade('UP'), [handleTrade]),
+    onSell: useCallback(() => handleTrade('DOWN'), [handleTrade]),
+    onAmountSelect: handleSelectAmount,
+    onDurationSelect: handleDurationNav,
+    amounts: QUICK_AMOUNTS,
+    enabled: !!user && placingTrades.size === 0,
+  });
 
   if (!user) {
     return (
@@ -299,11 +350,6 @@ export default function TradePage() {
           currentPrice={currentPrice}
           livePrices={latestPrices}
         />
-        <FavoritePairsBar
-          selectedAsset={selectedAsset}
-          onSelectAsset={handleSelectAsset}
-          livePrices={latestPrices}
-        />
       </div>
 
       {/* ===== MOBILE LAYOUT ===== */}
@@ -343,7 +389,10 @@ export default function TradePage() {
           isTradesPanelOpen={isTradesPanelOpen}
           initialDuration={selectedDuration}
           onDurationChange={handleSelectDuration}
+          amount={selectedAmount}
+          onAmountChange={handleSelectAmount}
           isLoading={placingTrades.size > 0}
+          showShortcuts
         />
 
         {/* Desktop Trades Sidebar */}
@@ -369,6 +418,8 @@ export default function TradePage() {
         onTrade={handleTrade}
         onDurationChange={handleSelectDuration}
         initialDuration={selectedDuration}
+        amount={selectedAmount}
+        onAmountChange={handleSelectAmount}
         isLoading={placingTrades.size > 0}
         onOpenTrades={() => setIsMobileTradesOpen(true)}
         onOpenCopyTrading={() => setIsMobileCopyTradingOpen(true)}
