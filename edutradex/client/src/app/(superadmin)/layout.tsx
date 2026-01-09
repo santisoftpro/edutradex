@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SuperAdminHeader } from '@/components/layout/SuperAdminHeader';
 import { SuperAdminSidebar } from '@/components/layout/SuperAdminSidebar';
 import { SuperAdminMobileNav } from '@/components/layout/SuperAdminMobileNav';
@@ -10,16 +12,27 @@ export default function SuperAdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 60 * 1000,
+        refetchOnWindowFocus: false,
+      },
+    },
+  }));
+
   return (
-    <SuperAdminRoute>
-      <div className="min-h-screen bg-slate-900 flex flex-col">
-        <SuperAdminHeader />
-        <div className="flex-1 flex overflow-hidden">
-          <SuperAdminSidebar />
-          <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6">{children}</main>
+    <QueryClientProvider client={queryClient}>
+      <SuperAdminRoute>
+        <div className="min-h-screen bg-slate-900 flex flex-col">
+          <SuperAdminHeader />
+          <div className="flex-1 flex overflow-hidden">
+            <SuperAdminSidebar />
+            <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6">{children}</main>
+          </div>
+          <SuperAdminMobileNav />
         </div>
-        <SuperAdminMobileNav />
-      </div>
-    </SuperAdminRoute>
+      </SuperAdminRoute>
+    </QueryClientProvider>
   );
 }

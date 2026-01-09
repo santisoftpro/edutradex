@@ -15,41 +15,57 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ==========================================
+// ENUMS
+// ==========================================
+
+// User type for financial reporting segregation
+enum UserType {
+  REAL // Actual customers - included in financial reports
+  TEST // Internal testing accounts - excluded from financials
+  DEMO_ONLY // Users who never deposited real money
+  AFFILIATE_TEST // Affiliate testing accounts - excluded from financials
+}
+
 model User {
-  id                String       @id @default(uuid())
-  email             String       @unique
+  id                String  @id @default(uuid())
+  email             String  @unique
   password          String
   name              String
-  role              String       @default("USER") // "USER", "ADMIN", "SUPERADMIN"
-  liveBalance       Float        @default(0)
-  demoBalance       Float        @default(0)        // NOTE: This is actually the REAL money balance (legacy naming)
-  practiceBalance   Float        @default(10000)    // Demo/practice balance for risk-free trading
-  activeAccountType String       @default("LIVE")   // "LIVE" uses demoBalance, "DEMO" uses practiceBalance
-  isActive          Boolean      @default(true)
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  trades            Trade[]
-  sessions          Session[]
-  deposits          Deposit[]
-  withdrawals       Withdrawal[]
+  role              String  @default("USER") // "USER", "ADMIN", "SUPERADMIN"
+  liveBalance       Float   @default(0)
+  demoBalance       Float   @default(0) // NOTE: This is actually the REAL money balance (legacy naming)
+  practiceBalance   Float   @default(10000) // Demo/practice balance for risk-free trading
+  activeAccountType String  @default("LIVE") // "LIVE" uses demoBalance, "DEMO" uses practiceBalance
+  isActive          Boolean @default(true)
+
+  // Financial Reporting Segregation
+  userType      UserType     @default(REAL) // Type for financial report filtering
+  isTestAccount Boolean      @default(false) // Quick flag for excluding from financials
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  trades        Trade[]
+  sessions      Session[]
+  deposits      Deposit[]
+  withdrawals   Withdrawal[]
 
   emailVerified   Boolean   @default(false)
   emailVerifiedAt DateTime?
 
-  kyc             KYC?
-  supportTickets  SupportTicket[]
+  kyc            KYC?
+  supportTickets SupportTicket[]
 
   leaderProfile CopyTradingLeader?
   following     CopyTradingFollower[] @relation("Follower")
 
-  referralCode      String?   @unique
-  referredBy        String?
-  referredByUser    User?     @relation("Referrals", fields: [referredBy], references: [id])
-  referrals         User[]    @relation("Referrals")
-  referralEarnings  Float     @default(0)
-  totalReferrals    Int       @default(0)
+  referralCode     String? @unique
+  referredBy       String?
+  referredByUser   User?   @relation("Referrals", fields: [referredBy], references: [id])
+  referrals        User[]  @relation("Referrals")
+  referralEarnings Float   @default(0)
+  totalReferrals   Int     @default(0)
 
-  commissionsEarned  ReferralCommission[] @relation("Earner")
+  commissionsEarned    ReferralCommission[] @relation("Earner")
   commissionsGenerated ReferralCommission[] @relation("Generator")
 
   // OTC Manual Control relations
@@ -57,14 +73,14 @@ model User {
   otcUserTargetings      OTCUserTargeting[]
 
   // SuperAdmin tracking fields
-  lastLoginAt       DateTime?
-  lastLoginIp       String?
-  loginCount        Int       @default(0)
-  isProtected       Boolean   @default(false) // Protected users cannot be deleted/demoted
+  lastLoginAt DateTime?
+  lastLoginIp String?
+  loginCount  Int       @default(0)
+  isProtected Boolean   @default(false) // Protected users cannot be deleted/demoted
 
   // SuperAdmin audit relations
-  adminActivities   AdminActivityLog[] @relation("AdminActivities")
-  adminSessions     AdminSession[]     @relation("AdminSessions")
+  adminActivities AdminActivityLog[] @relation("AdminActivities")
+  adminSessions   AdminSession[]     @relation("AdminSessions")
 
   // Security tracking fields (for ALL users)
   registrationIp        String?
@@ -77,16 +93,16 @@ model User {
   lockReason            String?
 
   // Security relations
-  devices               UserDevice[]
-  loginAttempts         LoginAttempt[]
-  riskProfile           UserRiskProfile?
-  securityAlerts        SecurityAlert[]
+  devices        UserDevice[]
+  loginAttempts  LoginAttempt[]
+  riskProfile    UserRiskProfile?
+  securityAlerts SecurityAlert[]
 
   // Two-Factor Authentication
-  twoFactorEnabled      Boolean      @default(false)
-  twoFactorSecret       String?      // Encrypted TOTP secret
-  twoFactorVerifiedAt   DateTime?    // When 2FA was last verified
-  backupCodes           String[]     @default([]) // Hashed backup codes
+  twoFactorEnabled    Boolean   @default(false)
+  twoFactorSecret     String? // Encrypted TOTP secret
+  twoFactorVerifiedAt DateTime? // When 2FA was last verified
+  backupCodes         String[]  @default([]) // Hashed backup codes
 
   @@index([email])
   @@index([role])
@@ -95,6 +111,9 @@ model User {
   @@index([emailVerified])
   @@index([role, isActive])
   @@index([isActive])
+  @@index([userType])
+  @@index([isTestAccount])
+  @@index([userType, isActive])
 }
 
 model Trade {
@@ -117,9 +136,9 @@ model Trade {
   closedAt      DateTime?
   expiresAt     DateTime
 
-  isCopyTrade      Boolean           @default(false)
-  originalTrades   CopiedTrade[]     @relation("OriginalTrade")
-  copiedFromTrades CopiedTrade[]     @relation("CopiedTrade")
+  isCopyTrade      Boolean            @default(false)
+  originalTrades   CopiedTrade[]      @relation("OriginalTrade")
+  copiedFromTrades CopiedTrade[]      @relation("CopiedTrade")
   pendingCopies    PendingCopyTrade[]
 
   @@index([userId])
@@ -178,26 +197,26 @@ model SystemConfig {
 }
 
 model Deposit {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount          Float
-  method          String
-  status          String    @default("PENDING")
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount Float
+  method String
+  status String @default("PENDING")
 
-  phoneNumber     String?
-  mobileProvider  String?
+  phoneNumber    String?
+  mobileProvider String?
 
   cryptoCurrency  String?
   walletAddress   String?
   transactionHash String?
 
-  adminNote       String?
-  processedBy     String?
-  processedAt     DateTime?
+  adminNote   String?
+  processedBy String?
+  processedAt DateTime?
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([status])
@@ -208,39 +227,39 @@ model Deposit {
 }
 
 model SpreadConfig {
-  id           String   @id @default(uuid())
-  symbol       String   @unique
-  markupPips   Float    @default(2)
-  isActive     Boolean  @default(true)
-  description  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(uuid())
+  symbol      String   @unique
+  markupPips  Float    @default(2)
+  isActive    Boolean  @default(true)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([symbol])
   @@index([isActive])
 }
 
 model Withdrawal {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount          Float
-  method          String
-  status          String    @default("PENDING")
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount Float
+  method String
+  status String @default("PENDING")
 
-  phoneNumber     String?
-  mobileProvider  String?
+  phoneNumber    String?
+  mobileProvider String?
 
-  cryptoCurrency  String?
-  walletAddress   String?
-  network         String?
+  cryptoCurrency String?
+  walletAddress  String?
+  network        String?
 
-  adminNote       String?
-  processedBy     String?
-  processedAt     DateTime?
+  adminNote   String?
+  processedBy String?
+  processedAt DateTime?
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([status])
@@ -251,32 +270,32 @@ model Withdrawal {
 }
 
 model PaymentMethod {
-  id              String   @id @default(uuid())
-  type            String
-  name            String
-  code            String   @unique
+  id   String @id @default(uuid())
+  type String
+  name String
+  code String @unique
 
-  cryptoCurrency  String?
-  network         String?
-  walletAddress   String?
+  cryptoCurrency String?
+  network        String?
+  walletAddress  String?
 
-  mobileProvider  String?
-  phoneNumber     String?
-  accountName     String?
+  mobileProvider String?
+  phoneNumber    String?
+  accountName    String?
 
-  iconUrl         String?
-  iconBg          String   @default("bg-gray-500/20")
-  displayOrder    Int      @default(0)
+  iconUrl      String?
+  iconBg       String  @default("bg-gray-500/20")
+  displayOrder Int     @default(0)
 
-  minAmount       Float    @default(10)
-  maxAmount       Float    @default(10000)
-  processingTime  String   @default("~5 min")
+  minAmount      Float  @default(10)
+  maxAmount      Float  @default(10000)
+  processingTime String @default("~5 min")
 
-  isActive        Boolean  @default(true)
-  isPopular       Boolean  @default(false)
+  isActive  Boolean @default(true)
+  isPopular Boolean @default(false)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([type])
   @@index([isActive])
@@ -284,28 +303,28 @@ model PaymentMethod {
 }
 
 model CopyTradingLeader {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   displayName String
   description String?
   avatarUrl   String?
 
-  status      String   @default("PENDING")
+  status String @default("PENDING")
 
-  totalTrades   Int    @default(0)
-  winningTrades Int    @default(0)
-  totalProfit   Float  @default(0)
-  winRate       Float  @default(0)
+  totalTrades   Int   @default(0)
+  winningTrades Int   @default(0)
+  totalProfit   Float @default(0)
+  winRate       Float @default(0)
 
   maxFollowers Int     @default(100)
   isPublic     Boolean @default(true)
 
-  adminNote    String?
-  approvedAt   DateTime?
-  rejectedAt   DateTime?
-  suspendedAt  DateTime?
+  adminNote   String?
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  suspendedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -327,30 +346,30 @@ model CopyTradingFollower {
   leader     CopyTradingLeader @relation(fields: [leaderId], references: [id], onDelete: Cascade)
 
   // Mode: "PERCENTAGE" or "FIXED_AMOUNT"
-  copyMode         String  @default("PERCENTAGE")
+  copyMode String @default("PERCENTAGE")
 
   // For PERCENTAGE mode - percentage of leader's trade amount (e.g., 50, 100, 150)
-  percentageAmount Float   @default(100)
+  percentageAmount Float @default(100)
 
   // For FIXED_AMOUNT mode - fixed $ amount per trade
-  fixedAmount      Float   @default(10)
+  fixedAmount Float @default(10)
 
   // For FIXED_AMOUNT mode - daily limits (null = no limit)
   dailyLossLimit   Float?
   dailyProfitLimit Float?
 
   // Daily tracking counters (reset daily)
-  dailyLoss        Float   @default(0)
-  dailyProfit      Float   @default(0)
+  dailyLoss   Float @default(0)
+  dailyProfit Float @default(0)
 
   // Max trades per day (null when unlimitedTrades is true)
-  maxDailyTrades   Int?    @default(50)
-  unlimitedTrades  Boolean @default(false)
+  maxDailyTrades  Int?    @default(50)
+  unlimitedTrades Boolean @default(false)
 
-  isActive         Boolean @default(true)
+  isActive Boolean @default(true)
 
-  tradesToday    Int      @default(0)
-  lastTradeDate  DateTime?
+  tradesToday   Int       @default(0)
+  lastTradeDate DateTime?
 
   totalCopied Int   @default(0)
   totalProfit Float @default(0)
@@ -422,26 +441,26 @@ model PendingCopyTrade {
 }
 
 model ReferralCommission {
-  id            String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  earnerId      String
-  earner        User     @relation("Earner", fields: [earnerId], references: [id], onDelete: Cascade)
+  earnerId String
+  earner   User   @relation("Earner", fields: [earnerId], references: [id], onDelete: Cascade)
 
-  generatorId   String
-  generator     User     @relation("Generator", fields: [generatorId], references: [id], onDelete: Cascade)
+  generatorId String
+  generator   User   @relation("Generator", fields: [generatorId], references: [id], onDelete: Cascade)
 
-  type          String
-  amount        Float
-  percentage    Float
-  sourceAmount  Float?
-  sourceId      String?
+  type         String
+  amount       Float
+  percentage   Float
+  sourceAmount Float?
+  sourceId     String?
 
-  status        String   @default("PENDING")
-  creditedAt    DateTime?
+  status     String    @default("PENDING")
+  creditedAt DateTime?
 
-  description   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([earnerId])
   @@index([generatorId])
@@ -454,20 +473,20 @@ model ReferralCommission {
 }
 
 model ReferralSettings {
-  id                    String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  signupBonus           Float    @default(5)
-  depositCommission     Float    @default(5)
-  tradeCommission       Float    @default(1)
+  signupBonus       Float @default(5)
+  depositCommission Float @default(5)
+  tradeCommission   Float @default(1)
 
-  minWithdrawal         Float    @default(10)
-  maxCommissionPerUser  Float    @default(1000)
+  minWithdrawal        Float @default(10)
+  maxCommissionPerUser Float @default(1000)
 
-  isActive              Boolean  @default(true)
-  requireVerification   Boolean  @default(false)
+  isActive            Boolean @default(true)
+  requireVerification Boolean @default(false)
 
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model EmailVerification {
@@ -485,15 +504,15 @@ model EmailVerification {
 }
 
 model AdminMessage {
-  id          String   @id @default(uuid())
-  senderId    String
-  recipientId String?
-  subject     String
-  content     String
-  type        String   @default("GENERAL")
-  isRead      Boolean  @default(false)
-  sentViaEmail Boolean @default(true)
-  createdAt   DateTime @default(now())
+  id           String   @id @default(uuid())
+  senderId     String
+  recipientId  String?
+  subject      String
+  content      String
+  type         String   @default("GENERAL")
+  isRead       Boolean  @default(false)
+  sentViaEmail Boolean  @default(true)
+  createdAt    DateTime @default(now())
 
   @@index([recipientId])
   @@index([senderId])
@@ -501,63 +520,63 @@ model AdminMessage {
 }
 
 model KYC {
-  id              String    @id @default(uuid())
-  userId          String    @unique
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  firstName       String?
-  lastName        String?
-  dateOfBirth     DateTime?
-  nationality     String?
-  address         String?
-  city            String?
-  country         String?
-  postalCode      String?
-  phoneNumber     String?
+  firstName   String?
+  lastName    String?
+  dateOfBirth DateTime?
+  nationality String?
+  address     String?
+  city        String?
+  country     String?
+  postalCode  String?
+  phoneNumber String?
 
-  documentType    String?
-  documentNumber  String?
-  documentFront   String?
-  documentBack    String?
-  selfieWithId    String?
+  documentType   String?
+  documentNumber String?
+  documentFront  String?
+  documentBack   String?
+  selfieWithId   String?
 
-  status          String    @default("NOT_SUBMITTED")
+  status          String  @default("NOT_SUBMITTED")
   rejectionReason String?
 
-  reviewedBy      String?
-  reviewedAt      DateTime?
-  adminNote       String?
+  reviewedBy String?
+  reviewedAt DateTime?
+  adminNote  String?
 
-  submittedAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([userId])
   @@index([status])
 }
 
 model SupportTicket {
-  id          String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  ticketNumber String  @unique
-  subject     String
-  message     String
-  category    String   @default("GENERAL")
-  priority    String   @default("MEDIUM")
-  status      String   @default("OPEN")
+  ticketNumber String @unique
+  subject      String
+  message      String
+  category     String @default("GENERAL")
+  priority     String @default("MEDIUM")
+  status       String @default("OPEN")
 
-  adminReply  String?
-  repliedBy   String?
-  repliedAt   DateTime?
+  adminReply String?
+  repliedBy  String?
+  repliedAt  DateTime?
 
-  closedBy    String?
-  closedAt    DateTime?
+  closedBy String?
+  closedAt DateTime?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([status])
@@ -567,38 +586,38 @@ model SupportTicket {
 }
 
 model SimulatedLeader {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  displayName     String
-  description     String?
-  avatarUrl       String?
+  displayName String
+  description String?
+  avatarUrl   String?
 
-  winRate         Float    @default(65)
-  totalProfit     Float    @default(1000)
-  totalTrades     Int      @default(100)
-  followerCount   Int      @default(50)
+  winRate       Float @default(65)
+  totalProfit   Float @default(1000)
+  totalTrades   Int   @default(100)
+  followerCount Int   @default(50)
 
   // Variation settings for dynamic updates
-  winRateMin      Float    @default(60)
-  winRateMax      Float    @default(85)
-  profitMin       Float    @default(500)
-  profitMax       Float    @default(10000)
-  followerMin     Int      @default(20)
-  followerMax     Int      @default(500)
-  tradesMin       Int      @default(50)
-  tradesMax       Int      @default(1000)
+  winRateMin  Float @default(60)
+  winRateMax  Float @default(85)
+  profitMin   Float @default(500)
+  profitMax   Float @default(10000)
+  followerMin Int   @default(20)
+  followerMax Int   @default(500)
+  tradesMin   Int   @default(50)
+  tradesMax   Int   @default(1000)
 
   // Activity simulation settings
-  tradeFrequency  Int      @default(5)  // trades per hour (simulated)
+  tradeFrequency Int @default(5) // trades per hour (simulated)
 
-  isActive        Boolean  @default(true)
-  displayOrder    Int      @default(0)
+  isActive     Boolean @default(true)
+  displayOrder Int     @default(0)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Real followers tracking
-  followers       SimulatedLeaderFollower[]
+  followers SimulatedLeaderFollower[]
 
   @@index([isActive])
   @@index([displayOrder])
@@ -606,34 +625,34 @@ model SimulatedLeader {
 
 // Track users following simulated leaders (visual only, no real trades)
 model SimulatedLeaderFollower {
-  id                  String          @id @default(uuid())
+  id String @id @default(uuid())
 
-  userId              String
-  simulatedLeaderId   String
-  simulatedLeader     SimulatedLeader @relation(fields: [simulatedLeaderId], references: [id], onDelete: Cascade)
+  userId            String
+  simulatedLeaderId String
+  simulatedLeader   SimulatedLeader @relation(fields: [simulatedLeaderId], references: [id], onDelete: Cascade)
 
   // Copy settings (display only, no real trades)
   // Mode: "PERCENTAGE" or "FIXED_AMOUNT"
-  copyMode            String          @default("PERCENTAGE")
+  copyMode String @default("PERCENTAGE")
 
   // For PERCENTAGE mode - percentage of leader's trade amount
-  percentageAmount    Float           @default(100)
+  percentageAmount Float @default(100)
 
   // For FIXED_AMOUNT mode - fixed $ amount per trade
-  fixedAmount         Float           @default(10)
+  fixedAmount Float @default(10)
 
   // For FIXED_AMOUNT mode - daily limits (null = no limit)
-  dailyLossLimit      Float?
-  dailyProfitLimit    Float?
+  dailyLossLimit   Float?
+  dailyProfitLimit Float?
 
   // Max trades per day (null when unlimitedTrades is true)
-  maxDailyTrades      Int?            @default(50)
-  unlimitedTrades     Boolean         @default(false)
+  maxDailyTrades  Int?    @default(50)
+  unlimitedTrades Boolean @default(false)
 
-  isActive            Boolean         @default(true)
+  isActive Boolean @default(true)
 
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, simulatedLeaderId])
   @@index([userId])
@@ -647,50 +666,50 @@ model SimulatedLeaderFollower {
 
 // OTC Configuration per symbol - Admin configurable
 model OTCConfig {
-  id                      String   @id @default(uuid())
-  symbol                  String   @unique  // e.g., "EUR/USD-OTC"
-  baseSymbol              String   // e.g., "EUR/USD" (real symbol to track)
-  marketType              String   // "FOREX" or "CRYPTO"
-  name                    String   // Display name
-  isEnabled               Boolean  @default(true)
+  id         String  @id @default(uuid())
+  symbol     String  @unique // e.g., "EUR/USD-OTC"
+  baseSymbol String // e.g., "EUR/USD" (real symbol to track)
+  marketType String // "FOREX" or "CRYPTO"
+  name       String // Display name
+  isEnabled  Boolean @default(true)
 
   // Price Generation Settings
-  baseVolatility          Float    @default(0.0003)   // Base volatility per tick (0.03%)
-  volatilityMultiplier    Float    @default(1.0)      // Scale volatility up/down
-  meanReversionStrength   Float    @default(0.0015)   // How fast price reverts to real
-  maxDeviationPercent     Float    @default(1.5)      // Max allowed deviation from real price
-  priceOffsetPips         Float    @default(2.0)      // Small offset from real price
-  momentumFactor          Float    @default(0.15)     // Trend continuation strength
+  baseVolatility        Float @default(0.0003) // Base volatility per tick (0.03%)
+  volatilityMultiplier  Float @default(1.0) // Scale volatility up/down
+  meanReversionStrength Float @default(0.0015) // How fast price reverts to real
+  maxDeviationPercent   Float @default(1.5) // Max allowed deviation from real price
+  priceOffsetPips       Float @default(2.0) // Small offset from real price
+  momentumFactor        Float @default(0.15) // Trend continuation strength
 
   // Volatility Clustering (GARCH parameters)
-  garchAlpha              Float    @default(0.08)     // Weight of recent shocks
-  garchBeta               Float    @default(0.88)     // Persistence of volatility
-  garchOmega              Float    @default(0.04)     // Long-term variance weight
+  garchAlpha Float @default(0.08) // Weight of recent shocks
+  garchBeta  Float @default(0.88) // Persistence of volatility
+  garchOmega Float @default(0.04) // Long-term variance weight
 
   // Risk Management Settings
-  riskEnabled             Boolean  @default(true)
-  exposureThreshold       Float    @default(0.35)     // 35% imbalance triggers review
-  minInterventionRate     Float    @default(0.25)     // 25% minimum intervention
-  maxInterventionRate     Float    @default(0.40)     // 40% maximum intervention (moderate)
-  spreadMultiplier        Float    @default(1.5)      // Max spread multiplier for adjustments
+  riskEnabled         Boolean @default(true)
+  exposureThreshold   Float   @default(0.35) // 35% imbalance triggers review
+  minInterventionRate Float   @default(0.25) // 25% minimum intervention
+  maxInterventionRate Float   @default(0.40) // 40% maximum intervention (moderate)
+  spreadMultiplier    Float   @default(1.5) // Max spread multiplier for adjustments
 
   // Trading Settings
-  payoutPercent           Float    @default(85)
-  minTradeAmount          Float    @default(1)
-  maxTradeAmount          Float    @default(1000)
-  pipSize                 Float    @default(0.0001)   // Price precision
+  payoutPercent  Float @default(85)
+  minTradeAmount Float @default(1)
+  maxTradeAmount Float @default(1000)
+  pipSize        Float @default(0.0001) // Price precision
 
   // Scheduling
-  is24Hours               Boolean  @default(true)     // OTC runs 24/7
-  anchoringDurationMins   Int      @default(15)       // Minutes to anchor after market opens
+  is24Hours             Boolean @default(true) // OTC runs 24/7
+  anchoringDurationMins Int     @default(15) // Minutes to anchor after market opens
 
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  priceHistory            OTCPriceHistory[]
-  exposure                OTCRiskExposure?
-  activityLogs            OTCActivityLog[]
+  priceHistory OTCPriceHistory[]
+  exposure     OTCRiskExposure?
+  activityLogs OTCActivityLog[]
 
   @@index([baseSymbol])
   @@index([marketType])
@@ -700,29 +719,29 @@ model OTCConfig {
 
 // OTC Price History - For charts and analysis
 model OTCPriceHistory {
-  id          String    @id @default(uuid())
-  configId    String
-  config      OTCConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  id       String    @id @default(uuid())
+  configId String
+  config   OTCConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
 
-  symbol      String    // OTC symbol for quick lookup
-  price       Float
-  bid         Float
-  ask         Float
+  symbol String // OTC symbol for quick lookup
+  price  Float
+  bid    Float
+  ask    Float
 
   // OHLC data for candle generation
-  open        Float?
-  high        Float?
-  low         Float?
-  close       Float?
-  volume      Int       @default(0)
+  open   Float?
+  high   Float?
+  low    Float?
+  close  Float?
+  volume Int    @default(0)
 
   // Price mode tracking
-  priceMode   String    @default("OTC")  // "REAL", "OTC", "ANCHORING"
+  priceMode String @default("OTC") // "REAL", "OTC", "ANCHORING"
 
   // Volatility state at this point
   volatilityState Float?
 
-  timestamp   DateTime  @default(now())
+  timestamp DateTime @default(now())
 
   @@index([symbol, timestamp])
   @@index([configId, timestamp])
@@ -732,40 +751,40 @@ model OTCPriceHistory {
 
 // Real-time Risk Exposure per OTC symbol
 model OTCRiskExposure {
-  id                String    @id @default(uuid())
-  configId          String    @unique
-  config            OTCConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
-  symbol            String    @unique
+  id       String    @id @default(uuid())
+  configId String    @unique
+  config   OTCConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  symbol   String    @unique
 
   // UP direction exposure
-  totalUpAmount     Float     @default(0)
-  activeUpTrades    Int       @default(0)
-  upTradeIds        String[]  // Array of trade IDs
+  totalUpAmount  Float    @default(0)
+  activeUpTrades Int      @default(0)
+  upTradeIds     String[] // Array of trade IDs
 
   // DOWN direction exposure
-  totalDownAmount   Float     @default(0)
-  activeDownTrades  Int       @default(0)
-  downTradeIds      String[]  // Array of trade IDs
+  totalDownAmount  Float    @default(0)
+  activeDownTrades Int      @default(0)
+  downTradeIds     String[] // Array of trade IDs
 
   // Calculated metrics
-  netExposure       Float     @default(0)    // UP - DOWN
-  exposureRatio     Float     @default(0)    // Imbalance ratio 0-1
-  brokerRiskAmount  Float     @default(0)    // Potential broker loss
+  netExposure      Float @default(0) // UP - DOWN
+  exposureRatio    Float @default(0) // Imbalance ratio 0-1
+  brokerRiskAmount Float @default(0) // Potential broker loss
 
   // Statistics
-  totalInterventions    Int   @default(0)
+  totalInterventions      Int @default(0)
   successfulInterventions Int @default(0)
-  totalTradesProcessed  Int   @default(0)
+  totalTradesProcessed    Int @default(0)
 
   // Historical peak exposure
   peakExposureRatio Float     @default(0)
   peakExposureTime  DateTime?
 
-  lastUpdated       DateTime  @updatedAt
-  createdAt         DateTime  @default(now())
+  lastUpdated DateTime @updatedAt
+  createdAt   DateTime @default(now())
 
   // Individual trade tracking
-  tradeExposures    OTCTradeExposure[]
+  tradeExposures OTCTradeExposure[]
 
   @@index([symbol])
   @@index([exposureRatio])
@@ -773,19 +792,19 @@ model OTCRiskExposure {
 
 // Track individual trade contributions to exposure
 model OTCTradeExposure {
-  id            String           @id @default(uuid())
-  exposureId    String
-  exposure      OTCRiskExposure  @relation(fields: [exposureId], references: [id], onDelete: Cascade)
+  id         String          @id @default(uuid())
+  exposureId String
+  exposure   OTCRiskExposure @relation(fields: [exposureId], references: [id], onDelete: Cascade)
 
-  tradeId       String           @unique
-  symbol        String
-  direction     String           // "UP" or "DOWN"
-  amount        Float
-  entryPrice    Float
-  userId        String
-  expiresAt     DateTime
+  tradeId    String   @unique
+  symbol     String
+  direction  String // "UP" or "DOWN"
+  amount     Float
+  entryPrice Float
+  userId     String
+  expiresAt  DateTime
 
-  createdAt     DateTime         @default(now())
+  createdAt DateTime @default(now())
 
   @@index([exposureId])
   @@index([tradeId])
@@ -796,35 +815,35 @@ model OTCTradeExposure {
 
 // OTC Activity Log - Audit trail for all OTC operations
 model OTCActivityLog {
-  id              String    @id @default(uuid())
-  configId        String?
-  config          OTCConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
+  id       String     @id @default(uuid())
+  configId String?
+  config   OTCConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
 
-  symbol          String
-  eventType       String    // Types: PRICE_GENERATED, MODE_SWITCH, TRADE_TRACKED, etc.
+  symbol    String
+  eventType String // Types: PRICE_GENERATED, MODE_SWITCH, TRADE_TRACKED, etc.
 
   // Event context
-  tradeId         String?
-  userId          String?
+  tradeId String?
+  userId  String?
 
   // Metrics at time of event
-  priceMode       String?
-  exposureRatio   Float?
+  priceMode               String?
+  exposureRatio           Float?
   interventionProbability Float?
 
   // Price data
-  marketPrice     Float?
-  adjustedPrice   Float?
-  entryPrice      Float?
+  marketPrice   Float?
+  adjustedPrice Float?
+  entryPrice    Float?
 
   // Additional details as JSON
-  details         Json?
+  details Json?
 
   // Outcome
-  success         Boolean   @default(true)
-  errorMessage    String?
+  success      Boolean @default(true)
+  errorMessage String?
 
-  timestamp       DateTime  @default(now())
+  timestamp DateTime @default(now())
 
   @@index([symbol, timestamp])
   @@index([eventType])
@@ -840,19 +859,19 @@ model OTCActivityLog {
 
 // Audit trail for all manual interventions
 model OTCManualIntervention {
-  id            String   @id @default(uuid())
-  adminId       String
-  admin         User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  id      String @id @default(uuid())
+  adminId String
+  admin   User   @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
-  actionType    String   // PRICE_BIAS, TRADE_FORCE, USER_TARGET, VOLATILITY, PRICE_OVERRIDE
-  targetType    String   // SYMBOL, TRADE, USER
-  targetId      String   // symbol name, tradeId, or userId
+  actionType String // PRICE_BIAS, TRADE_FORCE, USER_TARGET, VOLATILITY, PRICE_OVERRIDE
+  targetType String // SYMBOL, TRADE, USER
+  targetId   String // symbol name, tradeId, or userId
 
   previousValue Json?
   newValue      Json
   reason        String?
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([actionType, createdAt(sort: Desc)])
   @@index([targetType, createdAt(sort: Desc)])
@@ -863,25 +882,25 @@ model OTCManualIntervention {
 
 // Active manual controls per symbol
 model OTCManualControl {
-  id                   String    @id @default(uuid())
-  symbol               String    @unique
+  id     String @id @default(uuid())
+  symbol String @unique
 
   // Price direction bias (-100 to +100, 0 = neutral)
-  directionBias        Int       @default(0)
-  directionStrength    Float     @default(0)  // 0-1 multiplier
-  directionBiasExpiry  DateTime?  // null = permanent, otherwise auto-resets
+  directionBias       Int       @default(0)
+  directionStrength   Float     @default(0) // 0-1 multiplier
+  directionBiasExpiry DateTime? // null = permanent, otherwise auto-resets
 
   // Volatility override multiplier
   volatilityMultiplier Float     @default(1.0)
-  volatilityExpiry     DateTime?  // null = permanent, otherwise auto-resets
+  volatilityExpiry     DateTime? // null = permanent, otherwise auto-resets
 
   // Direct price override
-  priceOverride        Float?
-  priceOverrideExpiry  DateTime?
+  priceOverride       Float?
+  priceOverrideExpiry DateTime?
 
-  isActive             Boolean   @default(true)
-  updatedAt            DateTime  @updatedAt
-  updatedBy            String?
+  isActive  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+  updatedBy String?
 
   @@index([symbol])
   @@index([isActive])
@@ -889,23 +908,23 @@ model OTCManualControl {
 
 // User-specific targeting for win rate manipulation
 model OTCUserTargeting {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  symbol          String?  // null = applies to all OTC symbols
+  symbol String? // null = applies to all OTC symbols
 
   // Win rate override (0-100, null = use normal algorithm)
-  targetWinRate   Float?
+  targetWinRate Float?
 
   // Force next N trades outcome
-  forceNextWin    Int      @default(0)
-  forceNextLose   Int      @default(0)
+  forceNextWin  Int @default(0)
+  forceNextLose Int @default(0)
 
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  createdBy       String   // Admin who created this targeting
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String // Admin who created this targeting
 
   @@unique([userId, symbol])
   @@index([userId])
@@ -919,28 +938,28 @@ model OTCUserTargeting {
 
 // Admin Activity Log - Audit trail for all admin/superadmin actions
 model AdminActivityLog {
-  id            String   @id @default(uuid())
-  adminId       String
-  admin         User     @relation("AdminActivities", fields: [adminId], references: [id], onDelete: Cascade)
+  id      String @id @default(uuid())
+  adminId String
+  admin   User   @relation("AdminActivities", fields: [adminId], references: [id], onDelete: Cascade)
 
-  actionType    String   // LOGIN, LOGOUT, USER_CREATE, USER_UPDATE, USER_DELETE, USER_STATUS_CHANGE,
-                         // ROLE_CHANGE, DEPOSIT_APPROVE, DEPOSIT_REJECT, WITHDRAWAL_APPROVE, WITHDRAWAL_REJECT,
-                         // KYC_APPROVE, KYC_REJECT, SETTINGS_CHANGE, ADMIN_CREATE, ADMIN_UPDATE, ADMIN_DELETE,
-                         // ADMIN_PASSWORD_RESET, ADMIN_ACTIVATE, ADMIN_DEACTIVATE, LEADER_APPROVE, LEADER_REJECT,
-                         // LEADER_SUSPEND, OTC_CONFIG_CHANGE, MARKET_CONFIG_CHANGE, TICKET_REPLY, TICKET_CLOSE
-  targetType    String?  // USER, DEPOSIT, WITHDRAWAL, SETTINGS, ADMIN, KYC, LEADER, TICKET, OTC, MARKET
-  targetId      String?  // ID of the affected entity
+  actionType String // LOGIN, LOGOUT, USER_CREATE, USER_UPDATE, USER_DELETE, USER_STATUS_CHANGE,
+  // ROLE_CHANGE, DEPOSIT_APPROVE, DEPOSIT_REJECT, WITHDRAWAL_APPROVE, WITHDRAWAL_REJECT,
+  // KYC_APPROVE, KYC_REJECT, SETTINGS_CHANGE, ADMIN_CREATE, ADMIN_UPDATE, ADMIN_DELETE,
+  // ADMIN_PASSWORD_RESET, ADMIN_ACTIVATE, ADMIN_DEACTIVATE, LEADER_APPROVE, LEADER_REJECT,
+  // LEADER_SUSPEND, OTC_CONFIG_CHANGE, MARKET_CONFIG_CHANGE, TICKET_REPLY, TICKET_CLOSE
+  targetType String? // USER, DEPOSIT, WITHDRAWAL, SETTINGS, ADMIN, KYC, LEADER, TICKET, OTC, MARKET
+  targetId   String? // ID of the affected entity
 
-  description   String   // Human-readable description
-  previousValue Json?    // Previous state (for changes)
-  newValue      Json?    // New state (for changes)
+  description   String // Human-readable description
+  previousValue Json? // Previous state (for changes)
+  newValue      Json? // New state (for changes)
 
-  ipAddress     String?
-  userAgent     String?
+  ipAddress String?
+  userAgent String?
 
-  metadata      Json?    // Additional context data
+  metadata Json? // Additional context data
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([adminId])
   @@index([actionType])
@@ -953,19 +972,19 @@ model AdminActivityLog {
 
 // Admin Session tracking for SuperAdmin monitoring
 model AdminSession {
-  id          String    @id @default(uuid())
-  adminId     String
-  admin       User      @relation("AdminSessions", fields: [adminId], references: [id], onDelete: Cascade)
+  id      String @id @default(uuid())
+  adminId String
+  admin   User   @relation("AdminSessions", fields: [adminId], references: [id], onDelete: Cascade)
 
-  token       String    @unique
-  ipAddress   String?
-  userAgent   String?
+  token     String  @unique
+  ipAddress String?
+  userAgent String?
 
-  loginAt     DateTime  @default(now())
-  logoutAt    DateTime?
-  expiresAt   DateTime
+  loginAt   DateTime  @default(now())
+  logoutAt  DateTime?
+  expiresAt DateTime
 
-  isActive    Boolean   @default(true)
+  isActive Boolean @default(true)
 
   @@index([adminId])
   @@index([token])
@@ -980,18 +999,18 @@ model AdminSession {
 
 // Token Blacklist - For invalidating tokens before expiry
 model TokenBlacklist {
-  id          String    @id @default(uuid())
-  tokenHash   String    @unique  // Hashed token (we don't store raw tokens) - @unique creates index automatically
-  userId      String
-  reason      String    // LOGOUT, SESSION_TERMINATED, SECURITY_BREACH, PASSWORD_CHANGED, IMPERSONATION_ENDED
-  expiresAt   DateTime  // When the token would have expired anyway (for cleanup)
-  createdAt   DateTime  @default(now())
+  id        String   @id @default(uuid())
+  tokenHash String   @unique // Hashed token (we don't store raw tokens) - @unique creates index automatically
+  userId    String
+  reason    String // LOGOUT, SESSION_TERMINATED, SECURITY_BREACH, PASSWORD_CHANGED, IMPERSONATION_ENDED
+  expiresAt DateTime // When the token would have expired anyway (for cleanup)
+  createdAt DateTime @default(now())
 
   // Composite index for the most frequent query: WHERE tokenHash = ? AND expiresAt > NOW()
   // This allows PostgreSQL to use a single index scan instead of filtering
   @@index([tokenHash, expiresAt], name: "idx_token_blacklist_hash_expiry")
   @@index([userId])
-  @@index([expiresAt])  // For cleanup queries: DELETE WHERE expiresAt < NOW()
+  @@index([expiresAt]) // For cleanup queries: DELETE WHERE expiresAt < NOW()
 }
 
 // ==========================================
@@ -1000,44 +1019,44 @@ model TokenBlacklist {
 
 // User devices - tracks all devices used by a user
 model UserDevice {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Device fingerprint (hash of browser/device characteristics)
   fingerprint     String
-  fingerprintHash String    // SHA256 hash for faster lookups
+  fingerprintHash String // SHA256 hash for faster lookups
 
   // Device details
-  deviceType      String    // desktop, mobile, tablet
-  browser         String?
-  browserVersion  String?
-  os              String?
-  osVersion       String?
+  deviceType       String // desktop, mobile, tablet
+  browser          String?
+  browserVersion   String?
+  os               String?
+  osVersion        String?
   screenResolution String?
-  timezone        String?
-  language        String?
+  timezone         String?
+  language         String?
 
   // Trust status
-  isTrusted       Boolean   @default(false)
-  trustScore      Int       @default(50) // 0-100
-  trustedAt       DateTime?
-  trustedBy       String?   // admin who trusted, or 'USER' if self-trusted
+  isTrusted  Boolean   @default(false)
+  trustScore Int       @default(50) // 0-100
+  trustedAt  DateTime?
+  trustedBy  String? // admin who trusted, or 'USER' if self-trusted
 
   // Usage tracking
-  firstSeenAt     DateTime  @default(now())
-  lastSeenAt      DateTime  @default(now())
-  lastIp          String?
-  lastCountry     String?
-  loginCount      Int       @default(1)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  lastIp      String?
+  lastCountry String?
+  loginCount  Int      @default(1)
 
   // Risk flags
-  isBlocked       Boolean   @default(false)
-  blockReason     String?
-  blockedAt       DateTime?
+  isBlocked   Boolean   @default(false)
+  blockReason String?
+  blockedAt   DateTime?
 
   // Relations
-  loginAttempts   LoginAttempt[]
+  loginAttempts LoginAttempt[]
 
   @@unique([userId, fingerprintHash])
   @@index([userId])
@@ -1045,37 +1064,37 @@ model UserDevice {
   @@index([fingerprint])
   @@index([isTrusted])
   @@index([isBlocked])
-  @@index([lastSeenAt])                    // Device cleanup queries
-  @@index([lastSeenAt, isTrusted])         // Cleanup old untrusted devices
+  @@index([lastSeenAt]) // Device cleanup queries
+  @@index([lastSeenAt, isTrusted]) // Cleanup old untrusted devices
 }
 
 // Login attempts - tracks ALL login attempts (successful and failed)
 model LoginAttempt {
-  id              String    @id @default(uuid())
-  userId          String?   // null for failed attempts with unknown user
-  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id     String  @id @default(uuid())
+  userId String? // null for failed attempts with unknown user
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  email           String    // Email attempted
-  ipAddress       String
-  country         String?   // Derived from IP
-  city            String?
-  userAgent       String?
+  email     String // Email attempted
+  ipAddress String
+  country   String? // Derived from IP
+  city      String?
+  userAgent String?
 
   // Device info
-  deviceId        String?   // FK to UserDevice
-  device          UserDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  deviceId          String? // FK to UserDevice
+  device            UserDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   deviceFingerprint String?
 
   // Attempt result
-  success         Boolean
-  failureReason   String?   // INVALID_CREDENTIALS, ACCOUNT_LOCKED, ACCOUNT_INACTIVE, etc.
+  success       Boolean
+  failureReason String? // INVALID_CREDENTIALS, ACCOUNT_LOCKED, ACCOUNT_INACTIVE, etc.
 
   // Risk assessment
-  riskScore       Int       @default(0) // 0-100
-  riskFlags       String[]  // Array of flags: VPN_DETECTED, NEW_DEVICE, NEW_LOCATION, etc.
-  isSuspicious    Boolean   @default(false)
+  riskScore    Int      @default(0) // 0-100
+  riskFlags    String[] // Array of flags: VPN_DETECTED, NEW_DEVICE, NEW_LOCATION, etc.
+  isSuspicious Boolean  @default(false)
 
-  attemptedAt     DateTime  @default(now())
+  attemptedAt DateTime @default(now())
 
   @@index([email])
   @@index([userId])
@@ -1086,59 +1105,59 @@ model LoginAttempt {
   @@index([email, attemptedAt])
   @@index([ipAddress, attemptedAt])
   // Composite indexes for security queries
-  @@index([email, success, attemptedAt])           // checkDistributedAttack
-  @@index([userId, success, attemptedAt])          // checkImpossibleTravel
+  @@index([email, success, attemptedAt]) // checkDistributedAttack
+  @@index([userId, success, attemptedAt]) // checkImpossibleTravel
   @@index([ipAddress, userId, success, attemptedAt]) // checkSharedIp
 }
 
 // User risk profile - aggregated risk assessment
 model UserRiskProfile {
-  id              String    @id @default(uuid())
-  userId          String    @unique
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Overall risk score (0-100)
-  riskScore       Int       @default(0)
-  riskLevel       String    @default("LOW") // LOW, MEDIUM, HIGH, CRITICAL
+  riskScore Int    @default(0)
+  riskLevel String @default("LOW") // LOW, MEDIUM, HIGH, CRITICAL
 
   // Risk factors
-  riskFlags       String[]  // Active risk flags
+  riskFlags String[] // Active risk flags
 
   // Multi-account detection
-  linkedAccounts  String[]  // User IDs of suspected linked accounts
-  sharedDevices   String[]  // Device IDs shared with other accounts
-  sharedIps       String[]  // IPs shared with other accounts
+  linkedAccounts String[] // User IDs of suspected linked accounts
+  sharedDevices  String[] // Device IDs shared with other accounts
+  sharedIps      String[] // IPs shared with other accounts
 
   // Behavior metrics
-  unusualLoginCount     Int @default(0)
-  failedLoginCount      Int @default(0)
-  suspiciousTradeCount  Int @default(0)
-  chargebackCount       Int @default(0)
+  unusualLoginCount    Int @default(0)
+  failedLoginCount     Int @default(0)
+  suspiciousTradeCount Int @default(0)
+  chargebackCount      Int @default(0)
 
   // Velocity metrics
-  dailyLoginCount       Int @default(0)
-  dailyTradeCount       Int @default(0)
-  dailyDepositCount     Int @default(0)
-  dailyWithdrawalCount  Int @default(0)
-  lastVelocityReset     DateTime @default(now())
+  dailyLoginCount      Int      @default(0)
+  dailyTradeCount      Int      @default(0)
+  dailyDepositCount    Int      @default(0)
+  dailyWithdrawalCount Int      @default(0)
+  lastVelocityReset    DateTime @default(now())
 
   // Geographic data
-  knownCountries        String[]
-  knownIps              String[]
-  lastKnownLocation     String?
+  knownCountries    String[]
+  knownIps          String[]
+  lastKnownLocation String?
 
   // Assessment tracking
-  lastAssessedAt        DateTime @default(now())
-  assessmentHistory     Json?    // Array of past assessments
+  lastAssessedAt    DateTime @default(now())
+  assessmentHistory Json? // Array of past assessments
 
   // Manual overrides
-  manualRiskOverride    Int?     // Admin can override risk score
-  overrideReason        String?
-  overrideBy            String?
-  overrideAt            DateTime?
+  manualRiskOverride Int? // Admin can override risk score
+  overrideReason     String?
+  overrideBy         String?
+  overrideAt         DateTime?
 
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([riskLevel])
@@ -1147,27 +1166,27 @@ model UserRiskProfile {
 
 // Security alerts - notifications for suspicious activity
 model SecurityAlert {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  alertType       String    // NEW_DEVICE, NEW_LOCATION, MULTIPLE_FAILED_LOGINS, IMPOSSIBLE_TRAVEL, etc.
-  severity        String    // LOW, MEDIUM, HIGH, CRITICAL
-  title           String
-  description     String
-  metadata        Json?     // Additional context
+  alertType   String // NEW_DEVICE, NEW_LOCATION, MULTIPLE_FAILED_LOGINS, IMPOSSIBLE_TRAVEL, etc.
+  severity    String // LOW, MEDIUM, HIGH, CRITICAL
+  title       String
+  description String
+  metadata    Json? // Additional context
 
   // Status
-  status          String    @default("OPEN") // OPEN, ACKNOWLEDGED, RESOLVED, FALSE_POSITIVE
-  resolvedBy      String?
-  resolvedAt      DateTime?
-  resolution      String?
+  status     String    @default("OPEN") // OPEN, ACKNOWLEDGED, RESOLVED, FALSE_POSITIVE
+  resolvedBy String?
+  resolvedAt DateTime?
+  resolution String?
 
   // User notification
-  userNotified    Boolean   @default(false)
-  notifiedAt      DateTime?
+  userNotified Boolean   @default(false)
+  notifiedAt   DateTime?
 
-  createdAt       DateTime  @default(now())
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([alertType])
@@ -1179,18 +1198,18 @@ model SecurityAlert {
 
 // Known malicious fingerprints/IPs (blocklist)
 model SecurityBlocklist {
-  id              String    @id @default(uuid())
+  id String @id @default(uuid())
 
-  type            String    // IP, FINGERPRINT, EMAIL_DOMAIN, COUNTRY
-  value           String    // The blocked value
-  valueHash       String?   // Hash for fingerprints
+  type      String // IP, FINGERPRINT, EMAIL_DOMAIN, COUNTRY
+  value     String // The blocked value
+  valueHash String? // Hash for fingerprints
 
-  reason          String
-  severity        String    // TEMPORARY, PERMANENT
+  reason   String
+  severity String // TEMPORARY, PERMANENT
 
-  addedBy         String?   // Admin who added
-  addedAt         DateTime  @default(now())
-  expiresAt       DateTime? // null = permanent
+  addedBy   String? // Admin who added
+  addedAt   DateTime  @default(now())
+  expiresAt DateTime? // null = permanent
 
   // Stats
   blockedAttempts Int       @default(0)
@@ -1201,4 +1220,224 @@ model SecurityBlocklist {
   @@index([value])
   @@index([valueHash])
   @@index([expiresAt])
+}
+
+// ==========================================
+// BROKER FINANCIAL MANAGEMENT
+// ==========================================
+
+// Daily financial snapshot - captures broker P&L and metrics for each day
+model BrokerFinancialSnapshot {
+  id   String   @id @default(uuid())
+  date DateTime @unique @db.Date // One snapshot per day
+
+  // ========== TRADING REVENUE (REAL users only) ==========
+  // Broker P&L = Lost trades (broker keeps) - Won payouts (broker pays)
+  grossTradingRevenue Float @default(0) // Net broker revenue from trades
+  totalTradeVolume    Float @default(0) // Sum of all trade amounts
+  totalTrades         Int   @default(0) // Number of closed trades
+  wonTrades           Int   @default(0) // Trades won by users (broker paid)
+  lostTrades          Int   @default(0) // Trades lost by users (broker kept)
+
+  // Broker win metrics
+  brokerWinRate    Float @default(0) // % of trades where broker profited
+  avgPayoutPercent Float @default(0) // Average payout % for the day
+
+  // Breakdown by trade result
+  totalWonAmount   Float @default(0) // Sum of amounts on winning trades (user won)
+  totalLostAmount  Float @default(0) // Sum of amounts on losing trades (user lost)
+  totalPayoutsPaid Float @default(0) // Actual payouts paid to winning users
+
+  // ========== AFFILIATE COSTS ==========
+  totalAffiliateCommissions Float @default(0) // Total paid to affiliates
+  signupBonusCosts          Float @default(0) // CPA signup bonuses
+  depositCommissionCosts    Float @default(0) // Deposit commission costs
+  tradeCommissionCosts      Float @default(0) // Trade commission costs
+  affiliateCount            Int   @default(0) // Active affiliates for the day
+
+  // ========== NET CALCULATIONS ==========
+  netRevenue     Float @default(0) // grossTradingRevenue - affiliateCosts
+  operatingCosts Float @default(0) // Manual: server, support, etc.
+  netProfit      Float @default(0) // netRevenue - operatingCosts
+
+  // ========== DEPOSITS & WITHDRAWALS ==========
+  totalDeposits    Float @default(0) // Total deposited amount
+  depositCount     Int   @default(0) // Number of deposits
+  totalWithdrawals Float @default(0) // Total withdrawn amount
+  withdrawalCount  Int   @default(0) // Number of withdrawals
+  netDeposits      Float @default(0) // deposits - withdrawals
+
+  // ========== USER METRICS ==========
+  activeTraders    Int @default(0) // Users who placed trades
+  newRegistrations Int @default(0) // New signups
+  newDepositors    Int @default(0) // First-time depositors (FTDs)
+  totalActiveUsers Int @default(0) // Total active users
+
+  // ========== SEGREGATED STATS (for verification) ==========
+  realUserTradeCount Int   @default(0) // Trades from REAL users
+  realUserVolume     Float @default(0) // Volume from REAL users
+  testUserTradeCount Int   @default(0) // Trades from TEST users (excluded)
+  testUserVolume     Float @default(0) // Volume from TEST users (excluded)
+
+  // ========== COPY TRADING METRICS ==========
+  copyTradingVolume Float @default(0) // Volume from copy trades
+  copyTradingTrades Int   @default(0) // Number of copy trades
+  activeLeaders     Int   @default(0) // Active copy trading leaders
+  activeFollowers   Int   @default(0) // Active copy trading followers
+
+  // ========== OTC MARKET METRICS ==========
+  otcTradingVolume Float @default(0) // Volume on OTC markets
+  otcTradingTrades Int   @default(0) // Trades on OTC markets
+  otcBrokerRevenue Float @default(0) // Revenue from OTC specifically
+  otcInterventions Int   @default(0) // Risk interventions triggered
+
+  // ========== BUSINESS HEALTH INDICATORS ==========
+  profitFactor    Float @default(0) // grossProfit / grossLoss (target > 1.5)
+  revenuePerUser  Float @default(0) // ARPU for the day
+  revenuePerTrade Float @default(0) // Revenue per trade
+  userWinRate     Float @default(0) // % users who were profitable
+
+  // ========== METADATA ==========
+  generatedAt   DateTime @default(now()) // When snapshot was created
+  lastUpdatedAt DateTime @updatedAt
+  isFinalized   Boolean  @default(false) // True when day is complete
+  notes         String? // Admin notes
+
+  @@index([date])
+  @@index([isFinalized])
+  @@index([date, isFinalized])
+}
+
+// Monthly aggregated report - summarizes daily snapshots
+model BrokerMonthlyReport {
+  id    String @id @default(uuid())
+  month Int // 1-12
+  year  Int
+
+  // ========== AGGREGATED REVENUE ==========
+  totalRevenue    Float @default(0) // Sum of daily grossTradingRevenue
+  totalVolume     Float @default(0) // Sum of daily volume
+  totalTrades     Int   @default(0) // Sum of daily trades
+  totalWonTrades  Int   @default(0)
+  totalLostTrades Int   @default(0)
+
+  // ========== AGGREGATED COSTS ==========
+  totalAffiliateCommissions Float @default(0)
+  totalOperatingCosts       Float @default(0)
+
+  // ========== NET PROFIT ==========
+  netProfit    Float @default(0)
+  profitMargin Float @default(0) // (netProfit / totalRevenue) × 100
+
+  // ========== DEPOSITS & WITHDRAWALS ==========
+  totalDeposits    Float @default(0)
+  totalWithdrawals Float @default(0)
+  netDeposits      Float @default(0)
+
+  // ========== USER METRICS ==========
+  uniqueActiveTraders Int @default(0) // Unique users who traded
+  newRegistrations    Int @default(0)
+  newDepositors       Int @default(0) // First-time depositors
+
+  // ========== COMPARISON METRICS ==========
+  previousMonthRevenue Float? // For trend analysis
+  revenueGrowthPercent Float? // MoM growth
+  previousMonthProfit  Float?
+  profitGrowthPercent  Float?
+
+  // ========== DAILY BREAKDOWNS ==========
+  avgDailyRevenue  Float     @default(0)
+  avgDailyVolume   Float     @default(0)
+  avgDailyTrades   Float     @default(0)
+  peakDayRevenue   Float     @default(0)
+  peakDayDate      DateTime?
+  lowestDayRevenue Float     @default(0)
+  lowestDayDate    DateTime?
+  profitableDays   Int       @default(0) // Days with positive P&L
+  lossDays         Int       @default(0) // Days with negative P&L
+
+  // ========== BUSINESS HEALTH ==========
+  avgBrokerWinRate Float  @default(0)
+  avgProfitFactor  Float  @default(0)
+  arpu             Float  @default(0) // Average Revenue Per User
+  ltv              Float? // Customer Lifetime Value estimate
+
+  // ========== AFFILIATE ANALYSIS ==========
+  affiliateROI        Float? // Revenue from referred / commission paid
+  topAffiliateId      String?
+  topAffiliateRevenue Float?
+
+  // ========== METADATA ==========
+  generatedAt   DateTime @default(now())
+  lastUpdatedAt DateTime @updatedAt
+  isFinalized   Boolean  @default(false)
+  notes         String?
+
+  @@unique([month, year])
+  @@index([year])
+  @@index([month, year])
+  @@index([isFinalized])
+}
+
+// Tracks real-time broker exposure and liability
+model BrokerRealTimeMetrics {
+  id String @id @default(uuid())
+
+  // Singleton pattern - only one record
+  isActive Boolean @unique @default(true)
+
+  // ========== CURRENT EXPOSURE ==========
+  totalOpenTrades    Int   @default(0)
+  totalOpenVolume    Float @default(0)
+  maxPotentialPayout Float @default(0) // If all open trades win
+  netExposure        Float @default(0) // UP exposure - DOWN exposure
+
+  // ========== TODAY'S RUNNING TOTALS ==========
+  todayRevenue              Float @default(0)
+  todayVolume               Float @default(0)
+  todayTrades               Int   @default(0)
+  todayDeposits             Float @default(0)
+  todayWithdrawals          Float @default(0)
+  todayAffiliateCommissions Float @default(0)
+
+  // ========== ALERTS & THRESHOLDS ==========
+  exposureAlertThreshold Float   @default(100000) // Alert if exposure exceeds
+  dailyLossLimit         Float   @default(50000) // Stop if daily loss exceeds
+  currentDailyPL         Float   @default(0)
+  isAlertActive          Boolean @default(false)
+  alertMessage           String?
+
+  // ========== LAST RESET ==========
+  lastDailyReset DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// Audit log for financial operations
+model FinancialAuditLog {
+  id String @id @default(uuid())
+
+  actionType String // SNAPSHOT_GENERATED, REPORT_GENERATED, MANUAL_ADJUSTMENT,
+  // OPERATING_COST_SET, USER_TYPE_CHANGED, EXPOSURE_ALERT
+
+  entityType String // DAILY_SNAPSHOT, MONTHLY_REPORT, USER, METRICS
+  entityId   String? // ID of affected entity
+
+  description   String
+  previousValue Json?
+  newValue      Json?
+
+  performedBy String? // Admin ID who performed action (null for system)
+  ipAddress   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([actionType])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([performedBy])
+  @@index([createdAt])
+  @@index([actionType, createdAt])
 }

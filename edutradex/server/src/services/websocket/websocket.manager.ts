@@ -461,6 +461,65 @@ class WebSocketManager {
     });
     return users;
   }
+
+  // Financial Updates Broadcasting
+  broadcastFinancialUpdate(data: {
+    type: 'realtime_metrics' | 'daily_snapshot' | 'monthly_report' | 'alert';
+    payload: Record<string, unknown>;
+  }): void {
+    const message: WebSocketMessage = {
+      type: 'financial_update',
+      payload: {
+        ...data,
+        timestamp: Date.now(),
+      },
+    };
+
+    // Broadcast to all authenticated clients (superadmins will filter on frontend)
+    let sentCount = 0;
+    this.clients.forEach((client) => {
+      if (client.userId && client.ws.readyState === WebSocket.OPEN) {
+        try {
+          client.ws.send(JSON.stringify(message));
+          sentCount++;
+        } catch (error) {
+          logger.error('Error broadcasting financial update', {
+            clientId: client.id,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+    });
+
+    logger.debug('Financial update broadcast', {
+      type: data.type,
+      sentTo: sentCount,
+    });
+  }
+
+  // Notify specific users about financial alerts
+  notifyFinancialAlert(userIds: string[], alert: {
+    alertType: 'high_exposure' | 'daily_loss_limit' | 'unusual_activity';
+    message: string;
+    severity: 'warning' | 'critical';
+    data?: Record<string, unknown>;
+  }): void {
+    userIds.forEach((userId) => {
+      this.sendToUser(userId, {
+        type: 'financial_alert',
+        payload: {
+          ...alert,
+          timestamp: Date.now(),
+        },
+      });
+    });
+
+    logger.info('Financial alert sent', {
+      alertType: alert.alertType,
+      severity: alert.severity,
+      recipientCount: userIds.length,
+    });
+  }
 }
 
 export const wsManager = new WebSocketManager();

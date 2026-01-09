@@ -16,6 +16,7 @@ import { wsManager } from './services/websocket/websocket.manager.js';
 import { emailService } from './services/email/email.service.js';
 import { commissionScheduler } from './services/scheduler/commission.scheduler.js';
 import { tradeSettlementScheduler } from './services/scheduler/trade.scheduler.js';
+import { financialScheduler } from './services/scheduler/financial.scheduler.js';
 import { otcMarketService } from './services/otc/otc-market.service.js';
 
 // Constants
@@ -273,6 +274,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
   // Stop schedulers
   commissionScheduler.stop();
   tradeSettlementScheduler.stop();
+  financialScheduler.stop();
 
   // Stop OTC market service
   otcMarketService.stop();
@@ -357,6 +359,9 @@ async function startServer(): Promise<void> {
 
     // Start trade settlement scheduler (runs every 5 seconds to catch expired trades)
     tradeSettlementScheduler.start();
+
+    // Start financial scheduler (real-time metrics, daily snapshots, monthly reports)
+    financialScheduler.start();
 
     // Initialize and start OTC market service
     try {

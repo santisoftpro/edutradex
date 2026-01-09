@@ -2312,6 +2312,215 @@ Object.assign(ApiClient.prototype, {
       total: response.pagination?.total || response.data.length,
     };
   },
+
+  // ============= Financial Management =============
+
+  async getFinancialSummary(): Promise<FinancialSummary> {
+    const response = await api.get<ApiResponse<FinancialSummary>>('/superadmin/financial/summary');
+    return response.data;
+  },
+
+  async getFinancialRealTimeMetrics(): Promise<RealTimeMetrics> {
+    const response = await api.get<ApiResponse<RealTimeMetrics>>('/superadmin/financial/realtime');
+    return response.data;
+  },
+
+  async getFinancialDailySnapshots(options?: {
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<PaginatedResponse<DailySnapshot>> {
+    const params = new URLSearchParams();
+    if (options?.from) params.append('from', options.from);
+    if (options?.to) params.append('to', options.to);
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.sortOrder) params.append('sortOrder', options.sortOrder);
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<DailySnapshot[]> & { pagination: PaginatedResponse<DailySnapshot>['pagination'] }>(
+      `/superadmin/financial/daily${queryStr ? `?${queryStr}` : ''}`
+    );
+    return {
+      data: response.data,
+      pagination: response.pagination || { page: 1, limit: 30, total: response.data.length, totalPages: 1 },
+    };
+  },
+
+  async getFinancialDailySnapshot(date: string): Promise<DailySnapshot> {
+    const response = await api.get<ApiResponse<DailySnapshot>>(`/superadmin/financial/daily/${date}`);
+    return response.data;
+  },
+
+  async setOperatingCosts(date: string, operatingCosts: number, adminPassword: string): Promise<DailySnapshot> {
+    const response = await api.post<ApiResponse<DailySnapshot>>(`/superadmin/financial/daily/${date}/costs`, {
+      operatingCosts,
+      adminPassword,
+    });
+    return response.data;
+  },
+
+  async getFinancialMonthlyReports(year?: number): Promise<MonthlyReport[]> {
+    const params = year ? `?year=${year}` : '';
+    const response = await api.get<ApiResponse<MonthlyReport[]>>(`/superadmin/financial/monthly${params}`);
+    return response.data;
+  },
+
+  async getFinancialMonthlyReport(year: number, month: number): Promise<MonthlyReport> {
+    const response = await api.get<ApiResponse<MonthlyReport>>(`/superadmin/financial/monthly/${year}/${month}`);
+    return response.data;
+  },
+
+  async triggerDailySnapshot(date?: string): Promise<{ success: boolean; date: string }> {
+    const response = await api.post<{ success: boolean; message: string; date: string }>('/superadmin/financial/generate/daily', { date });
+    return { success: true, date: response.date || new Date().toISOString().split('T')[0] };
+  },
+
+  async triggerMonthlyReport(month: number, year: number): Promise<{ success: boolean; month: number; year: number }> {
+    const response = await api.post<{ success: boolean; message: string; month: number; year: number }>('/superadmin/financial/generate/monthly', { month, year });
+    return { success: true, month: response.month || month, year: response.year || year };
+  },
+
+  async backfillSnapshots(startDate: string, endDate: string): Promise<{ success: boolean; generated: number }> {
+    const response = await api.post<{ success: boolean; generated: number }>('/superadmin/financial/backfill', { startDate, endDate });
+    return { success: true, generated: response.generated };
+  },
+
+  async getFinancialAuditLogs(options?: {
+    page?: number;
+    limit?: number;
+    actionType?: string;
+    entityType?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<PaginatedResponse<FinancialAuditLog>> {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.actionType) params.append('actionType', options.actionType);
+    if (options?.entityType) params.append('entityType', options.entityType);
+    if (options?.startDate) params.append('startDate', options.startDate);
+    if (options?.endDate) params.append('endDate', options.endDate);
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<FinancialAuditLog[]> & { pagination: PaginatedResponse<FinancialAuditLog>['pagination'] }>(
+      `/superadmin/financial/audit-logs${queryStr ? `?${queryStr}` : ''}`
+    );
+    return {
+      data: response.data,
+      pagination: response.pagination || { page: 1, limit: 50, total: response.data.length, totalPages: 1 },
+    };
+  },
+
+  async getTopMetrics(from: string, to: string): Promise<TopMetrics> {
+    const response = await api.get<ApiResponse<TopMetrics>>(`/superadmin/financial/top-metrics?from=${from}&to=${to}`);
+    return response.data;
+  },
+
+  async getSchedulerStatus(): Promise<SchedulerStatus> {
+    const response = await api.get<ApiResponse<SchedulerStatus>>('/superadmin/financial/scheduler-status');
+    return response.data;
+  },
+
+  // ============= Analytics & Charts =============
+
+  async getRevenueTrend(days: number = 30): Promise<RevenueTrendData[]> {
+    const response = await api.get<ApiResponse<RevenueTrendData[]>>(`/superadmin/financial/analytics/revenue-trend?days=${days}`);
+    return response.data;
+  },
+
+  async getTopDepositors(limit: number = 10): Promise<TopDepositor[]> {
+    const response = await api.get<ApiResponse<TopDepositor[]>>(`/superadmin/financial/analytics/top-depositors?limit=${limit}`);
+    return response.data;
+  },
+
+  async getTopTraders(limit: number = 10): Promise<TopTrader[]> {
+    const response = await api.get<ApiResponse<TopTrader[]>>(`/superadmin/financial/analytics/top-traders?limit=${limit}`);
+    return response.data;
+  },
+
+  async compareDateRanges(range1Start: string, range1End: string, range2Start: string, range2End: string): Promise<DateRangeComparison> {
+    const response = await api.post<ApiResponse<DateRangeComparison>>('/superadmin/financial/analytics/compare', {
+      range1Start, range1End, range2Start, range2End,
+    });
+    return response.data;
+  },
+
+  async getAdvancedAnalytics(): Promise<AdvancedAnalytics> {
+    const response = await api.get<ApiResponse<AdvancedAnalytics>>('/superadmin/financial/analytics/advanced');
+    return response.data;
+  },
+
+  async getBudgetTargets(): Promise<BudgetTargets> {
+    const response = await api.get<ApiResponse<BudgetTargets>>('/superadmin/financial/budget-targets');
+    return response.data;
+  },
+
+  async setBudgetTargets(targets: Partial<BudgetTargets>, adminPassword: string): Promise<{ success: boolean }> {
+    await api.post('/superadmin/financial/budget-targets', { ...targets, adminPassword });
+    return { success: true };
+  },
+
+  async getAlertThresholds(): Promise<AlertThresholds> {
+    const response = await api.get<ApiResponse<AlertThresholds>>('/superadmin/financial/alert-thresholds');
+    return response.data;
+  },
+
+  async setAlertThresholds(thresholds: Partial<AlertThresholds>, adminPassword: string): Promise<{ success: boolean }> {
+    await api.post('/superadmin/financial/alert-thresholds', { ...thresholds, adminPassword });
+    return { success: true };
+  },
+
+  // ============= User Type Management =============
+
+  async getUsersByType(userType: UserType, options?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<PaginatedResponse<UserWithType>> {
+    const params = new URLSearchParams();
+    params.append('userType', userType);
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.search) params.append('search', options.search);
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<UserWithType[]> & { pagination: PaginatedResponse<UserWithType>['pagination'] }>(
+      `/superadmin/users/by-type?${queryStr}`
+    );
+    return {
+      data: response.data,
+      pagination: response.pagination || { page: 1, limit: 20, total: response.data.length, totalPages: 1 },
+    };
+  },
+
+  async updateUserType(userId: string, userType: UserType, adminPassword: string): Promise<{ success: boolean; previousType: UserType; newType: UserType }> {
+    const response = await api.patch<{ success: boolean; previousType: UserType; newType: UserType; message?: string }>(`/superadmin/users/${userId}/type`, {
+      userType,
+      adminPassword,
+    });
+    return { success: true, previousType: response.previousType, newType: response.newType };
+  },
+
+  async bulkUpdateUserTypes(userIds: string[], userType: UserType, adminPassword: string): Promise<{ success: boolean; updated: number }> {
+    const response = await api.post<{ success: boolean; updated: number; message?: string }>('/superadmin/users/bulk-type', {
+      userIds,
+      userType,
+      adminPassword,
+    });
+    return { success: true, updated: response.updated };
+  },
+
+  async previewDemoOnlyClassification(): Promise<{ count: number; users: { id: string; email: string; name: string }[]; message: string }> {
+    const response = await api.get<{ success: boolean; count: number; users: { id: string; email: string; name: string }[]; message: string }>('/superadmin/users/demo-only/preview');
+    return { count: response.count, users: response.users, message: response.message };
+  },
+
+  async autoClassifyDemoOnlyUsers(adminPassword: string): Promise<{ success: boolean; classified: number; message: string }> {
+    const response = await api.post<{ success: boolean; classified: number; userIds: string[]; message: string }>('/superadmin/users/demo-only/classify', {
+      adminPassword,
+    });
+    return { success: true, classified: response.classified, message: response.message };
+  },
 });
 
 // Type declarations for dynamically added methods
@@ -2372,4 +2581,270 @@ interface ApiClient {
     limit?: number;
     offset?: number;
   }): Promise<{ data: LoginHistoryItem[]; total: number }>;
+  // Financial Management
+  getFinancialSummary(): Promise<FinancialSummary>;
+  getFinancialRealTimeMetrics(): Promise<RealTimeMetrics>;
+  getFinancialDailySnapshots(options?: {
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<PaginatedResponse<DailySnapshot>>;
+  getFinancialDailySnapshot(date: string): Promise<DailySnapshot>;
+  setOperatingCosts(date: string, operatingCosts: number, adminPassword: string): Promise<DailySnapshot>;
+  getFinancialMonthlyReports(year?: number): Promise<MonthlyReport[]>;
+  getFinancialMonthlyReport(year: number, month: number): Promise<MonthlyReport>;
+  triggerDailySnapshot(date?: string): Promise<{ success: boolean; date: string }>;
+  triggerMonthlyReport(month: number, year: number): Promise<{ success: boolean; month: number; year: number }>;
+  backfillSnapshots(startDate: string, endDate: string): Promise<{ success: boolean; generated: number }>;
+  getFinancialAuditLogs(options?: {
+    page?: number;
+    limit?: number;
+    actionType?: string;
+    entityType?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<PaginatedResponse<FinancialAuditLog>>;
+  getTopMetrics(from: string, to: string): Promise<TopMetrics>;
+  getSchedulerStatus(): Promise<SchedulerStatus>;
+  // Analytics & Charts
+  getRevenueTrend(days?: number): Promise<RevenueTrendData[]>;
+  getTopDepositors(limit?: number): Promise<TopDepositor[]>;
+  getTopTraders(limit?: number): Promise<TopTrader[]>;
+  compareDateRanges(range1Start: string, range1End: string, range2Start: string, range2End: string): Promise<DateRangeComparison>;
+  getAdvancedAnalytics(): Promise<AdvancedAnalytics>;
+  getBudgetTargets(): Promise<BudgetTargets>;
+  setBudgetTargets(targets: Partial<BudgetTargets>, adminPassword: string): Promise<{ success: boolean }>;
+  getAlertThresholds(): Promise<AlertThresholds>;
+  setAlertThresholds(thresholds: Partial<AlertThresholds>, adminPassword: string): Promise<{ success: boolean }>;
+  // User Type Management
+  getUsersByType(userType: UserType, options?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<PaginatedResponse<UserWithType>>;
+  updateUserType(userId: string, userType: UserType, adminPassword: string): Promise<{ success: boolean; previousType: UserType; newType: UserType }>;
+  bulkUpdateUserTypes(userIds: string[], userType: UserType, adminPassword: string): Promise<{ success: boolean; updated: number }>;
+  previewDemoOnlyClassification(): Promise<{ count: number; users: { id: string; email: string; name: string }[]; message: string }>;
+  autoClassifyDemoOnlyUsers(adminPassword: string): Promise<{ success: boolean; classified: number; message: string }>;
+}
+
+// ============= Financial Types =============
+
+export type UserType = 'REAL' | 'TEST' | 'DEMO_ONLY' | 'AFFILIATE_TEST';
+
+export interface RealTimeMetrics {
+  totalOpenTrades: number;
+  totalOpenVolume: number;
+  maxPotentialPayout: number;
+  netExposure: number;
+  todayRevenue: number;
+  todayVolume: number;
+  todayTrades: number;
+  todayDeposits: number;
+  todayWithdrawals: number;
+  todayAffiliateCommissions: number;
+  currentDailyPL: number;
+  isAlertActive: boolean;
+  alertMessage: string | null;
+}
+
+export interface DailySnapshot {
+  id: string;
+  date: string;
+  grossTradingRevenue: number;
+  totalTradeVolume: number;
+  totalTrades: number;
+  wonTrades: number;
+  lostTrades: number;
+  brokerWinRate: number;
+  avgPayoutPercent: number;
+  totalWonAmount: number;
+  totalLostAmount: number;
+  totalPayoutsPaid: number;
+  totalAffiliateCommissions: number;
+  signupBonusCosts: number;
+  depositCommissionCosts: number;
+  tradeCommissionCosts: number;
+  affiliateCount: number;
+  netRevenue: number;
+  operatingCosts: number;
+  netProfit: number;
+  totalDeposits: number;
+  depositCount: number;
+  totalWithdrawals: number;
+  withdrawalCount: number;
+  netDeposits: number;
+  activeTraders: number;
+  newRegistrations: number;
+  newDepositors: number;
+  totalActiveUsers: number;
+  realUserTradeCount: number;
+  realUserVolume: number;
+  testUserTradeCount: number;
+  testUserVolume: number;
+  copyTradingVolume: number;
+  copyTradingTrades: number;
+  activeLeaders: number;
+  activeFollowers: number;
+  otcTradingVolume: number;
+  otcTradingTrades: number;
+  otcBrokerRevenue: number;
+  otcInterventions: number;
+  profitFactor: number;
+  revenuePerUser: number;
+  revenuePerTrade: number;
+  userWinRate: number;
+  isFinalized: boolean;
+  notes: string | null;
+}
+
+export interface MonthlyReport {
+  id: string;
+  month: number;
+  year: number;
+  totalRevenue: number;
+  totalVolume: number;
+  totalTrades: number;
+  netProfit: number;
+  profitMargin: number;
+  totalDeposits: number;
+  totalWithdrawals: number;
+  uniqueActiveTraders: number;
+  newRegistrations: number;
+  avgBrokerWinRate: number;
+  avgProfitFactor: number;
+  arpu: number;
+  profitableDays: number;
+  lossDays: number;
+}
+
+export interface FinancialSummary {
+  today: RealTimeMetrics;
+  yesterday: DailySnapshot | null;
+  thisMonth: {
+    totalRevenue: number;
+    totalVolume: number;
+    totalTrades: number;
+    netProfit: number;
+    daysReported: number;
+  };
+  lastMonth: MonthlyReport | null;
+  yearToDate: {
+    totalRevenue: number;
+    totalVolume: number;
+    netProfit: number;
+  };
+}
+
+export interface FinancialAuditLog {
+  id: string;
+  actionType: string;
+  entityType: string;
+  entityId: string | null;
+  description: string;
+  newValue: unknown;
+  performedBy: string | null;
+  createdAt: string;
+}
+
+export interface TopMetrics {
+  topProfitableDays: { date: string; revenue: number }[];
+  topLossDays: { date: string; revenue: number }[];
+  topTradingDays: { date: string; trades: number }[];
+  topVolumesDays: { date: string; volume: number }[];
+}
+
+export interface SchedulerStatus {
+  running: boolean;
+  lastSnapshotDate: string | null;
+  lastMonthlyReport: string | null;
+  intervals: {
+    realTimeMetrics: boolean;
+    dailySnapshot: boolean;
+    monthlyReport: boolean;
+    midnightReset: boolean;
+  };
+}
+
+// Analytics Types
+export interface RevenueTrendData {
+  date: string;
+  grossRevenue: number;
+  netRevenue: number;
+  netProfit: number;
+  volume: number;
+  trades: number;
+  deposits: number;
+  withdrawals: number;
+}
+
+export interface TopDepositor {
+  userId: string;
+  email: string;
+  name: string;
+  totalDeposits: number;
+  depositCount: number;
+  lastDeposit: string | null;
+}
+
+export interface TopTrader {
+  userId: string;
+  email: string;
+  name: string;
+  totalVolume: number;
+  totalTrades: number;
+  wonTrades: number;
+  lostTrades: number;
+  winRate: number;
+  netPnL: number;
+}
+
+export interface DateRangeComparison {
+  range1: {
+    start: string;
+    end: string;
+    metrics: Record<string, number>;
+  };
+  range2: {
+    start: string;
+    end: string;
+    metrics: Record<string, number>;
+  };
+  comparison: Record<string, { diff: number; percentChange: number }>;
+}
+
+export interface AdvancedAnalytics {
+  averageLTV: number;
+  averageDepositSize: number;
+  averageTradesPerUser: number;
+  userRetentionRate: number;
+  avgRevenuePerTrade: number;
+  depositToWithdrawalRatio: number;
+  activeUserPercentage: number;
+  realVsTestRatio: number;
+}
+
+export interface BudgetTargets {
+  monthlyRevenueTarget: number;
+  monthlyProfitTarget: number;
+  dailyVolumeTarget: number;
+  newUsersTarget: number;
+  depositsTarget: number;
+}
+
+export interface AlertThresholds {
+  exposureAlertThreshold: number;
+  dailyLossLimit: number;
+  lowBalanceAlert: number;
+  highVolumeAlert: number;
+}
+
+export interface UserWithType {
+  id: string;
+  email: string;
+  name: string;
+  userType: UserType;
+  createdAt: string;
 }
