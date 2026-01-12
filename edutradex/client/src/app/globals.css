@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 :root {
+  /* Mobile Trading Panel Height - used for bottom padding on trade page */
+  --mobile-trading-panel-height: 145px;
+
   /* ExpertOption Color Palette */
   --background: #182031;
   --foreground: #F5F5F5;

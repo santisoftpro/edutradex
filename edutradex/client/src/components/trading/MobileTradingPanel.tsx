@@ -34,7 +34,7 @@ const DURATIONS = [
   { label: '1h', value: 3600 },
 ];
 
-const QUICK_AMOUNTS = [10, 25, 50, 100, 250, 500, 1000, 5000];
+const QUICK_AMOUNTS = [5, 10, 25, 50, 100, 500, 1000, 5000];
 
 function MobileTradingPanelComponent({
   balance,
@@ -258,7 +258,7 @@ function MobileTradingPanelComponent({
               <span className="text-red-400 text-xs">!</span>
             </div>
             <span className="text-red-400 text-xs font-medium">
-              Insufficient balance: ${balance.toFixed(2)}
+              Need ${(amount - balance).toFixed(2)} more (Available: ${balance.toFixed(2)})
             </span>
           </div>
         )}

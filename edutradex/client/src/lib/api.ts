@@ -2521,6 +2521,252 @@ Object.assign(ApiClient.prototype, {
     });
     return { success: true, classified: response.classified, message: response.message };
   },
+
+  // ============= Professional Financial Analytics =============
+
+  async getExecutiveSummary(): Promise<ExecutiveSummary> {
+    const response = await api.get<ApiResponse<ExecutiveSummary>>('/superadmin/financial/executive-summary');
+    return response.data;
+  },
+
+  async getHealthScore(date?: string): Promise<HealthScoreResult> {
+    const params = date ? `?date=${date}` : '';
+    const response = await api.get<ApiResponse<HealthScoreResult>>(`/superadmin/financial/health-score${params}`);
+    return response.data;
+  },
+
+  async getBreakEven(month?: number, year?: number): Promise<BreakEvenResult> {
+    const params = new URLSearchParams();
+    if (month) params.append('month', month.toString());
+    if (year) params.append('year', year.toString());
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<BreakEvenResult>>(`/superadmin/financial/break-even${queryStr ? `?${queryStr}` : ''}`);
+    return response.data;
+  },
+
+  async getRunway(): Promise<RunwayResult> {
+    const response = await api.get<ApiResponse<RunwayResult>>('/superadmin/financial/runway');
+    return response.data;
+  },
+
+  async getKeyRatios(from?: string, to?: string): Promise<KeyRatiosResult> {
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<KeyRatiosResult>>(`/superadmin/financial/key-ratios${queryStr ? `?${queryStr}` : ''}`);
+    return response.data;
+  },
+
+  async getRevenueByMarket(from: string, to: string): Promise<RevenueByMarketResult> {
+    const response = await api.get<ApiResponse<RevenueByMarketResult>>(`/superadmin/financial/revenue/by-market?from=${from}&to=${to}`);
+    return response.data;
+  },
+
+  async getRevenueBySymbol(from: string, to: string, limit?: number): Promise<SymbolRevenue[]> {
+    const params = new URLSearchParams({ from, to });
+    if (limit) params.append('limit', limit.toString());
+    const response = await api.get<ApiResponse<SymbolRevenue[]>>(`/superadmin/financial/revenue/by-symbol?${params.toString()}`);
+    return response.data;
+  },
+
+  async getPLStatement(from: string, to: string): Promise<PLStatement> {
+    const response = await api.get<ApiResponse<PLStatement>>(`/superadmin/financial/pl-statement?from=${from}&to=${to}`);
+    return response.data;
+  },
+
+  async getCohortAnalysis(options?: { startMonth?: number; startYear?: number; months?: number }): Promise<CohortAnalysisResult> {
+    const params = new URLSearchParams();
+    if (options?.startMonth) params.append('startMonth', options.startMonth.toString());
+    if (options?.startYear) params.append('startYear', options.startYear.toString());
+    if (options?.months) params.append('months', options.months.toString());
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<CohortAnalysisResult>>(`/superadmin/financial/cohorts${queryStr ? `?${queryStr}` : ''}`);
+    return response.data;
+  },
+
+  async updateCohorts(): Promise<{ updated: number; created: number }> {
+    const response = await api.post<ApiResponse<{ updated: number; created: number }>>('/superadmin/financial/cohorts/update');
+    return response.data;
+  },
+
+  async getChurnMetrics(month?: number, year?: number): Promise<ChurnMetrics> {
+    const params = new URLSearchParams();
+    if (month) params.append('month', month.toString());
+    if (year) params.append('year', year.toString());
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<ChurnMetrics>>(`/superadmin/financial/churn${queryStr ? `?${queryStr}` : ''}`);
+    return response.data;
+  },
+
+  async getSeasonalPatterns(): Promise<SeasonalPatterns> {
+    const response = await api.get<ApiResponse<SeasonalPatterns>>('/superadmin/financial/seasonal-patterns');
+    return response.data;
+  },
+
+  async getForecast(daysAhead?: number): Promise<ForecastResponse> {
+    const params = daysAhead ? `?daysAhead=${daysAhead}` : '';
+    const response = await api.get<ApiResponse<ForecastResponse>>(`/superadmin/financial/forecast${params}`);
+    return response.data;
+  },
+
+  async getMonteCarloSimulation(daysAhead?: number, iterations?: number): Promise<MonteCarloResult> {
+    const params = new URLSearchParams();
+    if (daysAhead) params.append('daysAhead', daysAhead.toString());
+    if (iterations) params.append('iterations', iterations.toString());
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<MonteCarloResult>>(`/superadmin/financial/monte-carlo${queryStr ? `?${queryStr}` : ''}`);
+    return response.data;
+  },
+
+  async getGoalProgress(month?: number, year?: number): Promise<GoalProgressResult> {
+    const params = new URLSearchParams();
+    if (month) params.append('month', month.toString());
+    if (year) params.append('year', year.toString());
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<GoalProgressResult>>(`/superadmin/financial/goal-progress${queryStr ? `?${queryStr}` : ''}`);
+    return response.data;
+  },
+
+  async setGoalTargets(targets: SetGoalTargetsInput, adminPassword: string): Promise<{ success: boolean }> {
+    await api.post('/superadmin/financial/goal-targets', { ...targets, adminPassword });
+    return { success: true };
+  },
+
+  async getConcentrationRisk(date?: string): Promise<ConcentrationRiskResult> {
+    const params = date ? `?date=${date}` : '';
+    const response = await api.get<ApiResponse<ConcentrationRiskResult>>(`/superadmin/financial/concentration-risk${params}`);
+    return response.data;
+  },
+
+  async getCashFlowStatement(month?: number, year?: number): Promise<CashFlowResult> {
+    const params = new URLSearchParams();
+    if (month) params.append('month', month.toString());
+    if (year) params.append('year', year.toString());
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<CashFlowResult>>(`/superadmin/financial/cash-flow${queryStr ? `?${queryStr}` : ''}`);
+    return response.data;
+  },
+
+  // Expense Management
+  async getExpenseCategories(): Promise<ExpenseCategory[]> {
+    const response = await api.get<ApiResponse<ExpenseCategory[]>>('/superadmin/financial/expenses/categories');
+    return response.data;
+  },
+
+  async createExpenseCategory(data: CreateExpenseCategoryInput): Promise<ExpenseCategory> {
+    const response = await api.post<ApiResponse<ExpenseCategory>>('/superadmin/financial/expenses/categories', data);
+    return response.data;
+  },
+
+  async updateExpenseCategory(categoryId: string, data: { name?: string; description?: string; isActive?: boolean }): Promise<ExpenseCategory> {
+    const response = await api.patch<ApiResponse<ExpenseCategory>>(`/superadmin/financial/expenses/categories/${categoryId}`, data);
+    return response.data;
+  },
+
+  async seedExpenseCategories(): Promise<{ success: boolean }> {
+    await api.post('/superadmin/financial/expenses/categories/seed');
+    return { success: true };
+  },
+
+  async getExpenseEntries(options?: {
+    page?: number;
+    limit?: number;
+    categoryId?: string;
+    from?: string;
+    to?: string;
+    isRecurring?: boolean;
+  }): Promise<PaginatedResponse<ExpenseEntry>> {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.categoryId) params.append('categoryId', options.categoryId);
+    if (options?.from) params.append('from', options.from);
+    if (options?.to) params.append('to', options.to);
+    if (options?.isRecurring !== undefined) params.append('isRecurring', options.isRecurring.toString());
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<ExpenseEntry[]> & { pagination: PaginatedResponse<ExpenseEntry>['pagination'] }>(
+      `/superadmin/financial/expenses${queryStr ? `?${queryStr}` : ''}`
+    );
+    return {
+      data: response.data,
+      pagination: response.pagination || { page: 1, limit: 50, total: response.data.length, totalPages: 1 },
+    };
+  },
+
+  async createExpenseEntry(data: CreateExpenseEntryInput): Promise<ExpenseEntry> {
+    const response = await api.post<ApiResponse<ExpenseEntry>>('/superadmin/financial/expenses', data);
+    return response.data;
+  },
+
+  async updateExpenseEntry(expenseId: string, data: UpdateExpenseEntryInput): Promise<ExpenseEntry> {
+    const response = await api.patch<ApiResponse<ExpenseEntry>>(`/superadmin/financial/expenses/${expenseId}`, data);
+    return response.data;
+  },
+
+  async deleteExpenseEntry(expenseId: string): Promise<{ success: boolean }> {
+    await api.delete(`/superadmin/financial/expenses/${expenseId}`);
+    return { success: true };
+  },
+
+  async getExpenseAnalysis(from: string, to: string): Promise<ExpenseAnalysis> {
+    const response = await api.get<ApiResponse<ExpenseAnalysis>>(`/superadmin/financial/expenses/analysis?from=${from}&to=${to}`);
+    return response.data;
+  },
+
+  async getExpenseBudgets(month?: number, year?: number): Promise<ExpenseBudget[]> {
+    const params = new URLSearchParams();
+    if (month) params.append('month', month.toString());
+    if (year) params.append('year', year.toString());
+    const queryStr = params.toString();
+    const response = await api.get<ApiResponse<ExpenseBudget[]>>(`/superadmin/financial/expenses/budgets${queryStr ? `?${queryStr}` : ''}`);
+    return response.data;
+  },
+
+  async setExpenseBudget(data: SetExpenseBudgetInput, adminPassword: string): Promise<ExpenseBudget> {
+    const response = await api.post<ApiResponse<ExpenseBudget>>('/superadmin/financial/expenses/budgets', { ...data, adminPassword });
+    return response.data;
+  },
+
+  async updateRevenueBreakdown(date?: string): Promise<{ success: boolean }> {
+    await api.post('/superadmin/financial/revenue/update', { date });
+    return { success: true };
+  },
+
+  // PDF Export
+  async exportExecutiveSummaryPDF(): Promise<Blob> {
+    const baseURL = (api as unknown as { baseURL: string }).baseURL;
+    const token = (api as unknown as { getToken: () => string | null }).getToken();
+    const response = await fetch(`${baseURL}/superadmin/financial/export/pdf/executive-summary`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to export PDF');
+    }
+    return response.blob();
+  },
+
+  async exportPLStatementPDF(month?: number, year?: number): Promise<Blob> {
+    const baseURL = (api as unknown as { baseURL: string }).baseURL;
+    const token = (api as unknown as { getToken: () => string | null }).getToken();
+    const params = new URLSearchParams();
+    if (month) params.append('month', month.toString());
+    if (year) params.append('year', year.toString());
+    const queryStr = params.toString();
+    const response = await fetch(`${baseURL}/superadmin/financial/export/pdf/pl-statement${queryStr ? `?${queryStr}` : ''}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to export PDF');
+    }
+    return response.blob();
+  },
 });
 
 // Type declarations for dynamically added methods
@@ -2628,6 +2874,41 @@ interface ApiClient {
   bulkUpdateUserTypes(userIds: string[], userType: UserType, adminPassword: string): Promise<{ success: boolean; updated: number }>;
   previewDemoOnlyClassification(): Promise<{ count: number; users: { id: string; email: string; name: string }[]; message: string }>;
   autoClassifyDemoOnlyUsers(adminPassword: string): Promise<{ success: boolean; classified: number; message: string }>;
+  // Professional Financial Analytics
+  getExecutiveSummary(): Promise<ExecutiveSummary>;
+  getHealthScore(date?: string): Promise<HealthScoreResult>;
+  getBreakEven(month?: number, year?: number): Promise<BreakEvenResult>;
+  getRunway(): Promise<RunwayResult>;
+  getKeyRatios(from?: string, to?: string): Promise<KeyRatiosResult>;
+  getRevenueByMarket(from: string, to: string): Promise<RevenueByMarketResult>;
+  getRevenueBySymbol(from: string, to: string, limit?: number): Promise<SymbolRevenue[]>;
+  getPLStatement(from: string, to: string): Promise<PLStatement>;
+  getCohortAnalysis(options?: { startMonth?: number; startYear?: number; months?: number }): Promise<CohortAnalysisResult>;
+  updateCohorts(): Promise<{ updated: number; created: number }>;
+  getChurnMetrics(month?: number, year?: number): Promise<ChurnMetrics>;
+  getSeasonalPatterns(): Promise<SeasonalPatterns>;
+  getForecast(daysAhead?: number): Promise<ForecastResponse>;
+  getMonteCarloSimulation(daysAhead?: number, iterations?: number): Promise<MonteCarloResult>;
+  getGoalProgress(month?: number, year?: number): Promise<GoalProgressResult>;
+  setGoalTargets(targets: SetGoalTargetsInput, adminPassword: string): Promise<{ success: boolean }>;
+  getConcentrationRisk(date?: string): Promise<ConcentrationRiskResult>;
+  getCashFlowStatement(month?: number, year?: number): Promise<CashFlowResult>;
+  // Expense Management
+  getExpenseCategories(): Promise<ExpenseCategory[]>;
+  createExpenseCategory(data: CreateExpenseCategoryInput): Promise<ExpenseCategory>;
+  updateExpenseCategory(categoryId: string, data: { name?: string; description?: string; isActive?: boolean }): Promise<ExpenseCategory>;
+  seedExpenseCategories(): Promise<{ success: boolean }>;
+  getExpenseEntries(options?: { page?: number; limit?: number; categoryId?: string; from?: string; to?: string; isRecurring?: boolean }): Promise<PaginatedResponse<ExpenseEntry>>;
+  createExpenseEntry(data: CreateExpenseEntryInput): Promise<ExpenseEntry>;
+  updateExpenseEntry(expenseId: string, data: UpdateExpenseEntryInput): Promise<ExpenseEntry>;
+  deleteExpenseEntry(expenseId: string): Promise<{ success: boolean }>;
+  getExpenseAnalysis(from: string, to: string): Promise<ExpenseAnalysis>;
+  getExpenseBudgets(month?: number, year?: number): Promise<ExpenseBudget[]>;
+  setExpenseBudget(data: SetExpenseBudgetInput, adminPassword: string): Promise<ExpenseBudget>;
+  updateRevenueBreakdown(date?: string): Promise<{ success: boolean }>;
+  // PDF Export
+  exportExecutiveSummaryPDF(): Promise<Blob>;
+  exportPLStatementPDF(month?: number, year?: number): Promise<Blob>;
 }
 
 // ============= Financial Types =============
@@ -2847,4 +3128,358 @@ export interface UserWithType {
   name: string;
   userType: UserType;
   createdAt: string;
+}
+
+// ============= Professional Analytics Types =============
+
+export interface HealthScoreBreakdown {
+  profitMargin: { score: number; value: number; threshold: number };
+  cashFlow: { score: number; value: number };
+  volumeGrowth: { score: number; percentChange: number };
+  retention: { score: number; rate: number };
+  riskExposure: { score: number; level: string };
+}
+
+export interface HealthScoreResult {
+  score: number;
+  breakdown: HealthScoreBreakdown;
+  status: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'CRITICAL';
+}
+
+export interface BreakEvenResult {
+  currentProfit: number;
+  targetProfit: number;
+  daysRemaining: number;
+  dailyRateNeeded: number;
+  isOnTrack: boolean;
+  projectedEOM: number;
+  currentDailyAvg: number;
+}
+
+export interface RunwayResult {
+  availableCash: number;
+  monthlyBurnRate: number;
+  runwayMonths: number;
+  status: 'HEALTHY' | 'MODERATE' | 'LOW' | 'CRITICAL';
+}
+
+export interface KeyRatiosResult {
+  roi: number;
+  profitFactor: number;
+  roas: number;
+  customerAcquisitionCost: number;
+  lifetimeValue: number;
+  ltvCacRatio: number;
+}
+
+export interface ExecutiveSummary {
+  healthScore: HealthScoreResult;
+  breakEven: BreakEvenResult;
+  runway: RunwayResult;
+  keyRatios: KeyRatiosResult;
+  generatedAt: string;
+}
+
+export interface MarketRevenue {
+  market: string;
+  grossRevenue: number;
+  netRevenue: number;
+  totalVolume: number;
+  totalTrades: number;
+  wonTrades: number;
+  lostTrades: number;
+  profitMargin: number;
+  percentOfTotal: number;
+  brokerWinRate: number;
+}
+
+export interface RevenueByMarketResult {
+  markets: MarketRevenue[];
+  totals: {
+    totalRevenue: number;
+    totalVolume: number;
+    totalTrades: number;
+  };
+}
+
+export interface SymbolRevenue {
+  symbol: string;
+  market: string;
+  grossRevenue: number;
+  totalVolume: number;
+  totalTrades: number;
+  wonTrades: number;
+  lostTrades: number;
+  percentOfTotal: number;
+}
+
+export interface PLStatement {
+  period: { start: string; end: string };
+  income: {
+    tradingRevenue: {
+      grossTradeAmount: number;
+      payoutsPaid: number;
+      netTradingRevenue: number;
+    };
+    otherIncome: number;
+    totalIncome: number;
+  };
+  expenses: {
+    affiliateCosts: {
+      signupBonuses: number;
+      depositCommissions: number;
+      tradeCommissions: number;
+      totalAffiliateCosts: number;
+    };
+    operatingExpenses: {
+      byCategory: Array<{ category: string; amount: number }>;
+      totalOperating: number;
+    };
+    totalExpenses: number;
+  };
+  summary: {
+    grossProfit: number;
+    operatingProfit: number;
+    netProfit: number;
+    profitMargin: number;
+  };
+  comparison: {
+    previousPeriod: {
+      netProfit: number;
+      profitMargin: number;
+    };
+    change: {
+      amount: number;
+      percent: number;
+    };
+  } | null;
+}
+
+export interface CohortData {
+  cohortMonth: string;
+  cohortSize: number;
+  retention: {
+    month1: number;
+    month2: number;
+    month3: number;
+    month6: number;
+    month12: number;
+  };
+  revenue: {
+    month1: number;
+    cumulative3: number;
+    cumulative6: number;
+    ltv: number;
+  };
+  depositFrequency: number;
+}
+
+export interface CohortAnalysisResult {
+  cohorts: CohortData[];
+  averageRetention: {
+    month1: number;
+    month3: number;
+    month6: number;
+  };
+}
+
+export interface ChurnMetrics {
+  churnRate: number;
+  churnedUsers: number;
+  totalUsers: number;
+  churnBySegment: {
+    byUserType: Record<string, number>;
+    byDepositTier: Record<string, number>;
+  };
+  reactivatedUsers: number;
+  reactivationRate: number;
+  trend: Array<{ month: string; churnRate: number }>;
+}
+
+export interface SeasonalPatterns {
+  monthly: Array<{ month: number; avgRevenue: number; avgVolume: number; avgTrades: number; index: number }>;
+  dayOfWeek: Array<{ day: number; dayName: string; avgRevenue: number; avgTrades: number; index: number }>;
+  hourOfDay: Array<{ hour: number; avgTrades: number; avgVolume: number; index: number }>;
+}
+
+export interface ForecastResult {
+  date: string;
+  expected: number;
+  low: number;
+  high: number;
+  confidence: number;
+}
+
+export interface ForecastResponse {
+  forecasts: ForecastResult[];
+  monthEnd: {
+    projectedRevenue: number;
+    projectedProfit: number;
+    confidence: number;
+  };
+  methodology: string;
+}
+
+export interface MonteCarloResult {
+  percentiles: { p10: number; p25: number; p50: number; p75: number; p90: number };
+  mean: number;
+  stdDev: number;
+  scenarios: { best: number; worst: number; mostLikely: number };
+}
+
+export interface GoalProgressResult {
+  revenue: { target: number; current: number; projected: number; percentComplete: number; status: string; dailyRateNeeded: number };
+  profit: { target: number; current: number; projected: number; percentComplete: number; status: string };
+  volume: { target: number; current: number; percentComplete: number };
+  newUsers: { target: number; current: number; percentComplete: number };
+  deposits: { target: number; current: number; percentComplete: number };
+}
+
+export interface ConcentrationRiskUser {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  volume: number;
+  volumePercent: number;
+  trades: number;
+  tradesPercent: number;
+  revenue: number;
+  revenuePercent: number;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+}
+
+export interface ConcentrationRiskResult {
+  topUsers: ConcentrationRiskUser[];
+  metrics: {
+    top1Percent: number;
+    top5Percent: number;
+    top10Percent: number;
+    herfindahlIndex: number;
+  };
+  alerts: Array<{ userId: string; message: string; threshold: number; actual: number }>;
+}
+
+export interface CashFlowResult {
+  operatingActivities: {
+    tradingRevenue: number;
+    tradingPayouts: number;
+    netTradingCash: number;
+    affiliateCommissions: number;
+    operatingExpenses: number;
+    netOperatingCash: number;
+  };
+  financingActivities: {
+    customerDeposits: number;
+    customerWithdrawals: number;
+    netFinancingCash: number;
+  };
+  summary: {
+    openingBalance: number;
+    netCashChange: number;
+    closingBalance: number;
+  };
+}
+
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+  code: string;
+  parentId: string | null;
+  description: string | null;
+  isActive: boolean;
+  displayOrder: number;
+  children?: ExpenseCategory[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExpenseEntry {
+  id: string;
+  categoryId: string;
+  category?: ExpenseCategory;
+  date: string;
+  amount: number;
+  description: string | null;
+  vendor: string | null;
+  isRecurring: boolean;
+  recurringPeriod: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY' | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExpenseBudget {
+  id: string;
+  categoryId: string;
+  category?: ExpenseCategory;
+  month: number;
+  year: number;
+  budgetAmount: number;
+  actualAmount: number;
+  variance: number;
+  variancePercent: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExpenseAnalysis {
+  byCategory: Array<{
+    category: string;
+    categoryId: string;
+    budgeted: number;
+    actual: number;
+    variance: number;
+    variancePercent: number;
+  }>;
+  trends: Array<{
+    month: string;
+    total: number;
+    byCategory: Record<string, number>;
+  }>;
+  recurring: { monthly: number; annual: number };
+  total: number;
+}
+
+export interface SetGoalTargetsInput {
+  month: number;
+  year: number;
+  revenueTarget?: number;
+  profitTarget?: number;
+  volumeTarget?: number;
+  newUsersTarget?: number;
+  depositsTarget?: number;
+}
+
+export interface CreateExpenseEntryInput {
+  categoryId: string;
+  date: string;
+  amount: number;
+  description?: string;
+  vendor?: string;
+  isRecurring?: boolean;
+  recurringPeriod?: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
+}
+
+export interface UpdateExpenseEntryInput {
+  categoryId?: string;
+  date?: string;
+  amount?: number;
+  description?: string;
+  vendor?: string;
+  isRecurring?: boolean;
+  recurringPeriod?: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
+}
+
+export interface CreateExpenseCategoryInput {
+  name: string;
+  code: string;
+  parentId?: string;
+  description?: string;
+}
+
+export interface SetExpenseBudgetInput {
+  categoryId: string;
+  month: number;
+  year: number;
+  budgetAmount: number;
 }

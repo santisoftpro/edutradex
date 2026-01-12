@@ -1,0 +1,294 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+/* OptigoBroker Partners - Dark Theme with Blue Neon Accents */
+:root {
+  --radius: 0.625rem;
+
+  /* Dark theme as default - space/tech visual style */
+  --background: #0a0a0f;
+  --foreground: #f8fafc;
+
+  --card: #111827;
+  --card-foreground: #f8fafc;
+
+  --popover: #1f2937;
+  --popover-foreground: #f8fafc;
+
+  /* Primary: Blue neon accent */
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+
+  --secondary: #1f2937;
+  --secondary-foreground: #f8fafc;
+
+  --muted: #1f2937;
+  --muted-foreground: #94a3b8;
+
+  --accent: #1e3a5f;
+  --accent-foreground: #60a5fa;
+
+  --destructive: #ef4444;
+
+  --border: rgba(59, 130, 246, 0.2);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: #3b82f6;
+
+  /* Chart colors */
+  --chart-1: #3b82f6;
+  --chart-2: #22c55e;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+  --chart-5: #ec4899;
+
+  /* Sidebar */
+  --sidebar: #0f172a;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e3a5f;
+  --sidebar-accent-foreground: #60a5fa;
+  --sidebar-border: rgba(59, 130, 246, 0.2);
+  --sidebar-ring: #3b82f6;
+
+  /* Custom colors for affiliate system */
+  --neon-blue: #3b82f6;
+  --neon-blue-glow: rgba(59, 130, 246, 0.4);
+  --neon-cyan: #22d3ee;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --level-starter: #3b82f6;
+  --level-builder: #6366f1;
+  --level-growth: #8b5cf6;
+  --level-advanced: #a855f7;
+  --level-pro: #d946ef;
+  --level-ambassador: #f59e0b;
+}
+
+/* Dark mode overrides (same as root since we're dark by default) */
+.dark {
+  --background: #0a0a0f;
+  --foreground: #f8fafc;
+  --card: #111827;
+  --card-foreground: #f8fafc;
+  --popover: #1f2937;
+  --popover-foreground: #f8fafc;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #1f2937;
+  --secondary-foreground: #f8fafc;
+  --muted: #1f2937;
+  --muted-foreground: #94a3b8;
+  --accent: #1e3a5f;
+  --accent-foreground: #60a5fa;
+  --destructive: #ef4444;
+  --border: rgba(59, 130, 246, 0.2);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: #3b82f6;
+  --sidebar: #0f172a;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e3a5f;
+  --sidebar-accent-foreground: #60a5fa;
+  --sidebar-border: rgba(59, 130, 246, 0.2);
+  --sidebar-ring: #3b82f6;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  /* Neon glow effects */
+  .neon-glow {
+    box-shadow: 0 0 20px var(--neon-blue-glow), 0 0 40px var(--neon-blue-glow);
+  }
+
+  .neon-glow-sm {
+    box-shadow: 0 0 10px var(--neon-blue-glow);
+  }
+
+  .neon-border {
+    border-color: var(--neon-blue);
+    box-shadow: 0 0 10px var(--neon-blue-glow);
+  }
+
+  .text-neon {
+    color: var(--neon-blue);
+    text-shadow: 0 0 10px var(--neon-blue-glow);
+  }
+
+  /* Glassmorphism */
+  .glass {
+    background: rgba(17, 24, 39, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .glass-card {
+    background: rgba(31, 41, 55, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  /* Gradient backgrounds */
+  .bg-gradient-radial {
+    background: radial-gradient(ellipse at center, var(--tw-gradient-from) 0%, var(--tw-gradient-to) 100%);
+  }
+
+  .bg-space {
+    background: linear-gradient(180deg, #0a0a0f 0%, #111827 50%, #0f172a 100%);
+  }
+
+  /* Level colors */
+  .level-starter { color: var(--level-starter); }
+  .level-builder { color: var(--level-builder); }
+  .level-growth { color: var(--level-growth); }
+  .level-advanced { color: var(--level-advanced); }
+  .level-pro { color: var(--level-pro); }
+  .level-ambassador { color: var(--level-ambassador); }
+
+  .bg-level-starter { background-color: var(--level-starter); }
+  .bg-level-builder { background-color: var(--level-builder); }
+  .bg-level-growth { background-color: var(--level-growth); }
+  .bg-level-advanced { background-color: var(--level-advanced); }
+  .bg-level-pro { background-color: var(--level-pro); }
+  .bg-level-ambassador { background-color: var(--level-ambassador); }
+
+  /* Scrollbar styling */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--muted);
+    border-radius: 3px;
+  }
+
+  /* Animation utilities */
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 10px var(--neon-blue-glow), 0 0 20px var(--neon-blue-glow);
+  }
+  to {
+    box-shadow: 0 0 20px var(--neon-blue-glow), 0 0 40px var(--neon-blue-glow);
+  }
+}
+
+/* Custom scrollbar for the entire app */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0f;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f2937;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}
+
+/* Selection color */
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: #ffffff;
+}
+
+/* Focus visible styles */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Input autofill styling for dark theme */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px #1f2937 inset !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  caret-color: #f8fafc;
+}

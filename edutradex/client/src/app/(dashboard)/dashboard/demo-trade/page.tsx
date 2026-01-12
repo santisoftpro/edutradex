@@ -13,6 +13,7 @@ import { MobileTradingPanel } from '@/components/trading/MobileTradingPanel';
 import { MobileTradesSheet } from '@/components/trading/MobileTradesSheet';
 import { MobileChartSettingsSheet } from '@/components/trading/MobileChartSettingsSheet';
 import { MobileCopyTradingSheet } from '@/components/trading/MobileCopyTradingSheet';
+import { TradeConfirmModal } from '@/components/trading/TradeConfirmModal';
 import { useAuthStore } from '@/store/auth.store';
 import { useTradeStore, useActiveTradesCount } from '@/store/trade.store';
 import { useChartStore } from '@/store/chart.store';
@@ -43,6 +44,12 @@ export default function DemoTradePage() {
   const [selectedAmount, setSelectedAmount] = useState(10);
   const [placingTrades, setPlacingTrades] = useState<Set<string>>(new Set());
   const [drawnLinesCount, setDrawnLinesCount] = useState(0);
+  const [assetPayout, setAssetPayout] = useState(98); // Default payout, will be updated from asset config
+  const [pendingTrade, setPendingTrade] = useState<{
+    direction: 'UP' | 'DOWN';
+    amount: number;
+    duration: number;
+  } | null>(null);
   const hasSubscribedAllRef = useRef(false);
   const priceChartRef = useRef<PriceChartHandle>(null);
 
@@ -162,6 +169,22 @@ export default function DemoTradePage() {
     }
   }, [latestPrices, selectedAsset]);
 
+  // Fetch asset payout when selected asset changes
+  useEffect(() => {
+    async function fetchAssetPayout() {
+      try {
+        const asset = await api.getAsset(selectedAsset);
+        if (asset?.payoutPercent) {
+          setAssetPayout(asset.payoutPercent);
+        }
+      } catch (error) {
+        console.error('Failed to fetch asset payout:', error);
+        // Keep default payout on error
+      }
+    }
+    fetchAssetPayout();
+  }, [selectedAsset]);
+
   const getMarketType = (symbol: string): 'forex' | 'crypto' | 'stock' | 'index' => {
     if (symbol.endsWith('/USDT') || symbol.includes('BTC') || symbol.includes('ETH')) {
       return 'crypto';
@@ -178,24 +201,13 @@ export default function DemoTradePage() {
   // Get demo/practice balance
   const getDemoBalance = () => user?.practiceBalance ?? 10000;
 
-  const handleTrade = useCallback(
-    async (direction: 'UP' | 'DOWN', amount?: number, duration?: number) => {
+  // Large trade threshold for confirmation dialog
+  const LARGE_TRADE_THRESHOLD = 500;
+
+  // Execute the actual trade (called directly or after confirmation)
+  const executeTrade = useCallback(
+    async (direction: 'UP' | 'DOWN', tradeAmount: number, tradeDuration: number) => {
       if (!user) return;
-
-      // Use provided values or fall back to state
-      const tradeAmount = amount ?? selectedAmount;
-      const tradeDuration = duration ?? selectedDuration;
-
-      // Validate before placing trade
-      const balance = getDemoBalance();
-      if (tradeAmount > balance) {
-        toast.error('Insufficient balance', { duration: 3000 });
-        return;
-      }
-      if (tradeAmount <= 0) {
-        toast.error('Invalid trade amount', { duration: 3000 });
-        return;
-      }
 
       const tradeKey = `${direction}-${Date.now()}`;
 
@@ -245,8 +257,53 @@ export default function DemoTradePage() {
         });
       }
     },
-    [user, selectedAsset, selectedAmount, selectedDuration, currentPrice, syncBalanceFromServer, updatePracticeBalance, placeTrade]
+    [user, selectedAsset, currentPrice, syncBalanceFromServer, updatePracticeBalance, placeTrade]
   );
+
+  const handleTrade = useCallback(
+    async (direction: 'UP' | 'DOWN', amount?: number, duration?: number) => {
+      if (!user) return;
+
+      // Use provided values or fall back to state
+      const tradeAmount = amount ?? selectedAmount;
+      const tradeDuration = duration ?? selectedDuration;
+
+      // Validate before placing trade
+      const balance = getDemoBalance();
+      if (tradeAmount > balance) {
+        const shortfall = tradeAmount - balance;
+        toast.error(`Insufficient balance. Need $${shortfall.toFixed(2)} more (Available: $${balance.toFixed(2)})`, { duration: 4000 });
+        return;
+      }
+      if (tradeAmount <= 0) {
+        toast.error('Invalid trade amount', { duration: 3000 });
+        return;
+      }
+
+      // Show confirmation for large trades
+      if (tradeAmount >= LARGE_TRADE_THRESHOLD) {
+        setPendingTrade({ direction, amount: tradeAmount, duration: tradeDuration });
+        return;
+      }
+
+      // Execute trade directly for smaller amounts
+      await executeTrade(direction, tradeAmount, tradeDuration);
+    },
+    [user, selectedAmount, selectedDuration, executeTrade]
+  );
+
+  // Handle confirmation of large trade
+  const handleConfirmTrade = useCallback(() => {
+    if (pendingTrade) {
+      executeTrade(pendingTrade.direction, pendingTrade.amount, pendingTrade.duration);
+      setPendingTrade(null);
+    }
+  }, [pendingTrade, executeTrade]);
+
+  // Cancel pending trade
+  const handleCancelTrade = useCallback(() => {
+    setPendingTrade(null);
+  }, []);
 
   // Keyboard shortcuts for trading
   useTradingShortcuts({
@@ -379,7 +436,8 @@ export default function DemoTradePage() {
       />
 
       {/* ===== MAIN CONTENT AREA ===== */}
-      <div className="flex-1 flex overflow-hidden pb-[145px] md:pb-0">
+      {/* Mobile: padding-bottom for trading panel, Desktop: pb-0 */}
+      <div className="flex-1 flex overflow-hidden pb-[var(--mobile-trading-panel-height)] md:pb-0">
         {/* Chart Area */}
         <div className="flex-1 h-full relative overflow-hidden">
           <PriceChart
@@ -402,6 +460,7 @@ export default function DemoTradePage() {
           amount={selectedAmount}
           onAmountChange={handleSelectAmount}
           isLoading={placingTrades.size > 0}
+          payoutPercent={assetPayout}
           isDemoMode={true}
           showShortcuts
         />
@@ -431,6 +490,7 @@ export default function DemoTradePage() {
         amount={selectedAmount}
         onAmountChange={handleSelectAmount}
         isLoading={placingTrades.size > 0}
+        payoutPercent={assetPayout}
         onOpenTrades={() => setIsMobileTradesOpen(true)}
         onOpenCopyTrading={() => setIsMobileCopyTradingOpen(true)}
         activeTradesCount={activeTradesCount}
@@ -467,6 +527,18 @@ export default function DemoTradePage() {
       <MobileCopyTradingSheet
         isOpen={isMobileCopyTradingOpen}
         onClose={() => setIsMobileCopyTradingOpen(false)}
+      />
+
+      {/* Large Trade Confirmation Modal */}
+      <TradeConfirmModal
+        isOpen={pendingTrade !== null}
+        direction={pendingTrade?.direction ?? 'UP'}
+        symbol={selectedAsset}
+        amount={pendingTrade?.amount ?? 0}
+        duration={pendingTrade?.duration ?? 0}
+        payout={assetPayout}
+        onConfirm={handleConfirmTrade}
+        onCancel={handleCancelTrade}
       />
     </div>
   );

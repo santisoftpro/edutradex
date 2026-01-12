@@ -8,6 +8,8 @@ import {
 import { superAdminService, SuperAdminServiceError } from '../services/superadmin/superadmin.service.js';
 import { auditService } from '../services/audit/audit.service.js';
 import { brokerFinancialService, BrokerFinancialServiceError } from '../services/financial/index.js';
+import { brokerAnalyticsService } from '../services/financial/broker-analytics.service.js';
+import { pdfExportService } from '../services/financial/pdf-export.service.js';
 import { financialScheduler } from '../services/scheduler/financial.scheduler.js';
 import {
   getAdminsQuerySchema,
@@ -31,7 +33,26 @@ import {
   userIdParamSchema,
   updateUserTypeSchema,
   bulkUpdateUserTypesSchema,
+  dateRangeQuerySchema,
+  monthYearQuerySchema,
+  cohortQuerySchema,
+  forecastQuerySchema,
+  monteCarloQuerySchema,
+  symbolLimitQuerySchema,
+  dateParamSchema,
+  createExpenseCategorySchema,
+  updateExpenseCategorySchema,
+  createExpenseEntrySchema,
+  updateExpenseEntrySchema,
+  expenseIdParamSchema,
+  categoryIdParamSchema,
+  expenseQuerySchema,
+  setExpenseBudgetSchema,
+  setGoalTargetsSchema,
 } from '../validators/superadmin.validators.js';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 const router = Router();
 
@@ -1327,6 +1348,957 @@ router.post(
         userIds: result.userIds,
         message: `${result.classified} user(s) have been classified as DEMO_ONLY`,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= Professional Financial Analytics =============
+
+// Get executive summary
+router.get(
+  '/financial/executive-summary',
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const today = new Date();
+      const [healthScore, breakEven, runway, keyRatios] = await Promise.all([
+        brokerAnalyticsService.calculateHealthScore(today),
+        brokerAnalyticsService.calculateBreakEven(today.getMonth() + 1, today.getFullYear()),
+        brokerAnalyticsService.calculateRunway(),
+        brokerAnalyticsService.calculateKeyRatios({
+          start: new Date(today.getFullYear(), today.getMonth(), 1),
+          end: today,
+        }),
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          healthScore,
+          breakEven,
+          runway,
+          keyRatios,
+          generatedAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get health score
+router.get(
+  '/financial/health-score',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const date = req.query.date ? new Date(req.query.date as string) : new Date();
+      const healthScore = await brokerAnalyticsService.calculateHealthScore(date);
+
+      res.json({
+        success: true,
+        data: healthScore,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get break-even tracking
+router.get(
+  '/financial/break-even',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = monthYearQuerySchema.safeParse(req.query);
+      const month = parsed.success ? parsed.data.month : new Date().getMonth() + 1;
+      const year = parsed.success ? parsed.data.year : new Date().getFullYear();
+
+      const breakEven = await brokerAnalyticsService.calculateBreakEven(month, year);
+
+      res.json({
+        success: true,
+        data: breakEven,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get runway calculation
+router.get(
+  '/financial/runway',
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const runway = await brokerAnalyticsService.calculateRunway();
+
+      res.json({
+        success: true,
+        data: runway,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get key financial ratios
+router.get(
+  '/financial/key-ratios',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = dateRangeQuerySchema.safeParse(req.query);
+
+      if (!parsed.success) {
+        // Default to current month
+        const today = new Date();
+        const start = new Date(today.getFullYear(), today.getMonth(), 1);
+        const keyRatios = await brokerAnalyticsService.calculateKeyRatios({ start, end: today });
+
+        res.json({
+          success: true,
+          data: keyRatios,
+        });
+        return;
+      }
+
+      const keyRatios = await brokerAnalyticsService.calculateKeyRatios({
+        start: new Date(parsed.data.from),
+        end: new Date(parsed.data.to),
+      });
+
+      res.json({
+        success: true,
+        data: keyRatios,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= Revenue Breakdown =============
+
+// Get revenue by market type
+router.get(
+  '/financial/revenue/by-market',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = dateRangeQuerySchema.safeParse(req.query);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid query parameters',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const result = await brokerAnalyticsService.getRevenueByMarket({
+        start: new Date(parsed.data.from),
+        end: new Date(parsed.data.to),
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get revenue by symbol
+router.get(
+  '/financial/revenue/by-symbol',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = symbolLimitQuerySchema.safeParse(req.query);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid query parameters',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const result = await brokerAnalyticsService.getRevenueBySymbol(
+        {
+          start: new Date(parsed.data.from),
+          end: new Date(parsed.data.to),
+        },
+        parsed.data.limit
+      );
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get P&L statement
+router.get(
+  '/financial/pl-statement',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = dateRangeQuerySchema.safeParse(req.query);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid query parameters',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const result = await brokerAnalyticsService.generatePLStatement({
+        start: new Date(parsed.data.from),
+        end: new Date(parsed.data.to),
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= Cohort Analysis =============
+
+// Get cohort analysis
+router.get(
+  '/financial/cohorts',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = cohortQuerySchema.safeParse(req.query);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid query parameters',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const result = await brokerAnalyticsService.getCohortAnalysis(parsed.data);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Trigger cohort update
+router.post(
+  '/financial/cohorts/update',
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await brokerAnalyticsService.updateUserCohorts();
+
+      res.json({
+        success: true,
+        message: 'Cohort data updated successfully',
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= Churn Analysis =============
+
+// Get churn metrics
+router.get(
+  '/financial/churn',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = monthYearQuerySchema.safeParse(req.query);
+      const month = parsed.success ? parsed.data.month : new Date().getMonth() + 1;
+      const year = parsed.success ? parsed.data.year : new Date().getFullYear();
+
+      const result = await brokerAnalyticsService.calculateChurnMetrics(month, year);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= Seasonal Patterns =============
+
+// Get seasonal patterns
+router.get(
+  '/financial/seasonal-patterns',
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await brokerAnalyticsService.getSeasonalPatterns();
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= Forecasting =============
+
+// Get revenue forecast
+router.get(
+  '/financial/forecast',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = forecastQuerySchema.safeParse(req.query);
+      const daysAhead = parsed.success ? parsed.data.daysAhead : 30;
+
+      const result = await brokerAnalyticsService.generateForecast(daysAhead);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Run Monte Carlo simulation
+router.get(
+  '/financial/monte-carlo',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = monteCarloQuerySchema.safeParse(req.query);
+      const daysAhead = parsed.success ? parsed.data.daysAhead : 30;
+      const iterations = parsed.success ? parsed.data.iterations : 1000;
+
+      const result = await brokerAnalyticsService.runMonteCarloSimulation(daysAhead, iterations);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= Goal Progress =============
+
+// Get goal progress
+router.get(
+  '/financial/goal-progress',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = monthYearQuerySchema.safeParse(req.query);
+      const month = parsed.success ? parsed.data.month : new Date().getMonth() + 1;
+      const year = parsed.success ? parsed.data.year : new Date().getFullYear();
+
+      const result = await brokerAnalyticsService.getGoalProgress(month, year);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Set goal targets
+router.post(
+  '/financial/goal-targets',
+  superAdminSensitiveRateLimiter,
+  requirePasswordMiddleware,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = setGoalTargetsSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request body',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const { month, year, ...targets } = parsed.data;
+
+      await prisma.goalProgress.upsert({
+        where: { month_year: { month, year } },
+        create: {
+          month,
+          year,
+          revenueTarget: targets.revenueTarget || 0,
+          profitTarget: targets.profitTarget || 0,
+          volumeTarget: targets.volumeTarget || 0,
+          newUsersTarget: targets.newUsersTarget || 0,
+          depositsTarget: targets.depositsTarget || 0,
+        },
+        update: {
+          ...(targets.revenueTarget !== undefined && { revenueTarget: targets.revenueTarget }),
+          ...(targets.profitTarget !== undefined && { profitTarget: targets.profitTarget }),
+          ...(targets.volumeTarget !== undefined && { volumeTarget: targets.volumeTarget }),
+          ...(targets.newUsersTarget !== undefined && { newUsersTarget: targets.newUsersTarget }),
+          ...(targets.depositsTarget !== undefined && { depositsTarget: targets.depositsTarget }),
+        },
+      });
+
+      res.json({
+        success: true,
+        message: 'Goal targets updated successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= Concentration Risk =============
+
+// Get concentration risk
+router.get(
+  '/financial/concentration-risk',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const date = req.query.date ? new Date(req.query.date as string) : new Date();
+      const result = await brokerAnalyticsService.getConcentrationRisk(date);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= Cash Flow =============
+
+// Get cash flow statement
+router.get(
+  '/financial/cash-flow',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = monthYearQuerySchema.safeParse(req.query);
+      const month = parsed.success ? parsed.data.month : new Date().getMonth() + 1;
+      const year = parsed.success ? parsed.data.year : new Date().getFullYear();
+
+      const result = await brokerAnalyticsService.generateCashFlowStatement(month, year);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= Expense Management =============
+
+// Get expense categories
+router.get(
+  '/financial/expenses/categories',
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const categories = await prisma.expenseCategory.findMany({
+        where: { isActive: true },
+        include: {
+          children: {
+            where: { isActive: true },
+            orderBy: { displayOrder: 'asc' },
+          },
+        },
+        orderBy: { displayOrder: 'asc' },
+      });
+
+      // Filter to only get top-level categories
+      const topLevel = categories.filter(c => c.parentId === null);
+
+      res.json({
+        success: true,
+        data: topLevel,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Create expense category
+router.post(
+  '/financial/expenses/categories',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = createExpenseCategorySchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request body',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const category = await prisma.expenseCategory.create({
+        data: parsed.data,
+      });
+
+      res.status(201).json({
+        success: true,
+        data: category,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Update expense category
+router.patch(
+  '/financial/expenses/categories/:categoryId',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const paramsParsed = categoryIdParamSchema.safeParse({ params: req.params });
+      const bodyParsed = updateExpenseCategorySchema.safeParse(req.body);
+
+      if (!paramsParsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid category ID',
+          details: paramsParsed.error.issues,
+        });
+        return;
+      }
+
+      if (!bodyParsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request body',
+          details: bodyParsed.error.issues,
+        });
+        return;
+      }
+
+      const category = await prisma.expenseCategory.update({
+        where: { id: paramsParsed.data.params.categoryId },
+        data: bodyParsed.data,
+      });
+
+      res.json({
+        success: true,
+        data: category,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Seed default expense categories
+router.post(
+  '/financial/expenses/categories/seed',
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      await brokerAnalyticsService.seedDefaultExpenseCategories();
+
+      res.json({
+        success: true,
+        message: 'Default expense categories seeded successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get expense entries
+router.get(
+  '/financial/expenses',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = expenseQuerySchema.safeParse(req.query);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid query parameters',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const { page, limit, categoryId, from, to, isRecurring } = parsed.data;
+      const offset = (page - 1) * limit;
+
+      const where: Record<string, unknown> = {};
+      if (categoryId) where.categoryId = categoryId;
+      if (from) where.date = { ...(where.date as object || {}), gte: from };
+      if (to) where.date = { ...(where.date as object || {}), lte: to };
+      if (isRecurring !== undefined) where.isRecurring = isRecurring;
+
+      const [expenses, total] = await Promise.all([
+        prisma.expenseEntry.findMany({
+          where,
+          include: { category: true },
+          orderBy: { date: 'desc' },
+          skip: offset,
+          take: limit,
+        }),
+        prisma.expenseEntry.count({ where }),
+      ]);
+
+      res.json({
+        success: true,
+        data: expenses,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Create expense entry
+router.post(
+  '/financial/expenses',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = createExpenseEntrySchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request body',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const expense = await prisma.expenseEntry.create({
+        data: {
+          ...parsed.data,
+          date: new Date(parsed.data.date),
+          createdBy: req.userId,
+        },
+        include: { category: true },
+      });
+
+      res.status(201).json({
+        success: true,
+        data: expense,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Update expense entry
+router.patch(
+  '/financial/expenses/:expenseId',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const paramsParsed = expenseIdParamSchema.safeParse({ params: req.params });
+      const bodyParsed = updateExpenseEntrySchema.safeParse(req.body);
+
+      if (!paramsParsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid expense ID',
+          details: paramsParsed.error.issues,
+        });
+        return;
+      }
+
+      if (!bodyParsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request body',
+          details: bodyParsed.error.issues,
+        });
+        return;
+      }
+
+      const updateData: Record<string, unknown> = { ...bodyParsed.data };
+      if (bodyParsed.data.date) {
+        updateData.date = new Date(bodyParsed.data.date);
+      }
+
+      const expense = await prisma.expenseEntry.update({
+        where: { id: paramsParsed.data.params.expenseId },
+        data: updateData,
+        include: { category: true },
+      });
+
+      res.json({
+        success: true,
+        data: expense,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Delete expense entry
+router.delete(
+  '/financial/expenses/:expenseId',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = expenseIdParamSchema.safeParse({ params: req.params });
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid expense ID',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      await prisma.expenseEntry.delete({
+        where: { id: parsed.data.params.expenseId },
+      });
+
+      res.json({
+        success: true,
+        message: 'Expense entry deleted successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get expense analysis
+router.get(
+  '/financial/expenses/analysis',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = dateRangeQuerySchema.safeParse(req.query);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid query parameters',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const result = await brokerAnalyticsService.getExpenseAnalysis({
+        start: new Date(parsed.data.from),
+        end: new Date(parsed.data.to),
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get expense budgets
+router.get(
+  '/financial/expenses/budgets',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = monthYearQuerySchema.safeParse(req.query);
+      const month = parsed.success ? parsed.data.month : new Date().getMonth() + 1;
+      const year = parsed.success ? parsed.data.year : new Date().getFullYear();
+
+      const budgets = await prisma.expenseBudget.findMany({
+        where: { month, year },
+        include: { category: true },
+      });
+
+      res.json({
+        success: true,
+        data: budgets,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Set expense budget
+router.post(
+  '/financial/expenses/budgets',
+  superAdminSensitiveRateLimiter,
+  requirePasswordMiddleware,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const parsed = setExpenseBudgetSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request body',
+          details: parsed.error.issues,
+        });
+        return;
+      }
+
+      const { categoryId, month, year, budgetAmount } = parsed.data;
+
+      const budget = await prisma.expenseBudget.upsert({
+        where: {
+          categoryId_month_year: { categoryId, month, year },
+        },
+        create: {
+          categoryId,
+          month,
+          year,
+          budgetAmount,
+        },
+        update: {
+          budgetAmount,
+        },
+        include: { category: true },
+      });
+
+      res.json({
+        success: true,
+        data: budget,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= Revenue Breakdown Update (Scheduler) =============
+
+// Trigger revenue breakdown update
+router.post(
+  '/financial/revenue/update',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const date = req.body.date ? new Date(req.body.date) : new Date();
+      await brokerAnalyticsService.updateRevenueBreakdown(date);
+
+      res.json({
+        success: true,
+        message: 'Revenue breakdown updated successfully',
+        date: date.toISOString().split('T')[0],
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============= PDF Export =============
+
+// Export Executive Summary as PDF
+router.get(
+  '/financial/export/pdf/executive-summary',
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+
+      // Create date range for this month
+      const startOfMonth = new Date(year, month - 1, 1);
+      const endOfMonth = new Date(year, month, 0);
+      const dateRange = { start: startOfMonth, end: endOfMonth };
+
+      // Gather all data for executive summary
+      const [healthScore, breakEven, runway, keyRatios] = await Promise.all([
+        brokerAnalyticsService.calculateHealthScore(now),
+        brokerAnalyticsService.calculateBreakEven(month, year),
+        brokerAnalyticsService.calculateRunway(),
+        brokerAnalyticsService.calculateKeyRatios(dateRange),
+      ]);
+
+      const pdfData = {
+        healthScore,
+        breakEven,
+        runway,
+        keyRatios,
+      };
+
+      const pdfBuffer = await pdfExportService.generateExecutiveSummaryPDF(pdfData);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="executive-summary-${year}-${String(month).padStart(2, '0')}.pdf"`
+      );
+      res.send(pdfBuffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Export P&L Statement as PDF
+router.get(
+  '/financial/export/pdf/pl-statement',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const month = req.query.month ? Number(req.query.month) : new Date().getMonth() + 1;
+      const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
+
+      // Create date range for the specified month
+      const startOfMonth = new Date(year, month - 1, 1);
+      const endOfMonth = new Date(year, month, 0);
+      const dateRange = { start: startOfMonth, end: endOfMonth };
+
+      const plStatement = await brokerAnalyticsService.generatePLStatement(dateRange);
+
+      const pdfBuffer = await pdfExportService.generatePLStatementPDF(plStatement);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="pl-statement-${year}-${String(month).padStart(2, '0')}.pdf"`
+      );
+      res.send(pdfBuffer);
     } catch (error) {
       next(error);
     }

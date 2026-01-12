@@ -45,7 +45,11 @@ export function validateTrade(
     return { valid: false, error: 'Amount must be greater than 0' };
   }
   if (amount > balance) {
-    return { valid: false, error: 'Insufficient balance' };
+    const shortfall = amount - balance;
+    return {
+      valid: false,
+      error: `Need $${shortfall.toFixed(2)} more (Available: $${balance.toFixed(2)})`
+    };
   }
   if (duration < 5) {
     return { valid: false, error: 'Minimum duration is 5 seconds' };

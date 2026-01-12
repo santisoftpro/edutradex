@@ -234,8 +234,7 @@ export function TradingHeader({ selectedAsset, onSelectAsset, currentPrice, live
         )}
 
         {/* Account Switcher */}
-        <AccountSwitcher compact className="hidden md:block" />
-        <AccountSwitcher compact className="md:hidden" />
+        <AccountSwitcher compact />
 
         {/* User Menu */}
         <div className="relative">

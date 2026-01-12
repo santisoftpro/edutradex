@@ -13,7 +13,12 @@
       "Bash(TRADE_ID=\"0983d1ac-8b22-4a35-9d4f-63b2496da611\")",
       "Bash(__NEW_LINE__ echo \"Trade ID: $TRADE_ID\")",
       "Bash(npx tsc:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "WebSearch",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "Bash(npx shadcn@latest add button card input label table badge tabs dialog dropdown-menu avatar separator sheet toast form select textarea -y)",
+      "Bash(npx shadcn@latest add:*)"
     ],
     "deny": [],
     "ask": []

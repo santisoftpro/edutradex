@@ -61,6 +61,7 @@ export function MobileAssetBar({
   const [category, setCategory] = useState<AssetCategory>('all');
   const [assets, setAssets] = useState<MarketAsset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [expirationDisplay, setExpirationDisplay] = useState('');
   const { activeTrades } = useTradeStore();
 
   // Fetch assets on mount
@@ -111,16 +112,23 @@ export function MobileAssetBar({
     });
   };
 
-  const formatExpirationTime = () => {
-    const now = new Date();
-    const expiration = new Date(now.getTime() + expirationTime * 1000);
-    return expiration.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    });
-  };
+  // Update expiration time display every second
+  useEffect(() => {
+    const updateExpiration = () => {
+      const now = new Date();
+      const expiration = new Date(now.getTime() + expirationTime * 1000);
+      setExpirationDisplay(expiration.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }));
+    };
+
+    updateExpiration(); // Initial update
+    const interval = setInterval(updateExpiration, 1000);
+    return () => clearInterval(interval);
+  }, [expirationTime]);
 
   // Filter assets
   const filteredAssets = useMemo(() => {
@@ -347,7 +355,7 @@ export function MobileAssetBar({
         {/* Right Side - Expiration Time */}
         <div className="flex flex-col items-end">
           <span className="text-gray-400 text-[11px] font-medium">Expiration</span>
-          <span className="text-white text-sm font-semibold">{formatExpirationTime()}</span>
+          <span className="text-white text-sm font-semibold">{expirationDisplay}</span>
         </div>
       </div>
 

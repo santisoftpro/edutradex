@@ -104,6 +104,10 @@ model User {
   twoFactorVerifiedAt DateTime? // When 2FA was last verified
   backupCodes         String[]  @default([]) // Hashed backup codes
 
+  // Professional Financial Analytics Relations
+  cohort             UserCohort?
+  concentrationRisks ConcentrationRisk[]
+
   @@index([email])
   @@index([role])
   @@index([referralCode])
@@ -155,6 +159,10 @@ model Trade {
   @@index([status, expiresAt], name: "idx_trade_status_expires")
   // Composite index for leader stats aggregation: WHERE userId = $1 AND status = 'CLOSED' AND isCopyTrade = false
   @@index([userId, status, isCopyTrade], name: "idx_trade_leader_stats")
+  // Composite index for financial analytics: WHERE accountType = 'LIVE' AND status = 'CLOSED' AND closedAt BETWEEN
+  @@index([accountType, status, closedAt], name: "idx_trade_financial_analytics")
+  // Composite index for market revenue breakdown: filter by closedAt, group by market
+  @@index([closedAt, market], name: "idx_trade_market_revenue")
 }
 
 model Session {
@@ -1297,11 +1305,22 @@ model BrokerFinancialSnapshot {
   revenuePerTrade Float @default(0) // Revenue per trade
   userWinRate     Float @default(0) // % users who were profitable
 
+  // ========== EXECUTIVE SUMMARY FIELDS ==========
+  businessHealthScore Int     @default(0) // 0-100 health score
+  profitMarginStatus  String  @default("NORMAL") // HEALTHY, WARNING, CRITICAL
+  daysToBreakeven     Int? // Days until break-even
+  runwayMonths        Float? // Months of operating cash
+  roi                 Float   @default(0) // Return on investment
+
   // ========== METADATA ==========
   generatedAt   DateTime @default(now()) // When snapshot was created
   lastUpdatedAt DateTime @updatedAt
   isFinalized   Boolean  @default(false) // True when day is complete
   notes         String? // Admin notes
+
+  // Revenue breakdown relations
+  revenueByMarket BrokerRevenueByMarket[]
+  revenueBySymbol BrokerRevenueBySymbol[]
 
   @@index([date])
   @@index([isFinalized])
@@ -1440,4 +1459,324 @@ model FinancialAuditLog {
   @@index([performedBy])
   @@index([createdAt])
   @@index([actionType, createdAt])
+}
+
+// ==========================================
+// PROFESSIONAL FINANCIAL ANALYTICS
+// ==========================================
+
+// Revenue breakdown by market type (FOREX, CRYPTO, STOCK, INDEX, OTC)
+model BrokerRevenueByMarket {
+  id         String                  @id @default(uuid())
+  snapshotId String
+  snapshot   BrokerFinancialSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  date       DateTime                @db.Date
+  market     String // FOREX, CRYPTO, STOCK, INDEX, OTC
+
+  // Revenue metrics
+  grossRevenue  Float @default(0)
+  totalVolume   Float @default(0)
+  totalTrades   Int   @default(0)
+  wonTrades     Int   @default(0)
+  lostTrades    Int   @default(0)
+  totalPayouts  Float @default(0)
+  profitMargin  Float @default(0)
+  brokerWinRate Float @default(0)
+  avgTradeSize  Float @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([date, market])
+  @@index([market, date])
+  @@index([snapshotId])
+}
+
+// Revenue breakdown by top symbols
+model BrokerRevenueBySymbol {
+  id         String                  @id @default(uuid())
+  snapshotId String
+  snapshot   BrokerFinancialSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  date       DateTime                @db.Date
+  symbol     String
+  market     String
+
+  // Revenue metrics
+  grossRevenue Float @default(0)
+  totalVolume  Float @default(0)
+  totalTrades  Int   @default(0)
+  wonTrades    Int   @default(0)
+  lostTrades   Int   @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@index([snapshotId])
+  @@index([grossRevenue(sort: Desc)])
+  @@index([date, symbol])
+}
+
+// User cohort for retention analysis
+model UserCohort {
+  id               String    @id @default(uuid())
+  userId           String    @unique
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  signupMonth      Int
+  signupYear       Int
+  firstDepositDate DateTime? @db.Date
+  firstTradeDate   DateTime? @db.Date
+  lastActiveDate   DateTime? @db.Date
+  lastDepositDate  DateTime? @db.Date
+
+  // Lifetime metrics
+  totalDeposits    Float @default(0)
+  totalWithdrawals Float @default(0)
+  totalTrades      Int   @default(0)
+  totalVolume      Float @default(0)
+  netRevenue       Float @default(0) // Revenue generated for broker
+
+  // Retention status
+  day30Active   Boolean   @default(false)
+  day60Active   Boolean   @default(false)
+  day90Active   Boolean   @default(false)
+  currentStatus String    @default("ACTIVE") // ACTIVE, INACTIVE, CHURNED
+  churnedAt     DateTime? @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([signupYear, signupMonth])
+  @@index([currentStatus])
+  @@index([lastActiveDate])
+}
+
+// Monthly churn analysis
+model ChurnAnalysis {
+  id    String @id @default(uuid())
+  month Int
+  year  Int
+
+  // Starting cohort
+  startingUsers Int @default(0)
+
+  // Churn metrics
+  churnedUsers Int   @default(0)
+  churnRate    Float @default(0)
+
+  // Reactivation
+  reactivatedUsers Int   @default(0)
+  reactivationRate Float @default(0)
+
+  // By segment
+  churnByUserType    Json? // {"REAL": 10, "DEMO_ONLY": 50}
+  churnByDepositTier Json? // {"<100": 20, "100-500": 10, ">500": 5}
+
+  createdAt DateTime @default(now())
+
+  @@unique([month, year])
+  @@index([year, month])
+}
+
+// Seasonal patterns for trend analysis
+model SeasonalPattern {
+  id          String @id @default(uuid())
+  periodType  String // MONTHLY, DAY_OF_WEEK, HOUR_OF_DAY
+  periodValue Int // Month 1-12, Day 0-6, Hour 0-23
+  year        Int? // NULL for all-time patterns
+
+  // Metrics
+  avgRevenue Float @default(0)
+  avgVolume  Float @default(0)
+  avgTrades  Float @default(0)
+  avgDeposits Float @default(0)
+
+  // Statistical
+  stdDevRevenue Float @default(0)
+  sampleSize    Int   @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([periodType, periodValue, year])
+  @@index([periodType])
+}
+
+// Revenue forecasts
+model RevenueForecast {
+  id           String   @id @default(uuid())
+  forecastDate DateTime @unique @db.Date // Unique for efficient upserts
+  generatedAt  DateTime @default(now())
+
+  // Forecasts
+  expectedRevenue Float
+  lowBound        Float // 10th percentile
+  highBound       Float // 90th percentile
+
+  expectedVolume Float?
+  expectedTrades Int?
+
+  // Model info
+  modelType  String // LINEAR_REGRESSION, MOVING_AVG, MONTE_CARLO
+  confidence Float? // 0-1
+
+  // Actual (filled after date passes)
+  actualRevenue Float?
+  forecastError Float? // (actual - expected) / expected
+
+  @@index([generatedAt])
+  @@index([forecastDate, actualRevenue]) // For forecast accuracy queries
+}
+
+// Goal progress tracking
+model GoalProgress {
+  id    String @id @default(uuid())
+  month Int
+  year  Int
+
+  // Targets
+  revenueTarget  Float @default(0)
+  profitTarget   Float @default(0)
+  volumeTarget   Float @default(0)
+  newUsersTarget Int   @default(0)
+  depositsTarget Float @default(0)
+
+  // Current progress
+  currentRevenue  Float @default(0)
+  currentProfit   Float @default(0)
+  currentVolume   Float @default(0)
+  currentNewUsers Int   @default(0)
+  currentDeposits Float @default(0)
+
+  // Projections
+  projectedRevenue Float?
+  projectedProfit  Float?
+  paceStatus       String? // AHEAD, ON_TRACK, BEHIND, FAR_BEHIND
+
+  lastUpdated DateTime @default(now())
+
+  @@unique([month, year])
+  @@index([year, month])
+}
+
+// Concentration risk tracking
+model ConcentrationRisk {
+  id     String   @id @default(uuid())
+  date   DateTime @db.Date
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Daily metrics
+  dailyVolume  Float @default(0)
+  dailyTrades  Int   @default(0)
+  dailyRevenue Float @default(0)
+
+  // Percentage of total
+  volumePercent  Float @default(0)
+  tradesPercent  Float @default(0)
+  revenuePercent Float @default(0)
+
+  // Risk flags
+  isHighRisk Boolean @default(false)
+  alertSent  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([date, userId])
+  @@index([date])
+  @@index([isHighRisk])
+  @@index([userId])
+}
+
+// Cash flow statement
+model CashFlowStatement {
+  id    String @id @default(uuid())
+  month Int
+  year  Int
+
+  // Operating Activities
+  tradingRevenue       Float @default(0)
+  tradingPayouts       Float @default(0)
+  netTradingCash       Float @default(0)
+  affiliateCommissions Float @default(0)
+  operatingExpenses    Float @default(0)
+  netOperatingCash     Float @default(0)
+
+  // Financing Activities
+  customerDeposits    Float @default(0)
+  customerWithdrawals Float @default(0)
+  netFinancingCash    Float @default(0)
+
+  // Net Position
+  openingBalance Float @default(0)
+  closingBalance Float @default(0)
+  netCashChange  Float @default(0)
+
+  generatedAt DateTime @default(now())
+
+  @@unique([month, year])
+  @@index([year, month])
+}
+
+// Expense categories
+model ExpenseCategory {
+  id           String            @id @default(uuid())
+  name         String
+  code         String            @unique
+  parentId     String?
+  parent       ExpenseCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children     ExpenseCategory[] @relation("CategoryHierarchy")
+  description  String?
+  isActive     Boolean           @default(true)
+  displayOrder Int               @default(0)
+
+  expenses ExpenseEntry[]
+  budgets  ExpenseBudget[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId])
+  @@index([isActive])
+  @@index([displayOrder])
+}
+
+// Expense entries
+model ExpenseEntry {
+  id         String          @id @default(uuid())
+  categoryId String
+  category   ExpenseCategory @relation(fields: [categoryId], references: [id])
+  date       DateTime        @db.Date
+
+  amount          Float
+  description     String?
+  vendor          String?
+  isRecurring     Boolean @default(false)
+  recurringPeriod String? // MONTHLY, QUARTERLY, ANNUALLY
+
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([categoryId])
+  @@index([isRecurring])
+}
+
+// Expense budgets
+model ExpenseBudget {
+  id         String          @id @default(uuid())
+  categoryId String
+  category   ExpenseCategory @relation(fields: [categoryId], references: [id])
+  month      Int
+  year       Int
+
+  budgetAmount    Float @default(0)
+  actualAmount    Float @default(0)
+  variance        Float @default(0)
+  variancePercent Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([categoryId, month, year])
+  @@index([year, month])
 }

@@ -1,0 +1,740 @@
+// OptigoBroker Partners - Affiliate System
+// Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// AUTHENTICATION & PARTNER
+// ============================================
+
+model Partner {
+  id                String        @id @default(cuid())
+  email             String        @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  displayName       String?
+  phone             String?
+  country           String?
+  level             PartnerLevel  @default(STARTER)
+  status            PartnerStatus @default(ACTIVE)
+
+  // Balances
+  availableBalance  Decimal       @default(0) @db.Decimal(18, 2)
+  pendingBalance    Decimal       @default(0) @db.Decimal(18, 2)
+  totalEarned       Decimal       @default(0) @db.Decimal(18, 2)
+  totalWithdrawn    Decimal       @default(0) @db.Decimal(18, 2)
+
+  // Stats
+  totalFTD          Int           @default(0)
+  totalTraders      Int           @default(0)
+  totalDeposits     Decimal       @default(0) @db.Decimal(18, 2)
+
+  // Verification
+  emailVerified     Boolean       @default(false)
+  emailVerifiedAt   DateTime?
+  twoFactorEnabled  Boolean       @default(false)
+  twoFactorSecret   String?
+
+  // Social Verification
+  socialStatus      SocialVerificationStatus @default(NOT_REQUIRED)
+
+  // Timestamps
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  lastLoginAt       DateTime?
+
+  // Relations
+  referredTraders   Trader[]
+  trackingLinks     TrackingLink[]
+  withdrawals       Withdrawal[]
+  settlements       Settlement[]
+  commissions       Commission[]
+  socialChannels    SocialChannel[]
+  marketingMethods  PartnerMarketingMethod[]
+  levelReviewRequests LevelReviewRequest[]
+  tickets           SupportTicket[]
+  ticketReplies     TicketReply[]
+  notifications     Notification[]
+  sessions          Session[]
+
+  @@index([email])
+  @@index([level])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum PartnerLevel {
+  STARTER     // Level 1: 60% - 20 FTD
+  BUILDER     // Level 2: 65% - 40 FTD
+  GROWTH      // Level 3: 70% - 100 FTD
+  ADVANCED    // Level 4: 75% - 150 FTD
+  PRO         // Level 5: 80% - 400+ FTD
+  AMBASSADOR  // Level 6: 85% - 400+ FTD + Verified
+}
+
+enum PartnerStatus {
+  PENDING
+  ACTIVE
+  BLOCKED
+  UNDER_REVIEW
+  SUSPENDED
+}
+
+enum SocialVerificationStatus {
+  NOT_REQUIRED
+  NOT_SUBMITTED
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+model Session {
+  id            String   @id @default(cuid())
+  partnerId     String
+  token         String   @unique
+  userAgent     String?
+  ipAddress     String?
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  partner       Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+  @@index([token])
+}
+
+// ============================================
+// TRACKING & ATTRIBUTION
+// ============================================
+
+model TrackingLink {
+  id          String    @id @default(cuid())
+  partnerId   String
+  code        String    @unique
+  comment     String?
+  type        LinkType  @default(REGISTER)
+  program     ProgramType @default(REVENUE_SHARE)
+  isActive    Boolean   @default(true)
+  clickCount  Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  partner     Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  traders     Trader[]
+  clicks      LinkClick[]
+
+  @@index([partnerId])
+  @@index([code])
+}
+
+enum LinkType {
+  REGISTER
+  MAIN_PAGE
+  ANDROID
+  PLATFORM
+}
+
+enum ProgramType {
+  REVENUE_SHARE
+  TURNOVER_SHARE
+}
+
+model LinkClick {
+  id          String   @id @default(cuid())
+  linkId      String
+  ipAddress   String?
+  userAgent   String?
+  referer     String?
+  country     String?
+  createdAt   DateTime @default(now())
+
+  link        TrackingLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@index([linkId])
+  @@index([createdAt])
+}
+
+// ============================================
+// REFERRED TRADERS
+// ============================================
+
+model Trader {
+  id                String    @id @default(cuid())
+  partnerId         String
+  linkId            String?
+
+  // Broker Integration
+  tradingUid        String    @unique  // UID from main broker
+  email             String?
+  country           String?
+
+  // Stats (synced from broker)
+  balance           Decimal   @default(0) @db.Decimal(18, 2)
+  totalDeposits     Decimal   @default(0) @db.Decimal(18, 2)
+  depositCount      Int       @default(0)
+  totalWithdrawals  Decimal   @default(0) @db.Decimal(18, 2)
+  profit            Decimal   @default(0) @db.Decimal(18, 2)
+  loss              Decimal   @default(0) @db.Decimal(18, 2)
+  netPL             Decimal   @default(0) @db.Decimal(18, 2)
+  turnover          Decimal   @default(0) @db.Decimal(18, 2)
+
+  // FTD Tracking
+  hasFTD            Boolean   @default(false)
+  ftdDate           DateTime?
+  ftdAmount         Decimal?  @db.Decimal(18, 2)
+
+  // Fraud Detection
+  isSelfReferral    Boolean   @default(false)
+  isFraud           Boolean   @default(false)
+  fraudReason       String?
+  deviceFingerprint String?
+
+  // Timestamps
+  registeredAt      DateTime  @default(now())
+  lastActivityAt    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  partner           Partner   @relation(fields: [partnerId], references: [id])
+  link              TrackingLink? @relation(fields: [linkId], references: [id])
+  commissions       Commission[]
+
+  @@index([partnerId])
+  @@index([linkId])
+  @@index([tradingUid])
+  @@index([hasFTD])
+  @@index([createdAt])
+}
+
+// ============================================
+// COMMISSIONS & SETTLEMENTS
+// ============================================
+
+model Commission {
+  id            String            @id @default(cuid())
+  partnerId     String
+  traderId      String
+
+  // Amounts
+  amount        Decimal           @db.Decimal(18, 2)
+  basis         Decimal           @db.Decimal(18, 2)  // The loss/revenue basis
+  rate          Decimal           @db.Decimal(5, 4)   // Partner's rate (0.60 - 0.85)
+
+  // Period
+  periodStart   DateTime
+  periodEnd     DateTime
+
+  // Status
+  status        CommissionStatus  @default(PENDING)
+  settlementId  String?
+
+  // Timestamps
+  createdAt     DateTime          @default(now())
+  creditedAt    DateTime?
+
+  // Relations
+  partner       Partner           @relation(fields: [partnerId], references: [id])
+  trader        Trader            @relation(fields: [traderId], references: [id])
+  settlement    Settlement?       @relation(fields: [settlementId], references: [id])
+
+  @@index([partnerId])
+  @@index([traderId])
+  @@index([status])
+  @@index([periodStart, periodEnd])
+}
+
+model Settlement {
+  id            String            @id @default(cuid())
+  partnerId     String
+
+  // Amount
+  amount        Decimal           @db.Decimal(18, 2)
+  commissionCount Int             @default(0)
+
+  // Partner state at settlement
+  level         PartnerLevel
+  rate          Decimal           @db.Decimal(5, 4)
+
+  // Status
+  status        SettlementStatus  @default(CREDITED)
+  notes         String?
+
+  // Timestamps
+  periodDate    DateTime          // The day this settlement covers
+  settledAt     DateTime          @default(now())
+
+  // Relations
+  partner       Partner           @relation(fields: [partnerId], references: [id])
+  commissions   Commission[]
+
+  @@index([partnerId])
+  @@index([periodDate])
+  @@index([status])
+}
+
+enum CommissionStatus {
+  PENDING
+  CREDITED
+  ADJUSTED
+  FROZEN
+  CANCELLED
+}
+
+enum SettlementStatus {
+  PENDING
+  CREDITED
+  ADJUSTED
+  FROZEN
+}
+
+// ============================================
+// WITHDRAWALS
+// ============================================
+
+model Withdrawal {
+  id            String            @id @default(cuid())
+  partnerId     String
+
+  // Amount
+  amount        Decimal           @db.Decimal(18, 2)
+  fee           Decimal           @default(0) @db.Decimal(18, 2)
+  netAmount     Decimal           @db.Decimal(18, 2)
+
+  // Method
+  method        PayoutMethod
+  coin          String?           // BTC, ETH, USDT, etc.
+  network       String?           // ERC20, TRC20, BEP20, etc.
+  address       String?           // Crypto address
+  tradingUid    String?           // For internal transfer
+
+  // Status
+  status        WithdrawalStatus  @default(PENDING)
+  txId          String?           // Blockchain transaction ID
+  rejectionReason String?
+
+  // Verification
+  otpVerified   Boolean           @default(false)
+
+  // Timestamps
+  requestedAt   DateTime          @default(now())
+  processedAt   DateTime?
+  completedAt   DateTime?
+
+  // Relations
+  partner       Partner           @relation(fields: [partnerId], references: [id])
+
+  @@index([partnerId])
+  @@index([status])
+  @@index([requestedAt])
+}
+
+enum PayoutMethod {
+  CRYPTO
+  INTERNAL_TRANSFER
+}
+
+enum WithdrawalStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+// ============================================
+// SOCIAL & MARKETING
+// ============================================
+
+model SocialChannel {
+  id            String                @id @default(cuid())
+  partnerId     String
+
+  platform      SocialPlatform
+  profileUrl    String
+  username      String?
+  followersCount Int?
+  country       String?
+  notes         String?
+
+  // Verification
+  status        SocialChannelStatus   @default(DRAFT)
+  verifiedAt    DateTime?
+  rejectionReason String?
+
+  // Timestamps
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  // Relations
+  partner       Partner               @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+  @@index([status])
+}
+
+enum SocialPlatform {
+  YOUTUBE
+  INSTAGRAM
+  TIKTOK
+  TWITTER
+  TELEGRAM
+  FACEBOOK
+  LINKEDIN
+  TWITCH
+  DISCORD
+  WEBSITE
+  OTHER
+}
+
+enum SocialChannelStatus {
+  DRAFT
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+model PartnerMarketingMethod {
+  id          String          @id @default(cuid())
+  partnerId   String
+  method      MarketingMethod
+  description String?
+  createdAt   DateTime        @default(now())
+
+  partner     Partner         @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerId, method])
+  @@index([partnerId])
+}
+
+enum MarketingMethod {
+  ORGANIC_SOCIAL
+  COMMUNITY_SHARING
+  PAID_ADS
+  WEBSITE_SEO
+  INFLUENCER_PARTNERSHIPS
+  EMAIL_MARKETING
+  OTHER
+}
+
+// ============================================
+// LEVEL REVIEW
+// ============================================
+
+model LevelReviewRequest {
+  id              String                @id @default(cuid())
+  partnerId       String
+
+  // Request
+  targetLevel     PartnerLevel
+  currentLevel    PartnerLevel
+
+  // Metrics Snapshot
+  ftdCount        Int
+  totalDeposits   Decimal               @db.Decimal(18, 2)
+  totalTurnover   Decimal               @db.Decimal(18, 2)
+  activeTraders   Int
+  last30DaysDeposits Decimal            @db.Decimal(18, 2)
+
+  // Notes
+  partnerNotes    String?
+  adminNotes      String?
+
+  // Status
+  status          ReviewRequestStatus   @default(PENDING)
+  reviewedBy      String?
+  reviewedAt      DateTime?
+
+  // Timestamps
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  // Relations
+  partner         Partner               @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+  @@index([status])
+}
+
+enum ReviewRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ============================================
+// SUPPORT TICKETS
+// ============================================
+
+model SupportTicket {
+  id          String        @id @default(cuid())
+  partnerId   String
+
+  // Ticket Info
+  ticketNumber String       @unique
+  category    TicketCategory
+  subject     String
+  message     String        @db.Text
+
+  // Status
+  status      TicketStatus  @default(OPEN)
+  priority    TicketPriority @default(NORMAL)
+
+  // Assignment
+  assignedTo  String?
+
+  // Timestamps
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  closedAt    DateTime?
+
+  // Relations
+  partner     Partner       @relation(fields: [partnerId], references: [id])
+  replies     TicketReply[]
+  attachments TicketAttachment[]
+
+  @@index([partnerId])
+  @@index([ticketNumber])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model TicketReply {
+  id          String    @id @default(cuid())
+  ticketId    String
+  partnerId   String?   // null if from admin
+
+  message     String    @db.Text
+  isFromAdmin Boolean   @default(false)
+  adminName   String?
+
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  partner     Partner?      @relation(fields: [partnerId], references: [id])
+
+  @@index([ticketId])
+}
+
+model TicketAttachment {
+  id          String    @id @default(cuid())
+  ticketId    String
+  fileName    String
+  fileUrl     String
+  fileSize    Int
+  mimeType    String
+  createdAt   DateTime  @default(now())
+
+  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+enum TicketCategory {
+  PAYMENTS_WITHDRAWALS
+  AFFILIATE_LEVEL
+  LINKS_TRACKING
+  ACCOUNT_LOGIN
+  FRAUD_REPORT
+  OTHER
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  REPLIED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+// ============================================
+// NEWS & ANNOUNCEMENTS
+// ============================================
+
+model NewsArticle {
+  id          String        @id @default(cuid())
+
+  title       String
+  slug        String        @unique
+  summary     String
+  content     String        @db.Text
+  coverImage  String?
+
+  category    NewsCategory
+  isPinned    Boolean       @default(false)
+  isPublished Boolean       @default(false)
+
+  // Author
+  authorName  String
+
+  // Timestamps
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([slug])
+  @@index([isPublished])
+  @@index([isPinned])
+  @@index([publishedAt])
+}
+
+enum NewsCategory {
+  ANNOUNCEMENT
+  BONUS_CAMPAIGN
+  WINNERS
+  TIPS
+  UPDATE
+  OTHER
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id          String            @id @default(cuid())
+  partnerId   String
+
+  title       String
+  message     String
+  type        NotificationType
+
+  // Link to related entity
+  linkType    String?           // 'ticket', 'withdrawal', 'news', etc.
+  linkId      String?
+
+  isRead      Boolean           @default(false)
+  readAt      DateTime?
+
+  createdAt   DateTime          @default(now())
+
+  partner     Partner           @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  SYSTEM
+  SUPPORT_REPLY
+  PAYOUT_UPDATE
+  LEVEL_CHANGE
+  NEWS
+  FRAUD_ALERT
+}
+
+// ============================================
+// FRAUD & AUDIT
+// ============================================
+
+model FraudLog {
+  id            String      @id @default(cuid())
+  partnerId     String
+  traderId      String?
+
+  type          FraudType
+  severity      FraudSeverity
+  description   String
+  metadata      Json?
+
+  // Action taken
+  actionTaken   String?
+  actionBy      String?
+
+  createdAt     DateTime    @default(now())
+
+  @@index([partnerId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+enum FraudType {
+  SELF_REFERRAL
+  IP_OVERLAP
+  DEVICE_FINGERPRINT
+  WALLET_REUSE
+  SUSPICIOUS_ACTIVITY
+  MANUAL_FLAG
+}
+
+enum FraudSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+
+  entityType  String    // 'partner', 'withdrawal', 'settlement', etc.
+  entityId    String
+  action      String    // 'create', 'update', 'delete', 'status_change'
+
+  performedBy String    // 'system', admin id, or partner id
+  performerType String  // 'system', 'admin', 'partner'
+
+  oldValue    Json?
+  newValue    Json?
+  metadata    Json?
+
+  createdAt   DateTime  @default(now())
+
+  @@index([entityType, entityId])
+  @@index([performedBy])
+  @@index([createdAt])
+}
+
+// ============================================
+// SYSTEM CONFIGURATION
+// ============================================
+
+model SystemConfig {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  value       String
+  description String?
+  updatedAt   DateTime  @updatedAt
+}
+
+// ============================================
+// ADMIN USERS
+// ============================================
+
+model Admin {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  passwordHash  String
+  name          String
+  role          AdminRole   @default(ADMIN)
+  isActive      Boolean     @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([email])
+  @@index([role])
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  SUPPORT
+}
