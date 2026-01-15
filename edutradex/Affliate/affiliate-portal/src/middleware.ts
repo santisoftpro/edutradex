@@ -3,14 +3,31 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { jwtVerify } from "jose";
 
+// Admin JWT secret - uses dedicated secret for admin authentication
 const ADMIN_JWT_SECRET = new TextEncoder().encode(
-  process.env.NEXTAUTH_SECRET || "fallback-secret-change-me"
+  process.env.ADMIN_JWT_SECRET
 );
 
-// Verify admin JWT token
+/**
+ * Verify admin JWT token
+ * Returns payload if valid, null otherwise
+ */
 async function verifyAdminToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, ADMIN_JWT_SECRET);
+    // Skip verification if secret not configured (development fallback)
+    if (!process.env.ADMIN_JWT_SECRET) {
+      return null;
+    }
+
+    const { payload } = await jwtVerify(token, ADMIN_JWT_SECRET, {
+      algorithms: ["HS256"],
+    });
+
+    // Validate required claims
+    if (!payload.id || !payload.email || !payload.role) {
+      return null;
+    }
+
     return payload;
   } catch {
     return null;
@@ -47,6 +64,9 @@ const adminProtectedRoutes = [
 // Admin auth routes
 const adminAuthRoutes = ["/admin/login"];
 
+/**
+ * Middleware for route protection and security headers
+ */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -126,32 +146,71 @@ export async function middleware(request: NextRequest) {
   // Add security headers
   const response = NextResponse.next();
 
+  // Prevent clickjacking
   response.headers.set("X-Frame-Options", "DENY");
+
+  // Prevent MIME type sniffing
   response.headers.set("X-Content-Type-Options", "nosniff");
+
+  // Control referrer information
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  // XSS protection (legacy, but still useful for older browsers)
   response.headers.set("X-XSS-Protection", "1; mode=block");
+
+  // Permissions policy - disable unnecessary features
   response.headers.set(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=()"
+    "camera=(), microphone=(), geolocation=(), payment=()"
   );
+
+  // Content Security Policy
+  // Note: Next.js requires 'unsafe-inline' for styles and scripts
+  // In production, consider using nonce-based CSP
+  const isProduction = process.env.NODE_ENV === "production";
 
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    // Scripts: self + inline for Next.js hydration
+    // Remove unsafe-eval in production for better security
+    isProduction
+      ? "script-src 'self' 'unsafe-inline'"
+      : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    // Styles: self + inline for styled-components/Tailwind
     "style-src 'self' 'unsafe-inline'",
+    // Images: self + data URIs + HTTPS sources
     "img-src 'self' data: https: blob:",
+    // Fonts: self + data URIs
     "font-src 'self' data:",
+    // Connections: self + HTTPS (for API calls)
     "connect-src 'self' https:",
+    // Frames: completely blocked
     "frame-ancestors 'none'",
+    // Form actions: self only
+    "form-action 'self'",
+    // Base URI: self only
+    "base-uri 'self'",
+    // Object/embed: none
+    "object-src 'none'",
+    // Upgrade insecure requests in production
+    ...(isProduction ? ["upgrade-insecure-requests"] : []),
   ].join("; ");
 
   response.headers.set("Content-Security-Policy", csp);
+
+  // Strict Transport Security (only in production)
+  if (isProduction) {
+    response.headers.set(
+      "Strict-Transport-Security",
+      "max-age=63072000; includeSubDomains; preload"
+    );
+  }
 
   return response;
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\..*|api/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\..*|api/).*)",
   ],
 };

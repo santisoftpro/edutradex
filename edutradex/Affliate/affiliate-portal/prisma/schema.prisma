@@ -43,6 +43,9 @@ model Partner {
   twoFactorEnabled  Boolean       @default(false)
   twoFactorSecret   String?
 
+  // Session Management - increment to invalidate all existing sessions
+  tokenVersion      Int           @default(0)
+
   // Social Verification
   socialStatus      SocialVerificationStatus @default(NOT_REQUIRED)
 

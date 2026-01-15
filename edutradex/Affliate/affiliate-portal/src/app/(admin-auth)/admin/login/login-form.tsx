@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff, Shield } from "lucide-react";
+import { Loader2, Eye, EyeOff, Shield, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { adminLoginSchema, type AdminLoginInput } from "@/lib/admin-auth";
@@ -25,15 +25,24 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+interface LoginError {
+  message: string;
+  code?: string;
+  attemptsRemaining?: number;
+  lockedUntil?: string;
+  retryAfter?: number;
+}
 
 export function AdminLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/admin/dashboard";
-  const error = searchParams.get("error");
 
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState<LoginError | null>(null);
 
   const form = useForm<AdminLoginInput>({
     resolver: zodResolver(adminLoginSchema),
@@ -45,6 +54,7 @@ export function AdminLoginForm() {
 
   async function onSubmit(data: AdminLoginInput) {
     setIsLoading(true);
+    setLoginError(null);
 
     try {
       const response = await fetch("/api/admin/login", {
@@ -61,7 +71,12 @@ export function AdminLoginForm() {
       const result = await response.json();
 
       if (!response.ok) {
-        toast.error(result.error || "Login failed");
+        setLoginError({
+          message: result.error || "Login failed",
+          attemptsRemaining: result.attemptsRemaining,
+          lockedUntil: result.lockedUntil,
+          retryAfter: result.retryAfter,
+        });
         return;
       }
 
@@ -69,7 +84,10 @@ export function AdminLoginForm() {
       router.push(callbackUrl);
       router.refresh();
     } catch {
-      toast.error("An unexpected error occurred. Please try again.");
+      setLoginError({
+        message: "An unexpected error occurred. Please try again.",
+        code: "NETWORK_ERROR",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -88,12 +106,28 @@ export function AdminLoginForm() {
       </CardHeader>
 
       <CardContent>
-        {error && (
-          <div className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-            {error === "CredentialsSignin"
-              ? "Invalid email or password"
-              : error}
-          </div>
+        {loginError && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-medium">{loginError.message}</div>
+              {loginError.attemptsRemaining !== undefined && loginError.attemptsRemaining > 0 && (
+                <div className="mt-1 text-xs opacity-80">
+                  {loginError.attemptsRemaining} attempt{loginError.attemptsRemaining !== 1 ? 's' : ''} remaining before lockout
+                </div>
+              )}
+              {loginError.lockedUntil && (
+                <div className="mt-1 text-xs opacity-80">
+                  Locked until: {new Date(loginError.lockedUntil).toLocaleTimeString()}
+                </div>
+              )}
+              {loginError.retryAfter && (
+                <div className="mt-1 text-xs opacity-80">
+                  Please wait {Math.ceil(loginError.retryAfter / 60)} minute{Math.ceil(loginError.retryAfter / 60) !== 1 ? 's' : ''} before trying again
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
         )}
 
         <Form {...form}>

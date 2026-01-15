@@ -4,6 +4,11 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "./db";
 import type { PartnerLevel, PartnerStatus } from "@prisma/client";
+import {
+  rateLimiter,
+  RATE_LIMIT_CONFIGS,
+  createLoginIdentifier,
+} from "./rate-limiter";
 
 // ============================================
 // TYPE DECLARATIONS
@@ -36,6 +41,7 @@ declare module "next-auth/jwt" {
     name: string;
     level: PartnerLevel;
     status: PartnerStatus;
+    tokenVersion: number;
   }
 }
 
@@ -117,7 +123,7 @@ const authConfig: NextAuthConfig = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         // Validate input
         const validated = loginSchema.safeParse(credentials);
 
@@ -126,10 +132,25 @@ const authConfig: NextAuthConfig = {
         }
 
         const { email, password } = validated.data;
+        const normalizedEmail = email.toLowerCase().trim();
+
+        // Extract client IP for rate limiting
+        const forwarded = request?.headers?.get?.("x-forwarded-for");
+        const realIp = request?.headers?.get?.("x-real-ip");
+        const clientIp = forwarded?.split(",")[0]?.trim() || realIp || null;
+
+        // Rate limiting check
+        const rateLimitId = createLoginIdentifier(normalizedEmail, clientIp);
+        const rateLimitCheck = rateLimiter.check(rateLimitId, RATE_LIMIT_CONFIGS.PARTNER_LOGIN);
+
+        if (!rateLimitCheck.allowed) {
+          const minutes = Math.ceil((rateLimitCheck.retryAfterMs || 0) / 60000);
+          throw new Error(`Too many login attempts. Please try again in ${minutes} minutes.`);
+        }
 
         // Find partner by email (case-insensitive)
         const partner = await db.partner.findUnique({
-          where: { email: email.toLowerCase().trim() },
+          where: { email: normalizedEmail },
           select: {
             id: true,
             email: true,
@@ -138,10 +159,13 @@ const authConfig: NextAuthConfig = {
             lastName: true,
             level: true,
             status: true,
+            tokenVersion: true,
           },
         });
 
         if (!partner) {
+          // Record failed attempt even for non-existent users
+          rateLimiter.recordFailure(rateLimitId, RATE_LIMIT_CONFIGS.PARTNER_LOGIN);
           throw new Error("Invalid email or password");
         }
 
@@ -149,9 +173,19 @@ const authConfig: NextAuthConfig = {
         const passwordMatch = await bcrypt.compare(password, partner.passwordHash);
 
         if (!passwordMatch) {
-          // TODO: Implement rate limiting and account lockout
+          // Record failed attempt
+          const failResult = rateLimiter.recordFailure(rateLimitId, RATE_LIMIT_CONFIGS.PARTNER_LOGIN);
+
+          if (failResult.lockedUntil) {
+            const minutes = Math.ceil((failResult.retryAfterMs || 0) / 60000);
+            throw new Error(`Account temporarily locked. Please try again in ${minutes} minutes.`);
+          }
+
           throw new Error("Invalid email or password");
         }
+
+        // Clear rate limit on successful password verification
+        rateLimiter.recordSuccess(rateLimitId);
 
         // Check partner status
         if (partner.status === "PENDING") {
@@ -185,13 +219,24 @@ const authConfig: NextAuthConfig = {
   ],
   callbacks: {
     async jwt({ token, user, trigger, session }) {
-      // Initial sign in
+      // Initial sign in - store all user data including tokenVersion
       if (user) {
         token.id = user.id;
         token.email = user.email;
         token.name = user.name;
         token.level = user.level;
         token.status = user.status;
+
+        // Fetch tokenVersion from database for new sessions
+        try {
+          const partner = await db.partner.findUnique({
+            where: { id: user.id },
+            select: { tokenVersion: true },
+          });
+          token.tokenVersion = partner?.tokenVersion ?? 0;
+        } catch {
+          token.tokenVersion = 0;
+        }
       }
 
       // Handle session updates (e.g., level change)
@@ -200,20 +245,31 @@ const authConfig: NextAuthConfig = {
         token.status = session.status ?? token.status;
       }
 
-      // Optionally refresh user data from database on session refresh
-      // This ensures level/status changes are reflected without re-login
-      if (trigger === "update" || (token.id && !user)) {
+      // Verify token version on each request to detect password changes
+      // This ensures sessions are invalidated when password is changed
+      if (token.id) {
         try {
           const partner = await db.partner.findUnique({
             where: { id: token.id },
-            select: { level: true, status: true },
+            select: { level: true, status: true, tokenVersion: true },
           });
-          if (partner) {
-            token.level = partner.level;
-            token.status = partner.status;
+
+          if (!partner) {
+            // User deleted - invalidate session
+            return { ...token, status: "BLOCKED" as PartnerStatus };
           }
+
+          // Check if token version matches (session invalidation)
+          if (partner.tokenVersion !== token.tokenVersion) {
+            // Token version mismatch - session has been invalidated (password changed)
+            return { ...token, status: "BLOCKED" as PartnerStatus };
+          }
+
+          // Update level and status from database
+          token.level = partner.level;
+          token.status = partner.status;
         } catch {
-          // Ignore errors, use existing token data
+          // On error, keep existing token data
         }
       }
 
@@ -241,16 +297,13 @@ const authConfig: NextAuthConfig = {
     },
   },
   events: {
-    async signIn({ user }) {
-      // Log successful sign in (can be extended for audit logging)
-      console.log(`Partner signed in: ${user.email}`);
+    async signIn() {
+      // Audit logging can be implemented here
+      // In production, use a proper logging service (not console.log)
     },
-    async signOut(message) {
-      // Log sign out - message can have token or session depending on strategy
-      const token = "token" in message ? message.token : null;
-      if (token?.email) {
-        console.log(`Partner signed out: ${token.email}`);
-      }
+    async signOut() {
+      // Audit logging can be implemented here
+      // In production, use a proper logging service (not console.log)
     },
   },
   debug: process.env.NODE_ENV === "development",

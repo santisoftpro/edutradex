@@ -6,7 +6,7 @@ import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Eye, EyeOff, LogIn } from "lucide-react";
+import { Loader2, Eye, EyeOff, LogIn, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { loginSchema, type LoginInput } from "@/lib/auth";
@@ -28,15 +28,25 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+interface LoginError {
+  message: string;
+  code?: string;
+  attemptsRemaining?: number;
+  warning?: string;
+  lockedUntil?: string;
+}
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
-  const error = searchParams.get("error");
+  const registered = searchParams.get("registered") === "true";
 
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState<LoginError | null>(null);
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -48,8 +58,35 @@ export function LoginForm() {
 
   async function onSubmit(data: LoginInput) {
     setIsLoading(true);
+    setLoginError(null);
 
     try {
+      // First, validate credentials with our custom API to get detailed errors
+      const validateResponse = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: data.email.toLowerCase().trim(),
+          password: data.password,
+        }),
+      });
+
+      const validateResult = await validateResponse.json();
+
+      if (!validateResponse.ok) {
+        setLoginError({
+          message: validateResult.error || "Login failed",
+          code: validateResult.code,
+          attemptsRemaining: validateResult.attemptsRemaining,
+          warning: validateResult.warning,
+          lockedUntil: validateResult.lockedUntil,
+        });
+        return;
+      }
+
+      // Credentials are valid, now sign in with NextAuth
       const result = await signIn("credentials", {
         email: data.email.toLowerCase().trim(),
         password: data.password,
@@ -57,7 +94,11 @@ export function LoginForm() {
       });
 
       if (result?.error) {
-        toast.error(result.error);
+        // This shouldn't happen since we validated first, but handle it anyway
+        setLoginError({
+          message: "Authentication failed. Please try again.",
+          code: "AUTH_ERROR",
+        });
         return;
       }
 
@@ -65,7 +106,10 @@ export function LoginForm() {
       router.push(callbackUrl);
       router.refresh();
     } catch {
-      toast.error("An unexpected error occurred. Please try again.");
+      setLoginError({
+        message: "An unexpected error occurred. Please try again.",
+        code: "NETWORK_ERROR",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -81,12 +125,31 @@ export function LoginForm() {
       </CardHeader>
 
       <CardContent>
-        {error && (
-          <div className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-            {error === "CredentialsSignin"
-              ? "Invalid email or password"
-              : error}
-          </div>
+        {registered && (
+          <Alert className="mb-4 border-green-500/50 bg-green-500/10">
+            <AlertDescription className="text-green-700 dark:text-green-400">
+              Account created successfully! Please sign in with your credentials.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {loginError && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-medium">{loginError.message}</div>
+              {loginError.warning && (
+                <div className="mt-1 text-xs opacity-80">
+                  {loginError.warning}
+                </div>
+              )}
+              {loginError.lockedUntil && (
+                <div className="mt-1 text-xs opacity-80">
+                  Locked until: {new Date(loginError.lockedUntil).toLocaleTimeString()}
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
         )}
 
         <Form {...form}>

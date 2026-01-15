@@ -14,11 +14,21 @@ const envSchema = z.object({
       "DATABASE_URL must be a PostgreSQL connection string"
     ),
 
-  // NextAuth
+  // NextAuth (Partner Authentication)
   NEXTAUTH_URL: z.string().url("NEXTAUTH_URL must be a valid URL"),
   NEXTAUTH_SECRET: z
     .string()
     .min(32, "NEXTAUTH_SECRET must be at least 32 characters"),
+
+  // Admin Authentication (separate secret for admin JWT tokens)
+  ADMIN_JWT_SECRET: z
+    .string()
+    .min(32, "ADMIN_JWT_SECRET must be at least 32 characters for security"),
+
+  // Rate Limiting
+  LOGIN_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().min(1).max(20).optional().default(5),
+  LOGIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().min(60000).optional().default(900000), // 15 min default
+  LOGIN_LOCKOUT_DURATION_MS: z.coerce.number().min(60000).optional().default(1800000), // 30 min default
 
   // Broker Integration (optional in development)
   BROKER_API_URL: z.string().url().optional(),
