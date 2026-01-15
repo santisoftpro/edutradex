@@ -850,6 +850,38 @@ export class OTCMarketService {
   }
 
   /**
+   * Get all OTC assets in market asset format for API responses
+   * This provides OTC symbols directly from the source of truth (OTC configs)
+   */
+  getOTCAssetsForMarket(): Array<{
+    symbol: string;
+    name: string;
+    marketType: 'forex' | 'crypto' | 'stock' | 'index';
+    basePrice: number;
+    pipSize: number;
+    isOTC: boolean;
+    isActive: boolean;
+    payoutPercent: number;
+  }> {
+    return Array.from(this.configs.values()).map(config => {
+      // Get current price from price generator or use real price fallback
+      const currentPrice = this.priceGenerator.getCurrentPrice(config.symbol);
+      const basePrice = currentPrice || this.realPrices.get(config.baseSymbol) || 0;
+
+      return {
+        symbol: config.symbol,
+        name: `${config.baseSymbol} OTC`,
+        marketType: config.marketType.toLowerCase() as 'forex' | 'crypto',
+        basePrice,
+        pipSize: config.pipSize,
+        isOTC: true,
+        isActive: config.isEnabled,
+        payoutPercent: config.payoutPercent
+      };
+    });
+  }
+
+  /**
    * Check if a symbol is an OTC symbol
    */
   isOTCSymbol(symbol: string): boolean {

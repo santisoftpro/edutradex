@@ -52,6 +52,25 @@ router.get('/prices/indices', (_req: Request, res: Response) => {
 router.get('/price/:symbol', (req: Request, res: Response) => {
   const { symbol } = req.params;
   const decodedSymbol = decodeURIComponent(symbol);
+
+  // Check OTC service for OTC symbols
+  if (otcMarketService.isOTCSymbol(decodedSymbol)) {
+    const otcPrice = otcMarketService.getCurrentPrice(decodedSymbol);
+    if (otcPrice) {
+      res.json({
+        success: true,
+        data: {
+          symbol: otcPrice.symbol,
+          price: otcPrice.price,
+          bid: otcPrice.bid,
+          ask: otcPrice.ask,
+          timestamp: otcPrice.timestamp
+        },
+      });
+      return;
+    }
+  }
+
   const price = marketService.getCurrentPrice(decodedSymbol);
 
   if (!price) {
@@ -126,9 +145,23 @@ router.get('/bars/:symbol', async (req: Request, res: Response) => {
 
 router.get('/assets', (_req: Request, res: Response) => {
   const assets = marketService.getAllAssets();
+
+  // Get OTC assets directly from OTC service (source of truth)
+  // This ensures OTC symbols are always included even if market service
+  // registration had timing issues during initialization
+  const otcAssets = otcMarketService.getOTCAssetsForMarket();
+
+  // Merge OTC assets, avoiding duplicates
+  const assetMap = new Map(assets.map(a => [a.symbol, a]));
+  for (const otc of otcAssets) {
+    if (!assetMap.has(otc.symbol)) {
+      assetMap.set(otc.symbol, otc);
+    }
+  }
+
   res.json({
     success: true,
-    data: assets,
+    data: Array.from(assetMap.values()),
   });
 });
 
