@@ -16,3 +16,4 @@ export { OTCAdminService, otcAdminService, OTCAdminServiceError } from './otc-ad
 export { ManualControlService, manualControlService } from './manual-control.service.js';
 export { OTCHistorySeeder, otcHistorySeeder } from './otc-history-seeder.js';
 export type { SeedResult, SeedOptions } from './otc-history-seeder.js';
+export { SyntheticHistoryGenerator, syntheticHistoryGenerator } from './synthetic-history-generator.js';

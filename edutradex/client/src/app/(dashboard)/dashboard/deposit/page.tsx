@@ -30,7 +30,7 @@ import type { Deposit, PaymentMethod as PaymentMethodType } from '@/types';
 type Step = 1 | 2 | 3;
 type PaymentCategory = 'popular' | 'mobile' | 'crypto';
 
-const QUICK_AMOUNTS = [10, 25, 50, 100, 250, 500];
+const QUICK_AMOUNTS = [50, 100, 250, 500, 1000, 2500, 5000, 10000];
 
 function StepIndicator({ currentStep }: { currentStep: Step }) {
   const steps = [
@@ -172,7 +172,9 @@ export default function DepositPage() {
 
   const { errors, validate, clearErrors } = useFormValidation(depositSchema);
 
-  const balance = user?.demoBalance || 0;
+  // Use correct balance based on account type (legacy naming: demoBalance = LIVE, practiceBalance = DEMO)
+  const isLiveAccount = user?.activeAccountType === 'LIVE';
+  const balance = isLiveAccount ? (user?.demoBalance || 0) : (user?.practiceBalance || 0);
 
   const filteredMethods = paymentMethods.filter(method => {
     const matchesSearch = method.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -333,13 +335,29 @@ export default function DepositPage() {
         </div>
 
         {/* Balance Card */}
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 flex items-center justify-between">
+        <div className={cn(
+          "bg-slate-800/50 border rounded-xl p-3 flex items-center justify-between",
+          isLiveAccount ? "border-slate-700" : "border-amber-500/30"
+        )}>
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="p-1.5 sm:p-2 bg-[#1079ff]/20 rounded-lg">
-              <Wallet className="h-4 w-4 text-[#1079ff]" />
+            <div className={cn(
+              "p-1.5 sm:p-2 rounded-lg",
+              isLiveAccount ? "bg-[#1079ff]/20" : "bg-amber-500/20"
+            )}>
+              <Wallet className={cn("h-4 w-4", isLiveAccount ? "text-[#1079ff]" : "text-amber-400")} />
             </div>
             <div>
-              <p className="text-slate-400 text-[10px] sm:text-xs">Current Balance</p>
+              <div className="flex items-center gap-2">
+                <p className="text-slate-400 text-[10px] sm:text-xs">Current Balance</p>
+                <span className={cn(
+                  "px-1.5 py-0.5 rounded text-[8px] sm:text-[10px] font-semibold",
+                  isLiveAccount
+                    ? "bg-[#1079ff]/20 text-[#1079ff]"
+                    : "bg-amber-500/20 text-amber-400"
+                )}>
+                  {isLiveAccount ? "LIVE" : "DEMO"}
+                </span>
+              </div>
               <p className="text-white text-base sm:text-lg font-bold">{formatCurrency(balance)}</p>
             </div>
           </div>
@@ -421,7 +439,7 @@ export default function DepositPage() {
                           {method.isPopular && <Star className="h-3 w-3 text-amber-400 fill-amber-400 shrink-0" />}
                         </div>
                         <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500 mt-0.5">
-                          <span>Min: ${method.minAmount}</span>
+                          <span>${method.minAmount} - ${method.maxAmount?.toLocaleString() || '100,000'}</span>
                           <span>•</span>
                           <span>{method.processingTime}</span>
                         </div>
@@ -469,7 +487,7 @@ export default function DepositPage() {
                     </div>
                     <div>
                       <p className="text-white font-medium text-xs sm:text-sm">{selectedMethod.name}</p>
-                      <p className="text-slate-500 text-[10px] sm:text-xs">Min: ${selectedMethod.minAmount} • {selectedMethod.processingTime}</p>
+                      <p className="text-slate-500 text-[10px] sm:text-xs">${selectedMethod.minAmount} - ${selectedMethod.maxAmount?.toLocaleString() || '100,000'} • {selectedMethod.processingTime}</p>
                     </div>
                   </div>
                 </div>
@@ -485,6 +503,7 @@ export default function DepositPage() {
                       onChange={(e) => setAmount(e.target.value)}
                       placeholder="0.00"
                       min={selectedMethod.minAmount}
+                      max={selectedMethod.maxAmount || 100000}
                       className={cn(
                         "w-full px-3 py-2 sm:py-2.5 bg-slate-900 border rounded-lg text-white text-base sm:text-lg placeholder-slate-600 focus:outline-none focus:border-[#1079ff]",
                         errors.amount ? "border-red-500" : "border-slate-700"
@@ -495,7 +514,7 @@ export default function DepositPage() {
                       <p className="mt-1 text-xs text-red-400">{errors.amount}</p>
                     )}
                     <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
-                      {QUICK_AMOUNTS.filter(a => a >= selectedMethod.minAmount).map((quickAmount) => (
+                      {QUICK_AMOUNTS.filter(a => a >= selectedMethod.minAmount && a <= (selectedMethod.maxAmount || 100000)).map((quickAmount) => (
                         <button
                           key={quickAmount}
                           type="button"

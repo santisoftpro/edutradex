@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ArrowUp, ArrowDown, DollarSign, Zap, Edit3, Loader2, AlertCircle } from 'lucide-react';
-import { cn, formatCurrency } from '@/lib/utils';
+import { cn, formatCurrency, debounce } from '@/lib/utils';
 import { getDefaultTradeAmount } from '@/lib/settings';
 import { validateTrade } from '@/schemas/trade.schema';
+import { TRADE_DURATIONS, QUICK_AMOUNTS } from '@/constants/trading';
 
 interface TradingPanelProps {
   balance: number;
   onTrade: (direction: 'UP' | 'DOWN', amount?: number, duration?: number) => void;
   isLoading?: boolean;
+  isDisabled?: boolean;
   currentPrice?: number;
   payoutPercent?: number;
   isTradesPanelOpen?: boolean;
@@ -21,25 +23,11 @@ interface TradingPanelProps {
   showShortcuts?: boolean;
 }
 
-const DURATIONS = [
-  { label: '5s', value: 5 },
-  { label: '15s', value: 15 },
-  { label: '30s', value: 30 },
-  { label: '1m', value: 60 },
-  { label: '3m', value: 180 },
-  { label: '5m', value: 300 },
-  { label: '10m', value: 600 },
-  { label: '15m', value: 900 },
-  { label: '30m', value: 1800 },
-  { label: '1h', value: 3600 },
-];
-
-const QUICK_AMOUNTS = [5, 10, 25, 50, 100, 500, 1000, 5000];
-
 export function TradingPanel({
   balance,
   onTrade,
   isLoading,
+  isDisabled = false,
   payoutPercent = 98,
   isTradesPanelOpen = true,
   initialDuration,
@@ -50,11 +38,48 @@ export function TradingPanel({
   showShortcuts = false,
 }: TradingPanelProps) {
   const [internalAmount, setInternalAmount] = useState(10);
+  const [displayAmount, setDisplayAmount] = useState(10); // For immediate UI feedback
   const [duration, setDuration] = useState(60);
 
   // Use controlled or internal amount
   const amount = controlledAmount ?? internalAmount;
-  const setAmount = onAmountChange ?? setInternalAmount;
+
+  // Debounced amount change handler for parent callback (150ms delay)
+  const debouncedAmountChange = useMemo(
+    () => onAmountChange ? debounce(onAmountChange, 150) : null,
+    [onAmountChange]
+  );
+
+  // Handle amount change with debouncing for controlled components
+  const handleAmountChange = useCallback((newAmount: number) => {
+    const validAmount = Math.max(1, newAmount);
+    setDisplayAmount(validAmount);
+
+    if (debouncedAmountChange) {
+      debouncedAmountChange(validAmount);
+    } else {
+      setInternalAmount(validAmount);
+    }
+  }, [debouncedAmountChange]);
+
+  // For quick buttons, update immediately without debounce
+  const setAmountImmediate = useCallback((newAmount: number) => {
+    const validAmount = Math.max(1, newAmount);
+    setDisplayAmount(validAmount);
+
+    if (onAmountChange) {
+      onAmountChange(validAmount);
+    } else {
+      setInternalAmount(validAmount);
+    }
+  }, [onAmountChange]);
+
+  // Sync display amount with controlled amount
+  useEffect(() => {
+    if (controlledAmount !== undefined) {
+      setDisplayAmount(controlledAmount);
+    }
+  }, [controlledAmount]);
 
   // Load default amount from settings on mount (only if not controlled)
   useEffect(() => {
@@ -81,7 +106,7 @@ export function TradingPanel({
 
   // Use Zod validation
   const validation = validateTrade(amount, duration, balance);
-  const canTrade = validation.valid && !isLoading;
+  const canTrade = validation.valid && !isLoading && !isDisabled;
 
   const handleDurationChange = (newDuration: number) => {
     setDuration(newDuration);
@@ -195,7 +220,7 @@ export function TradingPanel({
 
           {/* Duration buttons */}
           <div className="grid grid-cols-5 gap-1.5 mt-3">
-            {DURATIONS.slice(0, 5).map((d) => (
+            {TRADE_DURATIONS.slice(0, 5).map((d) => (
               <button
                 key={d.value}
                 onClick={() => {
@@ -214,7 +239,7 @@ export function TradingPanel({
             ))}
           </div>
           <div className="grid grid-cols-5 gap-1.5 mt-1.5">
-            {DURATIONS.slice(5, 10).map((d) => (
+            {TRADE_DURATIONS.slice(5, 10).map((d) => (
               <button
                 key={d.value}
                 onClick={() => {
@@ -245,8 +270,8 @@ export function TradingPanel({
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg font-medium">$</span>
             <input
               type="number"
-              value={amount}
-              onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))}
+              value={displayAmount}
+              onChange={(e) => handleAmountChange(Number(e.target.value))}
               className="w-full pl-9 pr-4 py-3 bg-gradient-to-b from-[#252542] to-[#1f1f38] border border-[#3d3d5c]/80 rounded-xl text-white text-xl font-bold text-center focus:outline-none focus:border-[#1079ff] focus:ring-2 focus:ring-[#1079ff]/30 transition-all shadow-inner"
             />
           </div>
@@ -256,7 +281,7 @@ export function TradingPanel({
             {QUICK_AMOUNTS.map((quickAmount, index) => (
               <button
                 key={quickAmount}
-                onClick={() => setAmount(quickAmount)}
+                onClick={() => setAmountImmediate(quickAmount)}
                 className={cn(
                   'py-2.5 rounded-lg text-sm font-semibold transition-all relative',
                   amount === quickAmount

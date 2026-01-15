@@ -234,7 +234,7 @@ export function DesktopCopyTradingPanel({ isOpen, onClose }: DesktopCopyTradingP
             className={cn(
               'flex-1 py-2 rounded-lg text-xs font-medium transition-all',
               activeTab === 'discover'
-                ? 'bg-emerald-600 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
             )}
           >
@@ -245,7 +245,7 @@ export function DesktopCopyTradingPanel({ isOpen, onClose }: DesktopCopyTradingP
             className={cn(
               'flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5',
               activeTab === 'following'
-                ? 'bg-emerald-600 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
             )}
           >
@@ -253,7 +253,7 @@ export function DesktopCopyTradingPanel({ isOpen, onClose }: DesktopCopyTradingP
             {totalFollowing > 0 && (
               <span className={cn(
                 'min-w-[16px] h-4 flex items-center justify-center text-[10px] font-bold rounded-full px-1',
-                activeTab === 'following' ? 'bg-white/20' : 'bg-slate-700'
+                activeTab === 'following' ? 'bg-white/20' : 'bg-blue-600'
               )}>
                 {totalFollowing}
               </span>
@@ -286,7 +286,7 @@ export function DesktopCopyTradingPanel({ isOpen, onClose }: DesktopCopyTradingP
                     className={cn(
                       'px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap',
                       sortBy === option.value
-                        ? 'bg-emerald-600 text-white'
+                        ? 'bg-blue-600 text-white'
                         : 'bg-slate-800 text-slate-400 hover:text-white'
                     )}
                   >

@@ -5,19 +5,19 @@ import Link from 'next/link';
 import {
   TrendingUp,
   TrendingDown,
-  DollarSign,
   BarChart2,
   Activity,
   ArrowUp,
   ArrowDown,
   Clock,
-  Wallet,
   ArrowUpRight,
   ArrowDownRight,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuthStore } from '@/store/auth.store';
-import { useTradeStore, Trade } from '@/store/trade.store';
+import { useTradeStore, useFilteredTrades, useFilteredActiveTrades, Trade } from '@/store/trade.store';
 import { formatCurrency, cn } from '@/lib/utils';
 
 function StatCard({
@@ -34,15 +34,15 @@ function StatCard({
   subtitle?: string;
 }) {
   return (
-    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 sm:p-4">
-      <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3">
-        <div className={cn('p-2 sm:p-2.5 rounded-lg', iconBg)}>
-          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+    <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-2.5 sm:p-4">
+      <div className="flex flex-col items-center gap-1.5 sm:gap-3 sm:flex-row">
+        <div className={cn('p-1.5 sm:p-2.5 rounded-lg', iconBg)}>
+          <Icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
         </div>
         <div className="min-w-0 flex-1 text-center sm:text-left">
-          <p className="text-[10px] sm:text-xs text-slate-400 truncate">{title}</p>
-          <p className="text-base sm:text-lg font-bold text-white truncate">{value}</p>
-          {subtitle && <p className="text-[10px] sm:text-xs text-slate-500 truncate">{subtitle}</p>}
+          <p className="text-[9px] sm:text-xs text-slate-400 truncate">{title}</p>
+          <p className="text-sm sm:text-lg font-bold text-white truncate">{value}</p>
+          {subtitle && <p className="text-[9px] sm:text-xs text-slate-500 truncate">{subtitle}</p>}
         </div>
       </div>
     </div>
@@ -85,33 +85,73 @@ function RecentTradeItem({ trade }: { trade: Trade }) {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const { trades, stats, fetchStats } = useTradeStore();
+  const syncFromApi = useTradeStore((state) => state.syncFromApi);
+
+  // Use filtered trades by account type (LIVE/DEMO)
+  const accountTrades = useFilteredTrades();
+  const activeTrades = useFilteredActiveTrades();
+
   const [timeframe, setTimeframe] = useState<'all' | '7d' | '30d'>('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        await syncFromApi();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, [syncFromApi]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await syncFromApi();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Filter closed trades by timeframe
+  const closedTrades = useMemo(() => {
+    return accountTrades.filter(t => t.status !== 'active');
+  }, [accountTrades]);
 
   const filteredTrades = useMemo(() => {
-    if (timeframe === 'all') return trades;
+    if (timeframe === 'all') return closedTrades;
     const days = timeframe === '7d' ? 7 : 30;
     const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-    return trades.filter(t => new Date(t.createdAt).getTime() >= cutoff);
-  }, [timeframe, trades]);
+    return closedTrades.filter(t => new Date(t.createdAt).getTime() >= cutoff);
+  }, [timeframe, closedTrades]);
 
+  // Compute stats from filtered trades
   const filteredStats = useMemo(() => {
-    if (timeframe === 'all') return stats;
     const totalTrades = filteredTrades.length;
     const wonTrades = filteredTrades.filter(t => t.status === 'won').length;
     const lostTrades = filteredTrades.filter(t => t.status === 'lost').length;
     const totalProfit = filteredTrades.reduce((sum, t) => sum + (t.profit || 0), 0);
     const winRate = totalTrades > 0 ? (wonTrades / totalTrades) * 100 : 0;
-    return { ...stats, totalTrades, wonTrades, lostTrades, winRate, totalProfit };
-  }, [filteredTrades, stats, timeframe]);
+    return { totalTrades, wonTrades, lostTrades, winRate, totalProfit };
+  }, [filteredTrades]);
 
-  const openTrades = useMemo(() => trades.filter(t => t.status === 'active'), [trades]);
   const recentTrades = filteredTrades.slice(0, 5);
-  const currentBalance = user?.demoBalance || 0;
+
+  // Get correct balance based on active account type
+  // Note: demoBalance is actually LIVE balance (legacy naming), practiceBalance is DEMO balance
+  const isLiveAccount = user?.activeAccountType === 'LIVE';
+  const currentBalance = isLiveAccount ? (user?.demoBalance || 0) : (user?.practiceBalance || 0);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -121,9 +161,18 @@ export default function DashboardPage() {
           <h1 className="text-lg sm:text-xl font-bold text-white">
             Welcome back, {user?.name?.split(' ')[0] || 'Trader'}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">Your trading overview</p>
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
+            {isLiveAccount ? 'Live' : 'Demo'} account overview
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="p-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700 rounded-lg transition-colors"
+          >
+            <RefreshCw className={cn('h-4 w-4 text-slate-400', isRefreshing && 'animate-spin')} />
+          </button>
           <div className="flex gap-0.5 sm:gap-1 bg-slate-800 rounded-lg border border-slate-700 p-0.5 sm:p-1">
             {(['all', '7d', '30d'] as const).map(tf => (
               <button
@@ -207,10 +256,10 @@ export default function DashboardPage() {
               <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400" />
               <h2 className="text-xs sm:text-sm font-semibold text-white">Open Trades</h2>
             </div>
-            <span className="text-[10px] sm:text-xs text-slate-400">{openTrades.length} active</span>
+            <span className="text-[10px] sm:text-xs text-slate-400">{activeTrades.length} active</span>
           </div>
           <div className="p-3 sm:p-4">
-            {openTrades.length === 0 ? (
+            {activeTrades.length === 0 ? (
               <div className="text-center py-4 sm:py-6">
                 <Clock className="h-8 w-8 sm:h-10 sm:w-10 text-slate-600 mx-auto" />
                 <p className="text-slate-400 mt-2 text-xs sm:text-sm">No open trades</p>
@@ -223,7 +272,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto">
-                {openTrades.slice(0, 5).map((trade) => (
+                {activeTrades.slice(0, 5).map((trade) => (
                   <div key={trade.id} className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
                     <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                       <div className={cn(
@@ -264,7 +313,7 @@ export default function DashboardPage() {
               <Activity className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#1079ff]" />
               <h2 className="text-xs sm:text-sm font-semibold text-white">Recent Trades</h2>
             </div>
-            {trades.length > 0 && (
+            {closedTrades.length > 0 && (
               <Link href="/dashboard/history" className="text-[10px] sm:text-xs text-[#1079ff] hover:text-[#3a93ff]">
                 View all
               </Link>
@@ -292,22 +341,22 @@ export default function DashboardPage() {
       {filteredStats.totalTrades > 0 && (
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 sm:p-4">
           <h2 className="text-xs sm:text-sm font-semibold text-white mb-2 sm:mb-3">Performance Summary</h2>
-          <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
-            <div className="text-center p-2 sm:p-3 bg-slate-700/30 rounded-lg">
-              <p className="text-sm sm:text-lg font-bold text-emerald-400">{filteredStats.wonTrades}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+            <div className="text-center p-2.5 sm:p-3 bg-slate-700/30 rounded-lg">
+              <p className="text-base sm:text-lg font-bold text-emerald-400">{filteredStats.wonTrades}</p>
               <p className="text-[10px] sm:text-xs text-slate-400">Wins</p>
             </div>
-            <div className="text-center p-2 sm:p-3 bg-slate-700/30 rounded-lg">
-              <p className="text-sm sm:text-lg font-bold text-red-400">{filteredStats.lostTrades}</p>
+            <div className="text-center p-2.5 sm:p-3 bg-slate-700/30 rounded-lg">
+              <p className="text-base sm:text-lg font-bold text-red-400">{filteredStats.lostTrades}</p>
               <p className="text-[10px] sm:text-xs text-slate-400">Losses</p>
             </div>
-            <div className="text-center p-2 sm:p-3 bg-slate-700/30 rounded-lg">
-              <p className="text-sm sm:text-lg font-bold text-white">{filteredStats.winRate.toFixed(0)}%</p>
+            <div className="text-center p-2.5 sm:p-3 bg-slate-700/30 rounded-lg">
+              <p className="text-base sm:text-lg font-bold text-white">{filteredStats.winRate.toFixed(0)}%</p>
               <p className="text-[10px] sm:text-xs text-slate-400">Win Rate</p>
             </div>
-            <div className="text-center p-2 sm:p-3 bg-slate-700/30 rounded-lg">
+            <div className="text-center p-2.5 sm:p-3 bg-slate-700/30 rounded-lg">
               <p className={cn(
-                'text-sm sm:text-lg font-bold',
+                'text-base sm:text-lg font-bold',
                 filteredStats.totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'
               )}>
                 {formatCurrency(Math.abs(filteredStats.totalProfit))}

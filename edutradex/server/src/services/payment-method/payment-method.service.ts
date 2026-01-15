@@ -116,7 +116,7 @@ export class PaymentMethodService {
       [
         id, 'CRYPTO', data.name, data.code, data.cryptoCurrency, data.network || null,
         data.walletAddress, data.iconUrl || null, data.iconBg || 'bg-gray-500/20',
-        data.minAmount ?? 10, data.maxAmount ?? 10000, data.processingTime || '~5 min',
+        data.minAmount ?? 10, data.maxAmount ?? 100000, data.processingTime || '~5 min',
         data.isActive ?? true, data.isPopular ?? false, data.displayOrder ?? 0, now, now,
       ]
     );
@@ -153,7 +153,7 @@ export class PaymentMethodService {
       [
         id, 'MOBILE_MONEY', data.name, data.code, data.mobileProvider, data.phoneNumber,
         data.accountName || null, data.iconUrl || null, data.iconBg || 'bg-gray-500/20',
-        data.minAmount ?? 10, data.maxAmount ?? 10000, data.processingTime || '~5 min',
+        data.minAmount ?? 10, data.maxAmount ?? 100000, data.processingTime || '~5 min',
         data.isActive ?? true, data.isPopular ?? false, data.displayOrder ?? 0, now, now,
       ]
     );
@@ -456,7 +456,7 @@ export class PaymentMethodService {
           (method as any).iconUrl || null,
           method.iconBg,
           10, // minAmount
-          10000, // maxAmount
+          100000, // maxAmount
           method.processingTime,
           true, // isActive
           method.isPopular,

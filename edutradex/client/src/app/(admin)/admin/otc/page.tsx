@@ -46,6 +46,8 @@ import {
   ManualIntervention,
   SeedResult,
   SeedAllResult,
+  SyntheticGenerationResult,
+  SyntheticGenerationAllResult,
 } from '@/lib/api';
 import toast from 'react-hot-toast';
 
@@ -74,10 +76,16 @@ export default function OTCAdminPage() {
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // History seeding state
+  // History seeding state (legacy - commented out)
   const [isSeedingModalOpen, setIsSeedingModalOpen] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedingResults, setSeedingResults] = useState<SeedAllResult | null>(null);
+
+  // Synthetic history state
+  const [isSyntheticModalOpen, setIsSyntheticModalOpen] = useState(false);
+  const [isGeneratingSynthetic, setIsGeneratingSynthetic] = useState(false);
+  const [syntheticResults, setSyntheticResults] = useState<SyntheticGenerationAllResult | null>(null);
+  const [syntheticCandleCount, setSyntheticCandleCount] = useState(500);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -287,16 +295,13 @@ export default function OTCAdminPage() {
           <p className="text-slate-400 mt-1">Manage synthetic OTC market configurations and risk settings</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Seed History feature hidden - causes chart discontinuity issues
-              Uncomment to re-enable in the future if needed
           <button
-            onClick={() => setIsSeedingModalOpen(true)}
+            onClick={() => setIsSyntheticModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
           >
             <Database className="h-4 w-4" />
-            <span>Seed History</span>
+            <span>Generate Chart History</span>
           </button>
-          */}
           <button
             onClick={() => { setEditingConfig(null); setIsModalOpen(true); }}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white rounded-lg transition-all"
@@ -557,6 +562,167 @@ export default function OTCAdminPage() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Synthetic History Generation Modal */}
+      {isSyntheticModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg border border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Database className="h-5 w-5 text-purple-400" />
+                Generate Chart History
+              </h2>
+              <button
+                onClick={() => { setIsSyntheticModalOpen(false); setSyntheticResults(null); }}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {!syntheticResults ? (
+              <>
+                <div className="bg-slate-900/50 rounded-lg p-4 mb-4">
+                  <p className="text-slate-300 text-sm">
+                    Generate synthetic historical candles for all enabled OTC symbols.
+                    This uses the same algorithm as live OTC price generation, ensuring
+                    seamless chart continuity.
+                  </p>
+                  <div className="mt-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                    <p className="text-emerald-400 text-xs flex items-center gap-2">
+                      <Check className="h-4 w-4" />
+                      Safe to run anytime - adds history behind existing data
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Number of Candles</label>
+                    <select
+                      value={syntheticCandleCount}
+                      onChange={(e) => setSyntheticCandleCount(Number(e.target.value))}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    >
+                      <option value={250}>250 candles (~4 hours)</option>
+                      <option value={500}>500 candles (~8 hours)</option>
+                      <option value={1000}>1000 candles (~16 hours)</option>
+                      <option value={2000}>2000 candles (~33 hours)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-6">
+                  <button
+                    onClick={() => setIsSyntheticModalOpen(false)}
+                    className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setIsGeneratingSynthetic(true);
+                      try {
+                        const results = await api.generateAllSyntheticHistory({
+                          candleCount: syntheticCandleCount,
+                          resolutionSeconds: 60,
+                        });
+                        setSyntheticResults(results);
+                        toast.success(`Generated history for ${results.successful} symbols`);
+                      } catch (error) {
+                        toast.error('Failed to generate synthetic history');
+                        console.error(error);
+                      } finally {
+                        setIsGeneratingSynthetic(false);
+                      }
+                    }}
+                    disabled={isGeneratingSynthetic}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                  >
+                    {isGeneratingSynthetic ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        <span>Generating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <BarChart3 className="h-4 w-4" />
+                        <span>Generate for All Symbols</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-slate-900/50 rounded-lg p-4 mb-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Check className="h-5 w-5 text-emerald-400" />
+                    <span className="text-emerald-400 font-medium">Generation Complete</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-2xl font-bold text-white">{syntheticResults.totalSymbols}</p>
+                      <p className="text-xs text-slate-400">Total Symbols</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-emerald-400">{syntheticResults.successful}</p>
+                      <p className="text-xs text-slate-400">Successful</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-red-400">{syntheticResults.failed}</p>
+                      <p className="text-xs text-slate-400">Failed</p>
+                    </div>
+                  </div>
+                </div>
+
+                {syntheticResults.results.length > 0 && (
+                  <div className="max-h-64 overflow-y-auto space-y-2">
+                    {syntheticResults.results.map((result) => (
+                      <div key={result.symbol} className="bg-slate-900/50 rounded-lg p-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-white font-medium">{result.symbol}</p>
+                          <p className="text-xs text-slate-400">
+                            {result.candlesGenerated} candles • {result.executionTimeMs}ms
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-slate-400">Price Range</p>
+                          <p className="text-sm text-white">
+                            {result.priceRange.min.toFixed(4)} - {result.priceRange.max.toFixed(4)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {syntheticResults.errors.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-red-400 text-sm font-medium mb-2">Errors:</p>
+                    <div className="space-y-1">
+                      {syntheticResults.errors.map((err, i) => (
+                        <p key={i} className="text-xs text-red-300">
+                          {err.symbol}: {err.error}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end mt-4">
+                  <button
+                    onClick={() => { setIsSyntheticModalOpen(false); setSyntheticResults(null); }}
+                    className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -61,13 +61,21 @@ export async function getClient(): Promise<PoolClient> {
   return client;
 }
 
-// Transaction helper
+// Transaction isolation levels
+export type IsolationLevel = 'READ COMMITTED' | 'REPEATABLE READ' | 'SERIALIZABLE';
+
+// Transaction helper with optional isolation level
 export async function transaction<T>(
-  callback: (client: PoolClient) => Promise<T>
+  callback: (client: PoolClient) => Promise<T>,
+  isolationLevel?: IsolationLevel
 ): Promise<T> {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    if (isolationLevel) {
+      await client.query(`BEGIN ISOLATION LEVEL ${isolationLevel}`);
+    } else {
+      await client.query('BEGIN');
+    }
     const result = await callback(client);
     await client.query('COMMIT');
     return result;
@@ -77,6 +85,36 @@ export async function transaction<T>(
   } finally {
     client.release();
   }
+}
+
+// Serializable transaction helper for critical financial operations
+export async function serializableTransaction<T>(
+  callback: (client: PoolClient) => Promise<T>,
+  maxRetries: number = 3
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await transaction(callback, 'SERIALIZABLE');
+    } catch (error: any) {
+      lastError = error;
+      // PostgreSQL serialization failure error code
+      if (error.code === '40001' && attempt < maxRetries) {
+        logger.warn('Serialization conflict, retrying transaction', {
+          attempt,
+          maxRetries,
+          error: error.message
+        });
+        // Exponential backoff: 10ms, 20ms, 40ms
+        await new Promise(resolve => setTimeout(resolve, 10 * Math.pow(2, attempt - 1)));
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw lastError;
 }
 
 // Helper to get single row

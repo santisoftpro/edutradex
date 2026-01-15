@@ -50,9 +50,17 @@ export function MobileTradesSheet({ isOpen, onClose, latestPrices }: MobileTrade
     setIsClient(true);
   }, []);
 
-  const closedTrades = allTrades
-    .filter(t => t.status === 'won' || t.status === 'lost')
+  // Get closed trades from the last 24 hours only (max 20)
+  const closedTrades = useMemo(() => {
+    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+    return allTrades
+    .filter(t => {
+        if (t.status !== 'won' && t.status !== 'lost') return false;
+        const closedTime = new Date(t.closedAt || t.createdAt).getTime();
+        return closedTime > twentyFourHoursAgo;
+      })
     .slice(0, 20);
+  }, [allTrades]);
 
   const searchedActiveTrades = useMemo(() => {
     if (!searchQuery.trim()) return activeTrades;

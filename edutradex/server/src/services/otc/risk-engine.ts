@@ -30,6 +30,14 @@ const EXPOSURE_WARNING_THRESHOLD = 0.7; // 70% imbalance triggers warning
 const MAX_ADJUSTMENT_SPREAD_MULTIPLIER = 2.0; // Max 2x normal spread for adjustments
 const INTERVENTION_COOLDOWN_MS = 1000; // Min time between interventions per symbol
 
+/**
+ * Round a price to the nearest tick size for proper precision
+ * Prevents floating-point precision issues in price calculations
+ */
+function roundToTick(price: number, pipSize: number): number {
+  return Math.round(price / pipSize) * pipSize;
+}
+
 export class RiskEngine implements IRiskEngine {
   private exposures: Map<string, SymbolExposure> = new Map();
   private configs: Map<string, RiskConfig> = new Map();
@@ -469,6 +477,7 @@ export class RiskEngine implements IRiskEngine {
    * 2. Calculate exit price that is ALWAYS on the losing side
    * 3. Add small randomization to look natural (but never cross to winning side)
    * 4. Bound within reasonable market range
+   * 5. Round to proper tick size for precision
    */
   private calculateAdjustedPrice(
     trade: { direction: 'UP' | 'DOWN'; entryPrice: number },
@@ -476,6 +485,10 @@ export class RiskEngine implements IRiskEngine {
     config: RiskConfig
   ): number {
     const pipSize = config.pipSize;
+
+    // Round entry and market prices to prevent floating-point issues
+    const roundedEntry = roundToTick(trade.entryPrice, pipSize);
+    const roundedMarket = roundToTick(marketPrice, pipSize);
 
     // Minimum margin to ensure clear loss (not a tie)
     const minLossMargin = pipSize * 2;
@@ -490,26 +503,29 @@ export class RiskEngine implements IRiskEngine {
 
     if (trade.direction === 'UP') {
       // For UP trade to LOSE: exit price MUST be < entry price
-      exitPrice = trade.entryPrice - randomOffset;
+      exitPrice = roundedEntry - randomOffset;
     } else {
       // For DOWN trade to LOSE: exit price MUST be > entry price
-      exitPrice = trade.entryPrice + randomOffset;
+      exitPrice = roundedEntry + randomOffset;
     }
+
+    // Round to tick size for precision
+    exitPrice = roundToTick(exitPrice, pipSize);
 
     // Validate: ensure we're on the losing side (defensive check)
     const isLosingPrice = trade.direction === 'UP'
-      ? exitPrice < trade.entryPrice
-      : exitPrice > trade.entryPrice;
+      ? exitPrice < roundedEntry
+      : exitPrice > roundedEntry;
 
     if (!isLosingPrice) {
       // Fallback: force to losing side with minimum margin
       exitPrice = trade.direction === 'UP'
-        ? trade.entryPrice - minLossMargin
-        : trade.entryPrice + minLossMargin;
+        ? roundToTick(roundedEntry - minLossMargin, pipSize)
+        : roundToTick(roundedEntry + minLossMargin, pipSize);
 
       logger.warn('[RiskEngine] Price correction applied to ensure loss', {
         direction: trade.direction,
-        entryPrice: trade.entryPrice,
+        entryPrice: roundedEntry,
         correctedExitPrice: exitPrice
       });
     }
@@ -517,21 +533,24 @@ export class RiskEngine implements IRiskEngine {
     // Bound within reasonable market range (max 15 pips from market)
     // But NEVER allow it to cross to the winning side
     const maxDeviation = pipSize * 15;
-    const boundedPrice = Math.max(
-      marketPrice - maxDeviation,
-      Math.min(marketPrice + maxDeviation, exitPrice)
+    let boundedPrice = Math.max(
+      roundedMarket - maxDeviation,
+      Math.min(roundedMarket + maxDeviation, exitPrice)
     );
+
+    // Round the bounded price
+    boundedPrice = roundToTick(boundedPrice, pipSize);
 
     // Final safety check: if bounding pushed us to winning side, override
     const boundedIsLosing = trade.direction === 'UP'
-      ? boundedPrice < trade.entryPrice
-      : boundedPrice > trade.entryPrice;
+      ? boundedPrice < roundedEntry
+      : boundedPrice > roundedEntry;
 
     if (!boundedIsLosing) {
       // Market price is too favorable - use minimum loss price
       return trade.direction === 'UP'
-        ? trade.entryPrice - minLossMargin
-        : trade.entryPrice + minLossMargin;
+        ? roundToTick(roundedEntry - minLossMargin, pipSize)
+        : roundToTick(roundedEntry + minLossMargin, pipSize);
     }
 
     return boundedPrice;

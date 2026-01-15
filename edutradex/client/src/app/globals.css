@@ -370,3 +370,13 @@ div[style*="position: absolute"][style*="inset: 0px"][style*="pointer-events: no
 .animate-slide-in-left {
   animation: slide-in-left 0.25s ease-out;
 }
+
+/* Trade notification progress bar shrink animation */
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}

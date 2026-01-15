@@ -1,4 +1,4 @@
-import { query, queryOne, queryMany, transaction } from '../../config/db.js';
+import { query, queryOne, queryMany, transaction, serializableTransaction } from '../../config/db.js';
 import { config } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { marketService } from '../market/market.service.js';
@@ -124,8 +124,19 @@ export class TradeService {
     const payoutPercent = config.trading.defaultPayoutPercentage;
     const tradeId = randomUUID();
 
-    // Create trade and deduct balance atomically using transaction
-    const trade = await transaction(async (client) => {
+    // Create trade and deduct balance atomically using serializable transaction
+    // SERIALIZABLE prevents race conditions where two trades could see the same balance
+    const trade = await serializableTransaction(async (client) => {
+      // Re-verify balance within transaction to prevent race conditions
+      const userBalance = await client.query<{ balance: number }>(
+        `SELECT "${balanceField}" as balance FROM "User" WHERE id = $1 FOR UPDATE`,
+        [userId]
+      );
+
+      if (!userBalance.rows[0] || userBalance.rows[0].balance < data.amount) {
+        throw new TradeServiceError('Insufficient balance', 400);
+      }
+
       // Insert trade with correct accountType
       const tradeResult = await client.query<TradeRow>(
         `INSERT INTO "Trade" (
@@ -211,14 +222,150 @@ export class TradeService {
     };
   }
 
+  // Track pending settlements in memory for immediate trades
+  private pendingSettlements: Map<string, NodeJS.Timeout> = new Map();
+
+  // Interval for checking expired trades (from config)
+  private settlementCheckInterval: NodeJS.Timeout | null = null;
+  private readonly SETTLEMENT_CHECK_INTERVAL_MS = config.tradeSettlement.checkInterval;
+
   private scheduleTradeSettlement(tradeId: string, duration: number): void {
-    setTimeout(async () => {
+    // Clear any existing timer for this trade
+    const existingTimer = this.pendingSettlements.get(tradeId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(async () => {
+      this.pendingSettlements.delete(tradeId);
       try {
         await this.settleTrade(tradeId);
       } catch (error) {
         logger.error('Trade settlement failed', { tradeId, error });
       }
     }, duration * 1000);
+
+    this.pendingSettlements.set(tradeId, timer);
+  }
+
+  /**
+   * Initialize trade settlement recovery system
+   * Call this on server startup to recover unsettled trades
+   */
+  async initializeSettlementRecovery(): Promise<void> {
+    logger.info('[TradeService] Initializing settlement recovery system');
+
+    // Recover any trades that should have been settled while server was down
+    await this.recoverUnsettledTrades();
+
+    // Start periodic check for expired trades
+    this.startSettlementChecker();
+
+    logger.info('[TradeService] Settlement recovery system initialized');
+  }
+
+  /**
+   * Recover trades that expired while the server was down
+   */
+  private async recoverUnsettledTrades(): Promise<void> {
+    try {
+      const expiredTrades = await queryMany<{ id: string; expiresAt: Date }>(
+        `SELECT id, "expiresAt" FROM "Trade"
+         WHERE status = 'OPEN' AND "expiresAt" <= NOW()
+         ORDER BY "expiresAt" ASC
+         LIMIT 100`
+      );
+
+      if (expiredTrades.length === 0) {
+        logger.info('[TradeService] No expired unsettled trades found');
+        return;
+      }
+
+      logger.warn('[TradeService] Found expired unsettled trades', { count: expiredTrades.length });
+
+      // Settle each trade with a small delay to avoid overwhelming the system
+      for (const trade of expiredTrades) {
+        try {
+          await this.settleTrade(trade.id);
+          logger.info('[TradeService] Recovered trade settlement', { tradeId: trade.id });
+        } catch (error) {
+          logger.error('[TradeService] Failed to recover trade', { tradeId: trade.id, error });
+        }
+        // Small delay between settlements to avoid race conditions
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      logger.info('[TradeService] Trade recovery complete', { settled: expiredTrades.length });
+    } catch (error) {
+      logger.error('[TradeService] Failed to recover unsettled trades', { error });
+    }
+  }
+
+  /**
+   * Start periodic check for expired trades
+   * This ensures no trades are missed even if setTimeout fails
+   */
+  private startSettlementChecker(): void {
+    if (this.settlementCheckInterval) {
+      clearInterval(this.settlementCheckInterval);
+    }
+
+    this.settlementCheckInterval = setInterval(async () => {
+      try {
+        await this.settleExpiredTrades();
+      } catch (error) {
+        logger.error('[TradeService] Settlement check failed', { error });
+      }
+    }, this.SETTLEMENT_CHECK_INTERVAL_MS);
+
+    logger.info('[TradeService] Settlement checker started', {
+      intervalMs: this.SETTLEMENT_CHECK_INTERVAL_MS
+    });
+  }
+
+  /**
+   * Settle any trades that have expired but are still open
+   */
+  private async settleExpiredTrades(): Promise<void> {
+    const expiredTrades = await queryMany<{ id: string }>(
+      `SELECT id FROM "Trade"
+       WHERE status = 'OPEN' AND "expiresAt" <= NOW()
+       LIMIT 50`
+    );
+
+    for (const trade of expiredTrades) {
+      // Skip if already being processed in memory
+      if (this.pendingSettlements.has(trade.id)) {
+        continue;
+      }
+
+      try {
+        await this.settleTrade(trade.id);
+      } catch (error) {
+        logger.error('[TradeService] Failed to settle expired trade', {
+          tradeId: trade.id,
+          error
+        });
+      }
+    }
+  }
+
+  /**
+   * Cleanup on shutdown
+   */
+  shutdown(): void {
+    if (this.settlementCheckInterval) {
+      clearInterval(this.settlementCheckInterval);
+      this.settlementCheckInterval = null;
+    }
+
+    // Clear all pending timers
+    for (const timer of this.pendingSettlements.values()) {
+      clearTimeout(timer);
+    }
+    this.pendingSettlements.clear();
+
+    logger.info('[TradeService] Settlement system shutdown complete');
   }
 
   async settleTrade(tradeId: string): Promise<TradeResult | null> {
@@ -278,8 +425,12 @@ export class TradeService {
     // - 'DEMO' trades use practiceBalance (which is the practice/demo money)
     const balanceField = trade.accountType === 'LIVE' ? 'demoBalance' : 'practiceBalance';
 
-    // Update trade and user balance atomically
-    const updatedTrade = await transaction(async (client) => {
+    // Update trade and user balance atomically with serializable isolation
+    // This prevents race conditions during settlement
+    const { updatedTrade, newBalance, newPracticeBalance } = await serializableTransaction(async (client) => {
+      // Lock the user row to prevent concurrent balance modifications
+      await client.query(`SELECT id FROM "User" WHERE id = $1 FOR UPDATE`, [trade.userId]);
+
       // Update trade
       const tradeResult = await client.query<TradeRow>(
         `UPDATE "Trade" SET
@@ -288,13 +439,19 @@ export class TradeService {
         [exitPrice, 'CLOSED', won ? 'WON' : 'LOST', won ? profit : -trade.amount, now, tradeId]
       );
 
-      // Add return amount to the correct balance
-      await client.query(
-        `UPDATE "User" SET "${balanceField}" = "${balanceField}" + $1, "updatedAt" = $2 WHERE id = $3`,
+      // Add return amount to the correct balance and return new balances
+      const balanceResult = await client.query<{ demoBalance: number; practiceBalance: number }>(
+        `UPDATE "User" SET "${balanceField}" = "${balanceField}" + $1, "updatedAt" = $2
+         WHERE id = $3
+         RETURNING "demoBalance", "practiceBalance"`,
         [returnAmount, now, trade.userId]
       );
 
-      return tradeResult.rows[0];
+      return {
+        updatedTrade: tradeResult.rows[0],
+        newBalance: balanceResult.rows[0].demoBalance,
+        newPracticeBalance: balanceResult.rows[0].practiceBalance,
+      };
     });
 
     logger.info('Trade settled', {
@@ -306,7 +463,7 @@ export class TradeService {
       wasInfluenced,
     });
 
-    // Send real-time WebSocket notification to user
+    // Send real-time WebSocket notification to user with updated balance
     wsManager.notifyTradeSettled(trade.userId, {
       id: tradeId,
       symbol: trade.symbol,
@@ -314,7 +471,17 @@ export class TradeService {
       amount: trade.amount,
       result: won ? 'WON' : 'LOST',
       profit: won ? profit : -trade.amount,
+      entryPrice: trade.entryPrice,
       exitPrice,
+      newBalance: trade.accountType === 'LIVE' ? newBalance : newPracticeBalance,
+      accountType: trade.accountType as 'LIVE' | 'DEMO',
+    });
+
+    // Also send dedicated balance update for immediate UI sync
+    wsManager.notifyBalanceUpdate(trade.userId, {
+      balance: newBalance,
+      practiceBalance: newPracticeBalance,
+      accountType: trade.accountType as 'LIVE' | 'DEMO',
     });
 
     // Update leader stats if this user is a leader (non-copy trade)

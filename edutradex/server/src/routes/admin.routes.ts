@@ -29,6 +29,8 @@ import {
   OTCAdminServiceError,
   manualControlService,
   otcHistorySeeder,
+  syntheticHistoryGenerator,
+  otcMarketService,
 } from '../services/otc/index.js';
 import { marketService } from '../services/market/market.service.js';
 import {
@@ -1669,6 +1671,23 @@ router.post(
       }
 
       const { price, expiryMinutes, reason } = parsed.data;
+
+      // Validate price is within reasonable bounds of current price (max 50% deviation)
+      const currentPriceTick = otcMarketService.getCurrentPrice(symbol);
+      if (currentPriceTick) {
+        const maxDeviation = currentPriceTick.price * 0.5;
+        if (Math.abs(price - currentPriceTick.price) > maxDeviation) {
+          res.status(400).json({
+            success: false,
+            error: 'Price override exceeds maximum allowed deviation (50% of current price)',
+            currentPrice: currentPriceTick.price,
+            requestedPrice: price,
+            maxAllowedDeviation: maxDeviation,
+          });
+          return;
+        }
+      }
+
       await manualControlService.setPriceOverride(symbol, price, expiryMinutes, req.user!.id, reason);
 
       res.json({
@@ -2098,6 +2117,127 @@ router.get(
         data: {
           symbol,
           hasSeededHistory: hasHistory,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============================================================================
+// SYNTHETIC HISTORY ENDPOINTS
+// Generate synthetic candles using OTC algorithm (same patterns as live)
+// ============================================================================
+
+// Generate synthetic history for all enabled OTC symbols
+// IMPORTANT: This route MUST come before /:symbol to avoid "all" being matched as a symbol
+router.post(
+  '/otc/synthetic/all',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { candleCount, resolutionSeconds } = req.body;
+
+      const result = await syntheticHistoryGenerator.generateForAllSymbols({
+        candleCount: candleCount || 500,
+        resolutionSeconds: resolutionSeconds || 60,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Generate synthetic history for a single OTC symbol
+router.post(
+  '/otc/synthetic/:symbol',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      const { candleCount, resolutionSeconds } = req.body;
+
+      const result = await syntheticHistoryGenerator.generateForSymbol(symbol, {
+        candleCount: candleCount || 500,
+        resolutionSeconds: resolutionSeconds || 60,
+      });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(400).json({
+          success: false,
+          error: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
+);
+
+// Get synthetic history stats for a symbol
+router.get(
+  '/otc/synthetic/stats/:symbol',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      const stats = await syntheticHistoryGenerator.getSyntheticHistoryStats(symbol);
+
+      res.json({
+        success: true,
+        data: {
+          symbol,
+          ...stats,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Check if symbol has synthetic history
+router.get(
+  '/otc/synthetic/has/:symbol',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      const hasHistory = await syntheticHistoryGenerator.hasSyntheticHistory(symbol);
+
+      res.json({
+        success: true,
+        data: {
+          symbol,
+          hasSyntheticHistory: hasHistory,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Clear synthetic history for a symbol (to regenerate)
+router.delete(
+  '/otc/synthetic/:symbol',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const symbol = decodeURIComponent(req.params.symbol);
+      const deletedCount = await syntheticHistoryGenerator.clearSyntheticHistory(symbol);
+
+      res.json({
+        success: true,
+        data: {
+          symbol,
+          deletedCandles: deletedCount,
         },
       });
     } catch (error) {

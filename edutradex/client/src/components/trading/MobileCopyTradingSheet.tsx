@@ -61,7 +61,7 @@ export function MobileCopyTradingSheet({ isOpen, onClose }: MobileCopyTradingShe
               className={cn(
                 'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
                 activeTab === 'discover'
-                  ? 'bg-emerald-600 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'bg-slate-800 text-slate-300'
               )}
             >
@@ -73,7 +73,7 @@ export function MobileCopyTradingSheet({ isOpen, onClose }: MobileCopyTradingShe
               className={cn(
                 'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
                 activeTab === 'following'
-                  ? 'bg-emerald-600 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'bg-slate-800 text-slate-300'
               )}
             >

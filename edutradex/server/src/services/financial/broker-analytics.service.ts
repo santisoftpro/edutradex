@@ -627,7 +627,7 @@ class BrokerAnalyticsService {
           AND t."closedAt" >= ${dateRange.start}
           AND t."closedAt" < ${dateRange.end}
         GROUP BY t.market
-        ORDER BY ("brokerGain" - "payoutsCost") DESC
+        ORDER BY (COALESCE(SUM(CASE WHEN t.result = 'LOST' THEN t.amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN t.result = 'WON' THEN t.amount * t."payoutPercent" / 100 ELSE 0 END), 0)) DESC
       `;
 
       const totalRevenue = result.reduce((sum, r) => sum + (r.brokerGain - r.payoutsCost), 0);
@@ -701,7 +701,7 @@ class BrokerAnalyticsService {
           AND t."closedAt" >= ${dateRange.start}
           AND t."closedAt" < ${dateRange.end}
         GROUP BY t.symbol, t.market
-        ORDER BY ("brokerGain" - "payoutsCost") DESC
+        ORDER BY (COALESCE(SUM(CASE WHEN t.result = 'LOST' THEN t.amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN t.result = 'WON' THEN t.amount * t."payoutPercent" / 100 ELSE 0 END), 0)) DESC
         LIMIT ${limit}
       `;
 
@@ -913,6 +913,107 @@ class BrokerAnalyticsService {
   }
 
   /**
+   * Bulk update cohorts using a single raw SQL statement
+   * This avoids N+1 queries by updating all records in one query
+   */
+  private async bulkUpdateCohorts(
+    operations: Array<{ userId: string; data: Record<string, unknown> }>
+  ): Promise<void> {
+    if (operations.length === 0) return;
+
+    // Build VALUES clause for bulk update
+    const values = operations.map((op, idx) => {
+      const d = op.data as {
+        signupMonth: number;
+        signupYear: number;
+        firstDepositDate: Date | null;
+        firstTradeDate: Date | null;
+        lastActiveDate: Date | null;
+        totalDeposits: number;
+        totalWithdrawals: number;
+        totalTrades: number;
+        totalVolume: number;
+        netRevenue: number;
+        day30Active: boolean;
+        day60Active: boolean;
+        day90Active: boolean;
+        currentStatus: string;
+        churnedAt: Date | null;
+      };
+      return `($${idx * 16 + 1}, $${idx * 16 + 2}, $${idx * 16 + 3}, $${idx * 16 + 4}::timestamp, $${idx * 16 + 5}::timestamp, $${idx * 16 + 6}::timestamp, $${idx * 16 + 7}::decimal, $${idx * 16 + 8}::decimal, $${idx * 16 + 9}::int, $${idx * 16 + 10}::decimal, $${idx * 16 + 11}::decimal, $${idx * 16 + 12}::boolean, $${idx * 16 + 13}::boolean, $${idx * 16 + 14}::boolean, $${idx * 16 + 15}, $${idx * 16 + 16}::timestamp)`;
+    }).join(', ');
+
+    // Flatten parameters
+    const params: unknown[] = [];
+    for (const op of operations) {
+      const d = op.data as {
+        signupMonth: number;
+        signupYear: number;
+        firstDepositDate: Date | null;
+        firstTradeDate: Date | null;
+        lastActiveDate: Date | null;
+        totalDeposits: number;
+        totalWithdrawals: number;
+        totalTrades: number;
+        totalVolume: number;
+        netRevenue: number;
+        day30Active: boolean;
+        day60Active: boolean;
+        day90Active: boolean;
+        currentStatus: string;
+        churnedAt: Date | null;
+      };
+      params.push(
+        op.userId,
+        d.signupMonth,
+        d.signupYear,
+        d.firstDepositDate,
+        d.firstTradeDate,
+        d.lastActiveDate,
+        d.totalDeposits,
+        d.totalWithdrawals,
+        d.totalTrades,
+        d.totalVolume,
+        d.netRevenue,
+        d.day30Active,
+        d.day60Active,
+        d.day90Active,
+        d.currentStatus,
+        d.churnedAt
+      );
+    }
+
+    const sql = `
+      UPDATE "UserCohort" AS c SET
+        "signupMonth" = v."signupMonth",
+        "signupYear" = v."signupYear",
+        "firstDepositDate" = v."firstDepositDate",
+        "firstTradeDate" = v."firstTradeDate",
+        "lastActiveDate" = v."lastActiveDate",
+        "totalDeposits" = v."totalDeposits",
+        "totalWithdrawals" = v."totalWithdrawals",
+        "totalTrades" = v."totalTrades",
+        "totalVolume" = v."totalVolume",
+        "netRevenue" = v."netRevenue",
+        "day30Active" = v."day30Active",
+        "day60Active" = v."day60Active",
+        "day90Active" = v."day90Active",
+        "currentStatus" = v."currentStatus",
+        "churnedAt" = v."churnedAt",
+        "updatedAt" = NOW()
+      FROM (VALUES ${values}) AS v(
+        "userId", "signupMonth", "signupYear", "firstDepositDate", "firstTradeDate",
+        "lastActiveDate", "totalDeposits", "totalWithdrawals", "totalTrades",
+        "totalVolume", "netRevenue", "day30Active", "day60Active", "day90Active",
+        "currentStatus", "churnedAt"
+      )
+      WHERE c."userId" = v."userId"
+    `;
+
+    await prisma.$executeRawUnsafe(sql, ...params);
+  }
+
+  /**
    * Update user cohort data (run daily)
    * Uses batch queries to avoid N+1 performance issues
    */
@@ -1055,7 +1156,7 @@ class BrokerAnalyticsService {
         day90Active: boolean;
         currentStatus: string;
       }> = [];
-      const updateOperations: Array<{ userId: string; data: object }> = [];
+      const updateOperations: Array<{ userId: string; data: Record<string, unknown> }> = [];
 
       for (const userId of userIds) {
         const user = userMap.get(userId);
@@ -1113,24 +1214,22 @@ class BrokerAnalyticsService {
         }
       }
 
-      // Execute batch operations within a transaction
-      await prisma.$transaction(async (tx) => {
-        // Batch create new cohorts
-        if (createOperations.length > 0) {
-          await tx.userCohort.createMany({ data: createOperations });
-          created = createOperations.length;
-        }
+      // Execute batch operations
+      // Batch create new cohorts
+      if (createOperations.length > 0) {
+        await prisma.userCohort.createMany({ data: createOperations });
+        created = createOperations.length;
+      }
 
-        // Batch update existing cohorts (Prisma doesn't support updateMany with different values, so we chunk)
-        const BATCH_SIZE = 100;
+      // Batch update existing cohorts using raw SQL for true bulk update
+      if (updateOperations.length > 0) {
+        const BATCH_SIZE = 500;
         for (let i = 0; i < updateOperations.length; i += BATCH_SIZE) {
           const batch = updateOperations.slice(i, i + BATCH_SIZE);
-          await Promise.all(
-            batch.map(op => tx.userCohort.update({ where: { userId: op.userId }, data: op.data }))
-          );
+          await this.bulkUpdateCohorts(batch);
         }
         updated = updateOperations.length;
-      });
+      }
 
       logger.info(`Updated ${updated} cohorts, created ${created} new cohorts`);
       return { updated, created };

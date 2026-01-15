@@ -44,10 +44,18 @@ export function TradesSidebar({ onToggle, latestPrices }: TradesSidebarProps) {
     setIsClient(true);
   }, []);
 
-  // Get recent closed trades (last 10) - trades with status 'won' or 'lost'
-  const closedTrades = trades
-    .filter(t => t.status === 'won' || t.status === 'lost')
-    .slice(0, 10);
+  // Get closed trades from the last 24 hours only (max 20)
+  const closedTrades = useMemo(() => {
+    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+    return trades
+      .filter(t => {
+        if (t.status !== 'won' && t.status !== 'lost') return false;
+        const closedTime = new Date(t.closedAt || t.createdAt).getTime();
+        return closedTime > twentyFourHoursAgo;
+      })
+      .slice(0, 20);
+  }, [trades]);
+
 
   const filteredActiveTrades = useMemo(() => {
     if (!searchQuery.trim()) return activeTrades;
@@ -291,7 +299,7 @@ function OpenedTradeCard({ trade, currentPrice }: { trade: Trade; currentPrice?:
                 {pl.isInProfit ? '+' : '-'}${Math.abs(pl.plAmount).toFixed(2)}
               </span>
             ) : (
-              <span className="text-emerald-400 font-semibold">+{trade.payout}%</span>
+              <span className="text-gray-400 font-semibold text-xs">Awaiting price</span>
             )}
           </div>
         </div>
@@ -331,7 +339,7 @@ function OpenedTradeCard({ trade, currentPrice }: { trade: Trade; currentPrice?:
                   {pl.isInProfit ? '+' : '-'}${Math.abs(pl.plAmount).toFixed(2)}
                 </span>
               ) : (
-                <span className="text-emerald-400 font-bold">+${potentialProfit.toFixed(2)}</span>
+                <span className="text-gray-400 font-bold">--</span>
               )}
             </div>
             <div className="bg-[#1a1a2e] rounded-md p-2 col-span-2">
@@ -351,155 +359,123 @@ function OpenedTradeCard({ trade, currentPrice }: { trade: Trade; currentPrice?:
   );
 }
 
+// Helper to format relative time
+function getRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const time = new Date(dateStr).getTime();
+  const diff = now - time;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return minutes + 'm ago';
+  if (hours < 24) return hours + 'h ago';
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 function ClosedTrades({ trades, searchQuery }: { trades: Trade[]; searchQuery: string }) {
+  const stats = useMemo(() => {
+    const wins = trades.filter(t => t.status === 'won').length;
+    const losses = trades.filter(t => t.status === 'lost').length;
+    const totalPnL = trades.reduce((sum, t) => {
+      if (t.status === 'won') return sum + (t.profit || 0);
+      return sum - t.amount;
+    }, 0);
+    return { wins, losses, totalPnL };
+  }, [trades]);
+
   if (trades.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-gray-500 p-4">
-        <div className="w-16 h-16 rounded-full bg-[#252542] flex items-center justify-center mb-3">
-          <History className="h-8 w-8 opacity-50" />
+        <div className="w-14 h-14 rounded-full bg-[#252542] flex items-center justify-center mb-3">
+          <History className="h-7 w-7 opacity-50" />
         </div>
-        <p className="text-sm font-medium text-gray-400">{searchQuery ? 'No matches' : 'No trade history'}</p>
-        <p className="text-xs text-gray-500 mt-1 text-center">{searchQuery ? 'Try a different symbol' : 'Completed trades appear here'}</p>
+        <p className="text-sm font-medium text-gray-400">{searchQuery ? 'No matches' : 'No recent trades'}</p>
+        <p className="text-xs text-gray-500 mt-1 text-center">{searchQuery ? 'Try a different symbol' : 'Last 24h history appears here'}</p>
       </div>
     );
   }
 
   return (
-    <div className="p-2 space-y-2">
-      {trades.map((trade) => (
-        <ClosedTradeCard key={trade.id} trade={trade} />
-      ))}
+    <div className="flex flex-col h-full">
+      <div className="px-2 py-2 border-b border-[#2d2d44]">
+        <div className="flex items-center justify-between text-[10px]">
+          <div className="flex items-center gap-3">
+            <span className="text-emerald-400 font-semibold">{stats.wins}W</span>
+            <span className="text-red-400 font-semibold">{stats.losses}L</span>
+          </div>
+          <span className={cn('font-bold text-xs', stats.totalPnL >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+            {stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toFixed(2)}
+          </span>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-1.5 space-y-1">
+        {trades.map((trade) => (
+          <ClosedTradeCard key={trade.id} trade={trade} />
+        ))}
+      </div>
     </div>
   );
 }
 
 function ClosedTradeCard({ trade }: { trade: Trade }) {
   const [isExpanded, setIsExpanded] = useState(false);
-
   const isWon = trade.status === 'won';
   const isUp = trade.direction === 'UP';
   const profit = trade.profit || 0;
+  const amount = isWon ? profit : trade.amount;
 
-  // Calculate pips if we have exit price
-  const pips = trade.exitPrice
-    ? calculatePips(trade.symbol, trade.entryPrice, trade.exitPrice)
-    : 0;
-
-  // Determine if pips are in favor of the trade direction
-  const pipsInFavor = isUp ? pips : -pips;
-
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
+  const formatTradePrice = (price: number) => {
+    if (trade.symbol.includes('JPY')) return price.toFixed(3);
+    return price.toFixed(5);
   };
 
   return (
     <div
       className={cn(
-        'bg-[#252542] rounded-lg cursor-pointer transition-all',
-        'border-l-3',
-        isWon ? 'border-l-emerald-500' : 'border-l-red-500'
+        'rounded-lg transition-all cursor-pointer',
+        isWon ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'bg-red-500/10 hover:bg-red-500/15'
       )}
-      style={{ borderLeftWidth: '3px' }}
       onClick={() => setIsExpanded(!isExpanded)}
     >
-      {/* Main content */}
-      <div className="p-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className={cn(
-              'w-6 h-6 rounded-full flex items-center justify-center',
-              isUp ? 'bg-emerald-500/20' : 'bg-red-500/20'
-            )}>
-              {isUp ? (
-                <ArrowUp className="h-3.5 w-3.5 text-emerald-400" />
-              ) : (
-                <ArrowDown className="h-3.5 w-3.5 text-red-400" />
-              )}
-            </div>
-            <span className="text-white text-sm font-semibold">{trade.symbol}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className={cn(
-              'w-5 h-5 rounded-full flex items-center justify-center',
-              isWon ? 'bg-emerald-500/20' : 'bg-red-500/20'
-            )}>
-              {isWon ? (
-                <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
-              ) : (
-                <XCircle className="h-3.5 w-3.5 text-red-400" />
-              )}
-            </div>
-            <ChevronDown className={cn(
-              'h-3.5 w-3.5 text-gray-400 transition-transform',
-              isExpanded && 'rotate-180'
-            )} />
-          </div>
+      {/* Collapsed View */}
+      <div className="flex items-center gap-2 px-2 py-1.5">
+        <div className={cn('w-5 h-5 rounded flex items-center justify-center flex-shrink-0', isUp ? 'bg-emerald-500/20' : 'bg-red-500/20')}>
+          {isUp ? (<ArrowUp className="h-3 w-3 text-emerald-400" strokeWidth={2.5} />) : (<ArrowDown className="h-3 w-3 text-red-400" strokeWidth={2.5} />)}
         </div>
-
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-gray-500">{formatTime(trade.closedAt || trade.createdAt)}</span>
-          <span className={cn(
-            'font-bold text-sm',
-            isWon ? 'text-emerald-400' : 'text-red-400'
-          )}>
-            {isWon ? '+' : '-'}${Math.abs(isWon ? profit : trade.amount).toFixed(2)}
-          </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-white text-xs font-medium truncate">{trade.symbol}</span>
+            <span className={cn('text-[9px] font-bold px-1 rounded', isWon ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400')}>{isWon ? 'WIN' : 'LOSS'}</span>
+          </div>
+          <span className="text-gray-500 text-[10px]">{getRelativeTime(trade.closedAt || trade.createdAt)}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className={cn('text-xs font-bold', isWon ? 'text-emerald-400' : 'text-red-400')}>{isWon ? '+' : '-'}${amount.toFixed(2)}</span>
+          <ChevronDown className={cn('h-3 w-3 text-gray-500 transition-transform', isExpanded && 'rotate-180')} />
         </div>
       </div>
 
       {/* Expanded Details */}
       {isExpanded && (
-        <div className="px-3 pb-3 pt-1 border-t border-[#3d3d5c] space-y-2 animate-in fade-in duration-200">
-          <div className="grid grid-cols-2 gap-2 text-[10px]">
-            <div className="bg-[#1a1a2e] rounded-md p-2">
-              <span className="text-gray-500 block">Forecast</span>
-              <span className={cn(
-                'font-bold',
-                isUp ? 'text-emerald-400' : 'text-red-400'
-              )}>
-                {isUp ? 'UP (Buy)' : 'DOWN (Sell)'}
-              </span>
+        <div className="px-2 pb-2 pt-1 border-t border-white/5 animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+            <div className="bg-black/20 rounded px-2 py-1">
+              <span className="text-gray-500 block">Entry</span>
+              <span className="text-white font-mono">{formatTradePrice(trade.entryPrice)}</span>
             </div>
-            <div className="bg-[#1a1a2e] rounded-md p-2">
-              <span className="text-gray-500 block">Result</span>
-              <span className={cn(
-                'font-bold',
-                isWon ? 'text-emerald-400' : 'text-red-400'
-              )}>
-                {isWon ? 'PROFIT' : 'LOSS'}
-              </span>
+            <div className="bg-black/20 rounded px-2 py-1">
+              <span className="text-gray-500 block">Exit</span>
+              <span className="text-white font-mono">{trade.exitPrice ? formatTradePrice(trade.exitPrice) : '-'}</span>
             </div>
-            <div className="bg-[#1a1a2e] rounded-md p-2">
+            <div className="bg-black/20 rounded px-2 py-1">
+              <span className="text-gray-500 block">Amount</span>
+              <span className="text-white">${trade.amount.toFixed(2)}</span>
+            </div>
+            <div className="bg-black/20 rounded px-2 py-1">
               <span className="text-gray-500 block">Payout</span>
-              <span className="text-blue-400 font-bold">+{trade.payout}%</span>
+              <span className="text-blue-400">{trade.payout}%</span>
             </div>
-            <div className="bg-[#1a1a2e] rounded-md p-2">
-              <span className="text-gray-500 block">{isWon ? 'Profit' : 'Loss'}</span>
-              <span className={cn(
-                'font-bold',
-                isWon ? 'text-emerald-400' : 'text-red-400'
-              )}>
-                {isWon ? '+' : '-'}${Math.abs(isWon ? profit : trade.amount).toFixed(2)}
-              </span>
-            </div>
-            <div className="bg-[#1a1a2e] rounded-md p-2">
-              <span className="text-gray-500 block">Entry Price</span>
-              <span className="text-white font-bold font-mono text-[9px]">
-                {formatPrice(trade.entryPrice, trade.symbol)}
-              </span>
-            </div>
-            <div className="bg-[#1a1a2e] rounded-md p-2">
-              <span className="text-gray-500 block">Exit Price</span>
-              <span className="text-white font-bold font-mono text-[9px]">
-                {trade.exitPrice ? formatPrice(trade.exitPrice, trade.symbol) : '-'}
-              </span>
-            </div>
-           
           </div>
         </div>
       )}

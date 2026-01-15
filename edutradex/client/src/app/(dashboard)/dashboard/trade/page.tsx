@@ -21,13 +21,18 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 import { useTradingShortcuts } from '@/hooks/useTradingShortcuts';
 import { api, PriceTick } from '@/lib/api';
 import { playBuySound, playSellSound } from '@/lib/sounds';
-
-const SELECTED_ASSET_KEY = 'optigobroker-selected-asset';
-const SELECTED_DURATION_KEY = 'optigobroker-selected-duration';
-const SELECTED_AMOUNT_KEY = 'optigobroker-selected-amount';
-
-const QUICK_AMOUNTS = [5, 10, 25, 50, 100, 500, 1000, 5000];
-const DURATIONS = [5, 15, 30, 60, 180, 300, 600, 900, 1800, 3600];
+import {
+  QUICK_AMOUNTS,
+  DURATION_VALUES,
+  STORAGE_KEYS,
+  LARGE_TRADE_THRESHOLD,
+  DEFAULT_DURATION,
+  DEFAULT_AMOUNT,
+  validateStoredAsset,
+  validateStoredDuration,
+  validateStoredAmount,
+} from '@/constants/trading';
+import { getMarketType } from '@/lib/utils';
 
 export default function TradePage() {
   const { user, syncBalanceFromServer, updateDemoBalance, updatePracticeBalance, getActiveBalance, switchAccount, isHydrated } = useAuthStore();
@@ -40,8 +45,8 @@ export default function TradePage() {
   const [isMobileTradesOpen, setIsMobileTradesOpen] = useState(false);
   const [isChartSettingsOpen, setIsChartSettingsOpen] = useState(false);
   const [isMobileCopyTradingOpen, setIsMobileCopyTradingOpen] = useState(false);
-  const [selectedDuration, setSelectedDuration] = useState(300);
-  const [selectedAmount, setSelectedAmount] = useState(10);
+  const [selectedDuration, setSelectedDuration] = useState(DEFAULT_DURATION);
+  const [selectedAmount, setSelectedAmount] = useState(DEFAULT_AMOUNT);
   const [placingTrades, setPlacingTrades] = useState<Set<string>>(new Set());
   const [drawnLinesCount, setDrawnLinesCount] = useState(0);
   const [assetPayout, setAssetPayout] = useState(98); // Default payout, will be updated from asset config
@@ -53,10 +58,14 @@ export default function TradePage() {
   const hasSubscribedAllRef = useRef(false);
   const priceChartRef = useRef<PriceChartHandle>(null);
 
-  // Force LIVE mode when on this page
+  // Ensure LIVE mode when on this page - notify user if switching
   useEffect(() => {
     if (user && user.activeAccountType !== 'LIVE') {
       switchAccount('LIVE');
+      toast('Switched to Live Trading mode', {
+        icon: '💰',
+        duration: 3000,
+      });
     }
   }, [user, switchAccount]);
 
@@ -84,19 +93,24 @@ export default function TradePage() {
     priceChartRef.current?.clearDrawings();
   }, []);
 
-  // Load saved preferences from localStorage on mount
+  // Load saved preferences from localStorage on mount with validation
   useEffect(() => {
-    const savedAsset = localStorage.getItem(SELECTED_ASSET_KEY);
-    if (savedAsset) {
-      setSelectedAsset(savedAsset);
+    const savedAsset = localStorage.getItem(STORAGE_KEYS.SELECTED_ASSET);
+    const validatedAsset = validateStoredAsset(savedAsset, 'EUR/USD');
+    if (validatedAsset !== 'EUR/USD') {
+      setSelectedAsset(validatedAsset);
     }
-    const savedDuration = localStorage.getItem(SELECTED_DURATION_KEY);
-    if (savedDuration) {
-      setSelectedDuration(parseInt(savedDuration, 10));
+
+    const savedDuration = localStorage.getItem(STORAGE_KEYS.SELECTED_DURATION);
+    const validatedDuration = validateStoredDuration(savedDuration);
+    if (validatedDuration !== DEFAULT_DURATION) {
+      setSelectedDuration(validatedDuration);
     }
-    const savedAmount = localStorage.getItem(SELECTED_AMOUNT_KEY);
-    if (savedAmount) {
-      setSelectedAmount(parseInt(savedAmount, 10));
+
+    const savedAmount = localStorage.getItem(STORAGE_KEYS.SELECTED_AMOUNT);
+    const validatedAmount = validateStoredAmount(savedAmount);
+    if (validatedAmount !== DEFAULT_AMOUNT) {
+      setSelectedAmount(validatedAmount);
     }
   }, []);
 
@@ -123,28 +137,28 @@ export default function TradePage() {
   // Save selected asset to localStorage when it changes
   const handleSelectAsset = useCallback((symbol: string) => {
     setSelectedAsset(symbol);
-    localStorage.setItem(SELECTED_ASSET_KEY, symbol);
+    localStorage.setItem(STORAGE_KEYS.SELECTED_ASSET, symbol);
   }, []);
 
   // Save selected duration to localStorage when it changes
   const handleSelectDuration = useCallback((duration: number) => {
     setSelectedDuration(duration);
-    localStorage.setItem(SELECTED_DURATION_KEY, duration.toString());
+    localStorage.setItem(STORAGE_KEYS.SELECTED_DURATION, duration.toString());
   }, []);
 
   // Save selected amount to localStorage when it changes
   const handleSelectAmount = useCallback((amount: number) => {
     setSelectedAmount(amount);
-    localStorage.setItem(SELECTED_AMOUNT_KEY, amount.toString());
+    localStorage.setItem(STORAGE_KEYS.SELECTED_AMOUNT, amount.toString());
   }, []);
 
   // Handle duration navigation (Q/E keys)
   const handleDurationNav = useCallback((direction: number) => {
     setSelectedDuration(prev => {
-      const currentIndex = DURATIONS.indexOf(prev);
-      const newIndex = Math.max(0, Math.min(DURATIONS.length - 1, currentIndex + direction));
-      const newDuration = DURATIONS[newIndex];
-      localStorage.setItem(SELECTED_DURATION_KEY, newDuration.toString());
+      const currentIndex = DURATION_VALUES.indexOf(prev);
+      const newIndex = Math.max(0, Math.min(DURATION_VALUES.length - 1, currentIndex + direction));
+      const newDuration = DURATION_VALUES[newIndex];
+      localStorage.setItem(STORAGE_KEYS.SELECTED_DURATION, newDuration.toString());
       return newDuration;
     });
   }, []);
@@ -187,46 +201,24 @@ export default function TradePage() {
     fetchAssetPayout();
   }, [selectedAsset]);
 
-  const getMarketType = (symbol: string): 'forex' | 'crypto' | 'stock' | 'index' => {
-    // Crypto symbols
-    if (symbol.endsWith('/USDT') || symbol.includes('BTC') || symbol.includes('ETH')) {
-      return 'crypto';
-    }
-    // Index symbols
-    if (['SPX500', 'NASDAQ', 'DJI', 'DAX', 'FTSE100', 'NIKKEI'].some(idx => symbol.includes(idx))) {
-      return 'index';
-    }
-    // Stock symbols (typically single uppercase words like AAPL, GOOGL)
-    if (/^[A-Z]{1,5}$/.test(symbol)) {
-      return 'stock';
-    }
-    // Default to forex (currency pairs like EUR/USD)
-    return 'forex';
-  };
-
-  // Large trade threshold for confirmation dialog
-  const LARGE_TRADE_THRESHOLD = 500;
-
   // Execute the actual trade (called directly or after confirmation)
   const executeTrade = useCallback(
     async (direction: 'UP' | 'DOWN', tradeAmount: number, tradeDuration: number) => {
       if (!user) return;
 
+      // Validate price is available before trading
+      if (!currentPrice?.price) {
+        toast.error('Waiting for price data. Please try again.', { duration: 3000 });
+        return;
+      }
+
       // Generate unique key for this trade action
       const tradeKey = `${direction}-${Date.now()}`;
-
-      // Play sound immediately for instant feedback
-      if (direction === 'UP') {
-        playBuySound();
-      } else {
-        playSellSound();
-      }
 
       // Track this specific trade placement (allows multiple concurrent trades)
       setPlacingTrades(prev => new Set(prev).add(tradeKey));
 
-      // Use current price from WebSocket (already available, no API call needed)
-      const entryPrice = currentPrice?.price || 1.0852;
+      const entryPrice = currentPrice.price;
       const marketType = getMarketType(selectedAsset);
 
       try {
@@ -238,6 +230,13 @@ export default function TradePage() {
           entryPrice,
           marketType,
         });
+
+        // Play sound only on successful trade
+        if (direction === 'UP') {
+          playBuySound();
+        } else {
+          playSellSound();
+        }
 
         // Optimistically deduct from the correct balance based on account type
         // NOTE: Due to legacy naming:
@@ -277,9 +276,19 @@ export default function TradePage() {
     [user, selectedAsset, currentPrice, syncBalanceFromServer, updateDemoBalance, updatePracticeBalance, getActiveBalance, placeTrade]
   );
 
+  // Check if trading is possible
+  const isPriceAvailable = !!currentPrice?.price;
+  const canTrade = isPriceAvailable && isConnected;
+
   const handleTrade = useCallback(
     async (direction: 'UP' | 'DOWN', amount?: number, duration?: number) => {
       if (!user) return;
+
+      // Check price availability first
+      if (!isPriceAvailable) {
+        toast.error('Waiting for price data. Please try again.', { duration: 3000 });
+        return;
+      }
 
       // Use provided values or fall back to state
       const tradeAmount = amount ?? selectedAmount;
@@ -306,7 +315,7 @@ export default function TradePage() {
       // Execute trade directly for smaller amounts
       await executeTrade(direction, tradeAmount, tradeDuration);
     },
-    [user, selectedAmount, selectedDuration, getActiveBalance, executeTrade]
+    [user, selectedAmount, selectedDuration, getActiveBalance, executeTrade, isPriceAvailable]
   );
 
   // Handle confirmation of large trade
@@ -329,7 +338,7 @@ export default function TradePage() {
     onAmountSelect: handleSelectAmount,
     onDurationSelect: handleDurationNav,
     amounts: QUICK_AMOUNTS,
-    enabled: !!user && placingTrades.size === 0,
+    enabled: !!user && placingTrades.size === 0 && canTrade,
   });
 
   if (!user) {
@@ -448,6 +457,7 @@ export default function TradePage() {
           amount={selectedAmount}
           onAmountChange={handleSelectAmount}
           isLoading={placingTrades.size > 0}
+          isDisabled={!canTrade}
           payoutPercent={assetPayout}
           showShortcuts
         />
@@ -478,6 +488,7 @@ export default function TradePage() {
         amount={selectedAmount}
         onAmountChange={handleSelectAmount}
         isLoading={placingTrades.size > 0}
+        isDisabled={!canTrade}
         payoutPercent={assetPayout}
         onOpenTrades={() => setIsMobileTradesOpen(true)}
         onOpenCopyTrading={() => setIsMobileCopyTradingOpen(true)}

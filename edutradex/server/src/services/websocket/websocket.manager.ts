@@ -176,18 +176,36 @@ class WebSocketManager {
     amount: number;
     result: 'WON' | 'LOST';
     profit: number;
+    entryPrice: number;
     exitPrice: number;
+    newBalance?: number;
+    accountType?: 'LIVE' | 'DEMO';
   }): void {
     logger.info('Sending trade_settled notification', {
       userId,
       tradeId: trade.id,
       result: trade.result,
-      profit: trade.profit
+      profit: trade.profit,
+      newBalance: trade.newBalance
     });
     this.sendToUser(userId, {
       type: 'trade_settled',
       payload: {
         ...trade,
+        timestamp: Date.now(),
+      },
+    });
+  }
+
+  notifyBalanceUpdate(userId: string, data: {
+    balance: number;
+    practiceBalance: number;
+    accountType?: 'LIVE' | 'DEMO';
+  }): void {
+    this.sendToUser(userId, {
+      type: 'balance_update',
+      payload: {
+        ...data,
         timestamp: Date.now(),
       },
     });
@@ -317,6 +335,8 @@ class WebSocketManager {
       subscribers.delete(clientId);
       if (subscribers.size === 0) {
         this.symbolSubscribers.delete(symbol);
+        // Clean up timer and pending updates when no subscribers left
+        this.cleanupSymbolResources(symbol);
       }
     }
 
@@ -331,6 +351,19 @@ class WebSocketManager {
       type: 'unsubscribed',
       payload: { symbol, timestamp: Date.now() },
     });
+  }
+
+  private cleanupSymbolResources(symbol: string): void {
+    // Clear any pending timer for this symbol
+    const timer = this.priceUpdateTimers.get(symbol);
+    if (timer) {
+      clearTimeout(timer);
+      this.priceUpdateTimers.delete(symbol);
+    }
+    // Clear pending price updates
+    this.pendingPriceUpdates.delete(symbol);
+    // Clear last broadcast timestamp
+    this.lastPriceBroadcast.delete(symbol);
   }
 
   broadcastPriceUpdate(priceTick: PriceTick): void {
@@ -372,17 +405,35 @@ class WebSocketManager {
       return;
     }
 
-    const message: WebSocketMessage = {
+    // Serialize once for all subscribers (performance optimization)
+    const messageJson = JSON.stringify({
       type: 'price_update',
       payload: priceTick,
-    };
+    });
 
+    // Send pre-serialized message to all subscribers
     subscribers.forEach((clientId) => {
-      this.sendToClient(clientId, message);
+      this.sendRawToClient(clientId, messageJson);
     });
 
     this.lastPriceBroadcast.set(symbol, Date.now());
     this.pendingPriceUpdates.delete(symbol);
+  }
+
+  private sendRawToClient(clientId: string, messageJson: string): void {
+    const client = this.clients.get(clientId);
+    if (!client || client.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    try {
+      client.ws.send(messageJson);
+    } catch (error) {
+      logger.error('Error sending raw message to client', {
+        clientId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
   }
 
   broadcastAllPrices(priceTicks: PriceTick[]): void {

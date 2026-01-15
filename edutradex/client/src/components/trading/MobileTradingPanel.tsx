@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import { ArrowUp, ArrowDown, Clock, DollarSign, Loader2, LineChart, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getDefaultTradeAmount } from '@/lib/settings';
+import { TRADE_DURATIONS, QUICK_AMOUNTS } from '@/constants/trading';
 
 interface MobileTradingPanelProps {
   balance: number;
   onTrade: (direction: 'UP' | 'DOWN', amount?: number, duration?: number) => void;
   isLoading?: boolean;
+  isDisabled?: boolean;
   payoutPercent?: number;
   onDurationChange?: (duration: number) => void;
   initialDuration?: number;
@@ -21,25 +23,11 @@ interface MobileTradingPanelProps {
   isDemoMode?: boolean;
 }
 
-const DURATIONS = [
-  { label: '5s', value: 5 },
-  { label: '15s', value: 15 },
-  { label: '30s', value: 30 },
-  { label: '1m', value: 60 },
-  { label: '3m', value: 180 },
-  { label: '5m', value: 300 },
-  { label: '10m', value: 600 },
-  { label: '15m', value: 900 },
-  { label: '30m', value: 1800 },
-  { label: '1h', value: 3600 },
-];
-
-const QUICK_AMOUNTS = [5, 10, 25, 50, 100, 500, 1000, 5000];
-
 function MobileTradingPanelComponent({
   balance,
   onTrade,
   isLoading,
+  isDisabled = false,
   payoutPercent = 98,
   onDurationChange,
   initialDuration,
@@ -82,10 +70,10 @@ function MobileTradingPanelComponent({
   const invalidAmount = amount <= 0;
 
   const handleTrade = useCallback((direction: 'UP' | 'DOWN') => {
-    if (!invalidAmount && !insufficientBalance && !isLoading) {
+    if (!invalidAmount && !insufficientBalance && !isLoading && !isDisabled) {
       onTrade(direction, amount, duration);
     }
-  }, [invalidAmount, insufficientBalance, isLoading, onTrade, amount, duration]);
+  }, [invalidAmount, insufficientBalance, isLoading, isDisabled, onTrade, amount, duration]);
 
   const goToCopy = useCallback(() => {
     if (onOpenCopyTrading) {
@@ -133,7 +121,7 @@ function MobileTradingPanelComponent({
               <h3 className="text-white font-bold text-base text-center mb-1">Select Duration</h3>
               <p className="text-slate-500 text-xs text-center mb-4">Choose trade expiration time</p>
               <div className="grid grid-cols-5 gap-2">
-                {DURATIONS.map((d) => (
+                {TRADE_DURATIONS.map((d) => (
                   <button
                     key={d.value}
                     onClick={() => handleDurationSelect(d.value)}
@@ -267,7 +255,7 @@ function MobileTradingPanelComponent({
         <div className="flex gap-2.5 px-3 py-2.5">
           <button
             onClick={() => handleTrade('UP')}
-            disabled={isLoading || insufficientBalance || invalidAmount}
+            disabled={isLoading || insufficientBalance || invalidAmount || isDisabled}
             className="flex-1 py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-emerald-900/50 disabled:to-emerald-900/50 disabled:cursor-not-allowed rounded-xl font-bold text-white text-base flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-900/40 active:scale-[0.98]"
           >
             {isLoading ? (
@@ -281,7 +269,7 @@ function MobileTradingPanelComponent({
           </button>
           <button
             onClick={() => handleTrade('DOWN')}
-            disabled={isLoading || insufficientBalance || invalidAmount}
+            disabled={isLoading || insufficientBalance || invalidAmount || isDisabled}
             className="flex-1 py-3.5 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:from-red-900/50 disabled:to-red-900/50 disabled:cursor-not-allowed rounded-xl font-bold text-white text-base flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-900/40 active:scale-[0.98]"
           >
             {isLoading ? (

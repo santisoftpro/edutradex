@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import toast from 'react-hot-toast';
 import { PriceTick } from '@/lib/api';
 import { useNotificationStore } from '@/store/notification.store';
 import { useAuthStore } from '@/store/auth.store';
 import { useTradeStore, markTradeNotified } from '@/store/trade.store';
 import { playWinSound, playLoseSound } from '@/lib/sounds';
+import { showTradeNotification } from '@/components/notifications/TradeNotification';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:5000/ws';
 const RECONNECT_INTERVAL = 3000;
 const PING_INTERVAL = 30000;
+const IS_DEV = process.env.NODE_ENV === 'development';
 
 interface WebSocketMessage {
   type: string;
@@ -95,7 +96,7 @@ export function useWebSocket(): UseWebSocketReturn {
         const ws = new WebSocket(WS_URL);
 
         ws.onopen = () => {
-          console.log('[WebSocket] Connected');
+          if (IS_DEV) console.log('[WebSocket] Connected');
           isConnectingRef.current = false;
           setIsConnected(true);
           clearTimers();
@@ -120,11 +121,11 @@ export function useWebSocket(): UseWebSocketReturn {
 
             switch (message.type) {
               case 'connected':
-                console.log('[WebSocket] Connection confirmed', message.payload);
+                if (IS_DEV) console.log('[WebSocket] Connection confirmed');
                 break;
 
               case 'authenticated':
-                console.log('[WebSocket] Authenticated', message.payload);
+                if (IS_DEV) console.log('[WebSocket] Authenticated');
                 isAuthenticatedRef.current = true;
                 break;
 
@@ -201,25 +202,50 @@ export function useWebSocket(): UseWebSocketReturn {
                 break;
               }
 
+              case 'balance_update': {
+                // Immediate balance sync from server - no need to call refreshProfile
+                const { balance, practiceBalance } = message.payload || {};
+                if (typeof balance === 'number' || typeof practiceBalance === 'number') {
+                  const authStore = useAuthStore.getState();
+                  if (authStore.user) {
+                    useAuthStore.setState({
+                      user: {
+                        ...authStore.user,
+                        ...(typeof balance === 'number' && { demoBalance: balance }),
+                        ...(typeof practiceBalance === 'number' && { practiceBalance }),
+                      },
+                    });
+                  }
+                }
+                break;
+              }
+
               case 'trade_settled': {
-                console.log('[WebSocket] Trade settled received:', message.payload);
-                const { id, symbol, result, profit, amount } = message.payload || {};
+                const { id, symbol, result, profit, amount, newBalance, accountType, direction, entryPrice, exitPrice } = message.payload || {};
                 const won = result === 'WON';
                 const profitAmount = typeof profit === 'number' ? profit : 0;
                 const tradeAmount = typeof amount === 'number' ? amount : 0;
 
                 // Only show notification if not already shown (prevents duplicates)
                 if (id && markTradeNotified(id)) {
-                  console.log('[WebSocket] Trade result:', { won, profitAmount, tradeAmount, symbol });
 
-                  // Play sound and show notification
+                  // Play sound
                   if (won) {
                     playWinSound();
-                    toast.success(`Profit +$${profitAmount.toFixed(2)} on ${symbol || 'trade'}`, { duration: 4000 });
                   } else {
                     playLoseSound();
-                    toast.error(`Loss -$${tradeAmount.toFixed(2)} on ${symbol || 'trade'}`, { duration: 4000 });
                   }
+
+                  // Show styled trade notification
+                  showTradeNotification({
+                    symbol: symbol || 'Unknown',
+                    result: won ? 'WON' : 'LOST',
+                    amount: tradeAmount,
+                    profit: profitAmount,
+                    direction: direction || 'UP',
+                    entryPrice,
+                    exitPrice,
+                  });
                 }
 
                 // Remove trade from active trades (don't call full syncFromApi to save API calls)
@@ -236,17 +262,31 @@ export function useWebSocket(): UseWebSocketReturn {
                   }
                 }
 
-                // Refresh balance only
-                useAuthStore.getState().refreshProfile();
+                // Update balance directly if provided, otherwise refresh from server
+                if (typeof newBalance === 'number') {
+                  const authStore = useAuthStore.getState();
+                  if (authStore.user) {
+                    const balanceKey = accountType === 'LIVE' ? 'demoBalance' : 'practiceBalance';
+                    useAuthStore.setState({
+                      user: {
+                        ...authStore.user,
+                        [balanceKey]: newBalance,
+                      },
+                    });
+                  }
+                } else {
+                  // Fallback: Refresh balance from server
+                  useAuthStore.getState().refreshProfile();
+                }
                 break;
               }
 
               case 'subscribed':
-                console.log('[WebSocket] Subscribed to', message.payload?.symbol);
+                // Subscription confirmed
                 break;
 
               case 'unsubscribed':
-                console.log('[WebSocket] Unsubscribed from', message.payload?.symbol);
+                // Unsubscription confirmed
                 break;
 
               case 'pong':
@@ -254,33 +294,32 @@ export function useWebSocket(): UseWebSocketReturn {
                 break;
 
               case 'error':
-                console.error('[WebSocket] Server error', message.payload);
+                if (IS_DEV) console.error('[WebSocket] Server error:', message.payload?.message || 'Unknown error');
                 break;
 
               default:
-                console.log('[WebSocket] Unknown message type', message.type);
+                if (IS_DEV) console.log('[WebSocket] Unknown message type:', message.type);
             }
-          } catch (error) {
-            console.error('[WebSocket] Failed to parse message', error);
+          } catch {
+            // Silently ignore malformed messages in production
+            if (IS_DEV) console.error('[WebSocket] Failed to parse message');
           }
         };
 
         ws.onerror = () => {
           // WebSocket errors don't provide useful info in browser
           // The onclose handler will handle reconnection
-          console.warn('[WebSocket] Connection error occurred');
           isConnectingRef.current = false;
         };
 
         ws.onclose = (event) => {
-          console.log('[WebSocket] Disconnected', event.code, event.reason);
+          if (IS_DEV) console.log('[WebSocket] Disconnected:', event.code);
           isConnectingRef.current = false;
           setIsConnected(false);
           clearTimers();
 
           // Attempt reconnect
           if (!event.wasClean) {
-            console.log(`[WebSocket] Reconnecting in ${RECONNECT_INTERVAL}ms...`);
             reconnectTimeoutRef.current = setTimeout(() => {
               connect();
             }, RECONNECT_INTERVAL);
@@ -288,8 +327,7 @@ export function useWebSocket(): UseWebSocketReturn {
         };
 
         wsRef.current = ws;
-      } catch (error) {
-        console.error('[WebSocket] Connection failed', error);
+      } catch {
         isConnectingRef.current = false;
         reconnectTimeoutRef.current = setTimeout(() => {
           connect();

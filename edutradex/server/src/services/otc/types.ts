@@ -106,7 +106,7 @@ export interface InterventionDecision {
 // SCHEDULER TYPES
 // ==========================================
 
-export type PriceMode = 'REAL' | 'OTC' | 'ANCHORING';
+export type PriceMode = 'REAL' | 'OTC' | 'ANCHORING' | 'SYNTHETIC' | 'SEEDED';
 
 export interface MarketSession {
   isOpen: boolean;
@@ -394,4 +394,77 @@ export interface InterventionLogFilters {
   to?: Date;
   page?: number;
   limit?: number;
+}
+
+// ==========================================
+// SYNTHETIC HISTORY GENERATOR TYPES
+// ==========================================
+
+/**
+ * Configuration for synthetic history generation
+ */
+export interface SyntheticGeneratorConfig {
+  symbol: string;
+  anchorPrice: number;
+  anchorTimestamp: Date;
+  candleCount: number;
+  resolutionSeconds: number;
+  marketType: 'FOREX' | 'CRYPTO';
+  pipSize: number;
+  baseVolatility: number;
+}
+
+/**
+ * Wave state for backwards generation
+ */
+export interface SyntheticWaveState {
+  direction: 1 | -1;
+  remainingCandles: number;
+  targetPips: number;
+  progressPips: number;
+  inPullback: boolean;
+  pullbackRemaining: number;
+  pullbackDirection: 1 | -1;
+}
+
+/**
+ * Generated synthetic candle
+ */
+export interface SyntheticCandle {
+  timestamp: Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+/**
+ * Result of synthetic history generation
+ */
+export interface SyntheticGenerationResult {
+  symbol: string;
+  candlesGenerated: number;
+  oldestTimestamp: Date;
+  newestTimestamp: Date;
+  priceRange: { min: number; max: number };
+  anchorPrice: number;
+  executionTimeMs: number;
+}
+
+/**
+ * Options for synthetic history generation
+ */
+export interface SyntheticGenerationOptions {
+  candleCount?: number;
+  resolutionSeconds?: number;
+}
+
+/**
+ * Anchor point for backwards generation
+ */
+export interface AnchorPoint {
+  price: number;
+  timestamp: Date;
+  source: 'EXISTING_HISTORY' | 'LIVE_PRICE' | 'DEFAULT';
 }

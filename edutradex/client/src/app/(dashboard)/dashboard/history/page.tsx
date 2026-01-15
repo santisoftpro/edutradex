@@ -1,30 +1,31 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ArrowUp,
   ArrowDown,
   Calendar,
   Download,
   TrendingUp,
-  TrendingDown,
   Trash2,
   Loader2,
-  Wallet,
   ArrowDownLeft,
   ArrowUpRight,
   CheckCircle,
   XCircle,
   Clock,
   ChevronRight,
+  ChevronLeft,
   X,
   Smartphone,
   Bitcoin,
   Copy,
   Check,
+  RefreshCw,
+  Search,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { useTradeStore, useFilteredTrades, useFilteredStats, Trade } from '@/store/trade.store';
+import { useTradeStore, useFilteredTrades, Trade } from '@/store/trade.store';
 import { useAuthStore } from '@/store/auth.store';
 import { cn, formatCurrency } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -36,26 +37,41 @@ type TradeFilterType = 'all' | 'won' | 'lost';
 type StatusFilterType = 'all' | 'PENDING' | 'APPROVED' | 'REJECTED';
 type DateRangeType = 'all' | 'today' | '7d' | '30d';
 
+const ITEMS_PER_PAGE = 20;
+
 export default function HistoryPage() {
   const { isHydrated } = useAuthStore();
-  // Use filtered trades and stats - only shows data for current account type (LIVE or DEMO)
+  // Use filtered trades - only shows data for current account type (LIVE or DEMO)
   const trades = useFilteredTrades();
-  const stats = useFilteredStats();
   const clearHistory = useTradeStore((state) => state.clearHistory);
+  const syncFromApi = useTradeStore((state) => state.syncFromApi);
+
   const [activeTab, setActiveTab] = useState<TabType>('trades');
   const [tradeFilter, setTradeFilter] = useState<TradeFilterType>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>('all');
   const [dateRange, setDateRange] = useState<DateRangeType>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [clearHistoryEnabled, setClearHistoryEnabled] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Deposits & Withdrawals state
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isTradesLoading, setIsTradesLoading] = useState(true);
 
   // Detail modal
   const [selectedDeposit, setSelectedDeposit] = useState<Deposit | null>(null);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<Withdrawal | null>(null);
+
+  // Ref for search input debounce
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [tradeFilter, statusFilter, dateRange, searchQuery, activeTab]);
 
   useEffect(() => {
     const fetchSetting = async () => {
@@ -70,6 +86,21 @@ export default function HistoryPage() {
     };
     fetchSetting();
   }, []);
+
+  // Initial trades sync
+  useEffect(() => {
+    const initTrades = async () => {
+      setIsTradesLoading(true);
+      try {
+        await syncFromApi();
+      } finally {
+        setIsTradesLoading(false);
+      }
+    };
+    if (isHydrated) {
+      initTrades();
+    }
+  }, [isHydrated, syncFromApi]);
 
   const fetchDepositsAndWithdrawals = useCallback(async () => {
     setIsLoading(true);
@@ -92,6 +123,32 @@ export default function HistoryPage() {
       fetchDepositsAndWithdrawals();
     }
   }, [activeTab, fetchDepositsAndWithdrawals]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      if (activeTab === 'trades') {
+        await syncFromApi();
+        toast.success('Trades refreshed');
+      } else {
+        await fetchDepositsAndWithdrawals();
+        toast.success('Data refreshed');
+      }
+    } catch {
+      toast.error('Failed to refresh');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleSearchChange = (value: string) => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      setSearchQuery(value);
+    }, 300);
+  };
 
   const handleClearHistory = async () => {
     if (!confirm('Are you sure you want to clear all trade history? This action cannot be undone.')) {
@@ -121,17 +178,42 @@ export default function HistoryPage() {
     return cutoff;
   }, []);
 
+  // Closed trades (excluding active) - base for filtering
+  const closedTrades = useMemo(() => {
+    return trades.filter((trade) => trade.status !== 'active');
+  }, [trades]);
+
+  // Filtered trades based on all filters
   const filteredTrades = useMemo(() => {
     const cutoff = getDateCutoff(dateRange);
+    const query = searchQuery.toLowerCase().trim();
 
-    return trades.filter((trade) => {
-      if (trade.status === 'active') return false;
+    return closedTrades.filter((trade) => {
       if (tradeFilter === 'won' && trade.status !== 'won') return false;
       if (tradeFilter === 'lost' && trade.status !== 'lost') return false;
       if (cutoff && new Date(trade.createdAt) < cutoff) return false;
+      if (query && !trade.symbol.toLowerCase().includes(query)) return false;
       return true;
     });
-  }, [trades, tradeFilter, dateRange, getDateCutoff]);
+  }, [closedTrades, tradeFilter, dateRange, searchQuery, getDateCutoff]);
+
+  // Computed stats from filtered trades (updates with filters)
+  const filteredStats = useMemo(() => {
+    const wonTrades = filteredTrades.filter((t) => t.status === 'won').length;
+    const lostTrades = filteredTrades.filter((t) => t.status === 'lost').length;
+    const totalTrades = filteredTrades.length;
+    const totalProfit = filteredTrades.reduce((sum, t) => sum + (t.profit ?? 0), 0);
+    const winRate = totalTrades > 0 ? (wonTrades / totalTrades) * 100 : 0;
+
+    return { totalTrades, wonTrades, lostTrades, totalProfit, winRate };
+  }, [filteredTrades]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredTrades.length / ITEMS_PER_PAGE);
+  const paginatedTrades = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredTrades.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredTrades, currentPage]);
 
   const filteredDeposits = useMemo(() => {
     const cutoff = getDateCutoff(dateRange);
@@ -187,7 +269,16 @@ export default function HistoryPage() {
     ]);
 
     const csvContent = [headers.join(','), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(','))].join('\n');
-    const summary = ['', '', 'Summary', `Total Trades,${filteredTrades.length}`, `Profit,${filteredTrades.filter((t) => t.status === 'won').length}`, `Loss,${filteredTrades.filter((t) => t.status === 'lost').length}`, `Total Profit/Loss,$${filteredTrades.reduce((sum, t) => sum + (t.profit || 0), 0).toFixed(2)}`, `Profit Rate,${stats.winRate.toFixed(1)}%`].join('\n');
+    const summary = [
+      '',
+      '',
+      'Summary',
+      `Total Trades,${filteredStats.totalTrades}`,
+      `Profit,${filteredStats.wonTrades}`,
+      `Loss,${filteredStats.lostTrades}`,
+      `Total Profit/Loss,$${filteredStats.totalProfit.toFixed(2)}`,
+      `Win Rate,${filteredStats.winRate.toFixed(1)}%`
+    ].join('\n');
 
     const blob = new Blob([csvContent + '\n' + summary], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -210,11 +301,13 @@ export default function HistoryPage() {
     );
   }
 
-  const tabs: { id: TabType; label: string; icon: React.ReactNode; count: number }[] = [
-    { id: 'trades', label: 'Trades', icon: <TrendingUp className="h-4 w-4" />, count: stats.totalTrades },
-    { id: 'deposits', label: 'Deposits', icon: <ArrowDownLeft className="h-4 w-4" />, count: deposits.length },
-    { id: 'withdrawals', label: 'Withdrawals', icon: <ArrowUpRight className="h-4 w-4" />, count: withdrawals.length },
+  const tabs: { id: TabType; label: string; icon: React.ReactNode; count: number; filteredCount: number }[] = [
+    { id: 'trades', label: 'Trades', icon: <TrendingUp className="h-4 w-4" />, count: closedTrades.length, filteredCount: filteredTrades.length },
+    { id: 'deposits', label: 'Deposits', icon: <ArrowDownLeft className="h-4 w-4" />, count: deposits.length, filteredCount: filteredDeposits.length },
+    { id: 'withdrawals', label: 'Withdrawals', icon: <ArrowUpRight className="h-4 w-4" />, count: withdrawals.length, filteredCount: filteredWithdrawals.length },
   ];
+
+  const hasActiveFilters = tradeFilter !== 'all' || dateRange !== 'all' || searchQuery !== '' || statusFilter !== 'all';
 
   const dateOptions: { value: DateRangeType; label: string }[] = [
     { value: 'all', label: 'All Time' },
@@ -232,127 +325,160 @@ export default function HistoryPage() {
             <h1 className="text-lg sm:text-xl font-bold text-white">Transaction History</h1>
             <p className="text-slate-400 text-xs sm:text-sm">View your trades, deposits and withdrawals</p>
           </div>
-          {activeTab === 'trades' && (
-            <div className="flex items-center gap-2">
-              {clearHistoryEnabled && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-xs sm:text-sm rounded-lg transition-colors"
+            >
+              <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+            {activeTab === 'trades' && (
+              <>
+                {clearHistoryEnabled && (
+                  <button
+                    onClick={handleClearHistory}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs sm:text-sm rounded-lg transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Clear</span>
+                  </button>
+                )}
                 <button
-                  onClick={handleClearHistory}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs sm:text-sm rounded-lg transition-colors"
+                  onClick={handleExport}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs sm:text-sm rounded-lg transition-colors"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Clear</span>
+                  <Download className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Export</span>
                 </button>
-              )}
-              <button
-                onClick={handleExport}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs sm:text-sm rounded-lg transition-colors"
-              >
-                <Download className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Export</span>
-              </button>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Tabs */}
         <div className="flex gap-1 bg-slate-800/50 p-1 rounded-xl">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id);
-                setStatusFilter('all');
-              }}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all',
-                activeTab === tab.id
-                  ? 'bg-[#1079ff] text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-              )}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-              <span className={cn(
-                'ml-1 px-1.5 py-0.5 rounded-full text-[10px]',
-                activeTab === tab.id ? 'bg-[#0d66d0]' : 'bg-slate-700'
-              )}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
+          {tabs.map((tab) => {
+            const showFilteredCount = hasActiveFilters && activeTab === tab.id && tab.filteredCount !== tab.count;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setStatusFilter('all');
+                  setTradeFilter('all');
+                  setSearchQuery('');
+                }}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all',
+                  activeTab === tab.id
+                    ? 'bg-[#1079ff] text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                )}
+              >
+                {tab.icon}
+                <span className="hidden xs:inline sm:inline">{tab.label}</span>
+                <span className={cn(
+                  'px-1.5 py-0.5 rounded-full text-[10px]',
+                  activeTab === tab.id ? 'bg-[#0d66d0]' : 'bg-slate-700'
+                )}>
+                  {showFilteredCount ? `${tab.filteredCount}/${tab.count}` : tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Stats for Trades */}
         {activeTab === 'trades' && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3">
               <p className="text-slate-400 text-[10px] sm:text-xs">Total Trades</p>
-              <p className="text-lg sm:text-xl font-bold text-white">{stats.totalTrades}</p>
+              <p className="text-lg sm:text-xl font-bold text-white">{filteredStats.totalTrades}</p>
             </div>
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3">
               <p className="text-slate-400 text-[10px] sm:text-xs">Profit</p>
-              <p className="text-lg sm:text-xl font-bold text-emerald-400">{stats.wonTrades}</p>
+              <p className="text-lg sm:text-xl font-bold text-emerald-400">{filteredStats.wonTrades}</p>
             </div>
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3">
               <p className="text-slate-400 text-[10px] sm:text-xs">Loss</p>
-              <p className="text-lg sm:text-xl font-bold text-red-400">{stats.lostTrades}</p>
+              <p className="text-lg sm:text-xl font-bold text-red-400">{filteredStats.lostTrades}</p>
             </div>
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3">
               <p className="text-slate-400 text-[10px] sm:text-xs">Win Rate</p>
-              <p className="text-lg sm:text-xl font-bold text-white">{stats.winRate.toFixed(1)}%</p>
+              <p className="text-lg sm:text-xl font-bold text-white">{filteredStats.winRate.toFixed(1)}%</p>
+            </div>
+            <div className="col-span-2 sm:col-span-3 lg:col-span-1 bg-slate-800/50 border border-slate-700 rounded-xl p-3">
+              <p className="text-slate-400 text-[10px] sm:text-xs">Total P&L</p>
+              <p className={cn('text-lg sm:text-xl font-bold', filteredStats.totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                {filteredStats.totalProfit >= 0 ? '+' : ''}{formatCurrency(filteredStats.totalProfit)}
+              </p>
             </div>
           </div>
         )}
 
         {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           {/* Trade Filters */}
           {activeTab === 'trades' && (
-            <div className="flex gap-1">
-              {(['all', 'won', 'lost'] as TradeFilterType[]).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setTradeFilter(f)}
-                  className={cn(
-                    'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
-                    tradeFilter === f
-                      ? 'bg-[#1079ff] text-white'
-                      : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white'
-                  )}
-                >
-                  {f === 'all' ? 'All' : f === 'won' ? 'Profit' : 'Loss'}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+              <div className="flex gap-1 flex-shrink-0">
+                {(['all', 'won', 'lost'] as TradeFilterType[]).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setTradeFilter(f)}
+                    className={cn(
+                      'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                      tradeFilter === f
+                        ? 'bg-[#1079ff] text-white'
+                        : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white'
+                    )}
+                  >
+                    {f === 'all' ? 'All' : f === 'won' ? 'Profit' : 'Loss'}
+                  </button>
+                ))}
+              </div>
+              {/* Search by symbol */}
+              <div className="relative flex-shrink-0">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="w-28 sm:w-36 bg-slate-800/50 border border-slate-700 text-white pl-8 pr-2.5 py-1.5 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-[#1079ff] placeholder:text-slate-500"
+                />
+              </div>
             </div>
           )}
 
           {/* Status Filters for Deposits/Withdrawals */}
           {activeTab !== 'trades' && (
-            <div className="flex gap-1">
+            <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
               {(['all', 'PENDING', 'APPROVED', 'REJECTED'] as StatusFilterType[]).map((f) => (
                 <button
                   key={f}
                   onClick={() => setStatusFilter(f)}
                   className={cn(
-                    'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
+                    'px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0',
                     statusFilter === f
                       ? 'bg-[#1079ff] text-white'
                       : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-white'
                   )}
                 >
-                  {f === 'all' ? 'All' : f === 'PENDING' ? 'Pending' : f === 'APPROVED' ? 'Completed' : 'Rejected'}
+                  {f === 'all' ? 'All' : f === 'PENDING' ? 'Pending' : f === 'APPROVED' ? 'Done' : 'Rejected'}
                 </button>
               ))}
             </div>
           )}
 
           {/* Date Range */}
-          <div className="flex items-center gap-1.5 ml-auto">
+          <div className="flex items-center gap-1.5 sm:ml-auto">
             <Calendar className="h-3.5 w-3.5 text-slate-500 hidden sm:block" />
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value as DateRangeType)}
-              className="bg-slate-800/50 border border-slate-700 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-[#1079ff]"
+              className="flex-1 sm:flex-none bg-slate-800/50 border border-slate-700 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-[#1079ff]"
             >
               {dateOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -363,11 +489,36 @@ export default function HistoryPage() {
 
         {/* Content */}
         {activeTab === 'trades' && (
-          <TradesContent
-            trades={filteredTrades}
-            formatDate={formatDate}
-            formatDuration={formatDuration}
-          />
+          <>
+            <TradesContent
+              trades={paginatedTrades}
+              isLoading={isTradesLoading}
+              formatDate={formatDate}
+              formatDuration={formatDuration}
+            />
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm text-slate-400">
+                  Page <span className="text-white font-medium">{currentPage}</span> of <span className="text-white font-medium">{totalPages}</span>
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-2 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {activeTab === 'deposits' && (
@@ -415,13 +566,23 @@ export default function HistoryPage() {
 // Trades Content
 function TradesContent({
   trades,
+  isLoading,
   formatDate,
   formatDuration,
 }: {
   trades: Trade[];
+  isLoading: boolean;
   formatDate: (d: string) => string;
   formatDuration: (s: number) => string;
 }) {
+  if (isLoading) {
+    return (
+      <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 text-[#1079ff] animate-spin" />
+      </div>
+    );
+  }
+
   if (trades.length === 0) {
     return (
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 sm:p-12 text-center">

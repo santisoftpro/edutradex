@@ -1671,6 +1671,33 @@ class ApiClient {
     const response = await this.get<ApiResponse<{ symbol: string; hasSeededHistory: boolean }>>(`/admin/otc/history/has/${encodeURIComponent(symbol)}`);
     return response.data.hasSeededHistory;
   }
+
+  // ============= OTC SYNTHETIC HISTORY =============
+
+  async generateSyntheticHistory(symbol: string, options?: { candleCount?: number; resolutionSeconds?: number }): Promise<SyntheticGenerationResult> {
+    const response = await this.post<ApiResponse<SyntheticGenerationResult>>(`/admin/otc/synthetic/${encodeURIComponent(symbol)}`, options || {});
+    return response.data;
+  }
+
+  async generateAllSyntheticHistory(options?: { candleCount?: number; resolutionSeconds?: number }): Promise<SyntheticGenerationAllResult> {
+    const response = await this.post<ApiResponse<SyntheticGenerationAllResult>>('/admin/otc/synthetic/all', options || {});
+    return response.data;
+  }
+
+  async getSyntheticHistoryStats(symbol: string): Promise<SyntheticHistoryStats> {
+    const response = await this.get<ApiResponse<SyntheticHistoryStats>>(`/admin/otc/synthetic/stats/${encodeURIComponent(symbol)}`);
+    return response.data;
+  }
+
+  async hasSyntheticHistory(symbol: string): Promise<boolean> {
+    const response = await this.get<ApiResponse<{ symbol: string; hasSyntheticHistory: boolean }>>(`/admin/otc/synthetic/has/${encodeURIComponent(symbol)}`);
+    return response.data.hasSyntheticHistory;
+  }
+
+  async clearSyntheticHistory(symbol: string): Promise<{ symbol: string; deletedCandles: number }> {
+    const response = await this.delete<ApiResponse<{ symbol: string; deletedCandles: number }>>(`/admin/otc/synthetic/${encodeURIComponent(symbol)}`);
+    return response.data;
+  }
 }
 
 // Add types for copy trading
@@ -1997,6 +2024,33 @@ export interface SeedAllResult {
   total: number;
   marketType?: 'FOREX' | 'CRYPTO';
   results: SeedResult[];
+}
+
+// OTC Synthetic History Types
+export interface SyntheticGenerationResult {
+  symbol: string;
+  candlesGenerated: number;
+  oldestTimestamp: string;
+  newestTimestamp: string;
+  priceRange: { min: number; max: number };
+  anchorPrice: number;
+  executionTimeMs: number;
+}
+
+export interface SyntheticGenerationAllResult {
+  totalSymbols: number;
+  successful: number;
+  failed: number;
+  results: SyntheticGenerationResult[];
+  errors: Array<{ symbol: string; error: string }>;
+}
+
+export interface SyntheticHistoryStats {
+  symbol: string;
+  count: number;
+  oldest: string | null;
+  newest: string | null;
+  priceRange: { min: number; max: number } | null;
 }
 
 // ============= SuperAdmin Types =============

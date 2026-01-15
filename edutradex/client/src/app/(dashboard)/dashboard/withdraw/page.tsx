@@ -214,7 +214,9 @@ export default function WithdrawPage() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
 
-  const balance = user?.demoBalance || 0;
+  // Use correct balance based on account type (legacy naming: demoBalance = LIVE, practiceBalance = DEMO)
+  const isLiveAccount = user?.activeAccountType === 'LIVE';
+  const balance = isLiveAccount ? (user?.demoBalance || 0) : (user?.practiceBalance || 0);
 
   // Create dynamic schema based on deposit method and balance
   const isMobileMoneyMethod = depositMethod?.type === 'MOBILE_MONEY' || !!depositMethod?.mobileProvider;
@@ -470,18 +472,18 @@ export default function WithdrawPage() {
     return (
       <div className="min-h-screen bg-slate-900 p-3 sm:p-4 md:p-6">
         <div className="max-w-lg mx-auto">
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-center">
-            <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="h-8 w-8 text-amber-400" />
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 sm:p-6 text-center">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+              <AlertTriangle className="h-6 w-6 sm:h-8 sm:w-8 text-amber-400" />
             </div>
-            <h2 className="text-lg font-bold text-white mb-2">No Deposit Found</h2>
-            <p className="text-slate-400 text-sm mb-4">
+            <h2 className="text-base sm:text-lg font-bold text-white mb-2">No Deposit Found</h2>
+            <p className="text-slate-400 text-xs sm:text-sm mb-4">
               You need to make a deposit first before you can withdraw funds.
               Your withdrawal method will be the same as your deposit method.
             </p>
             <a
               href="/dashboard/deposit"
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white font-medium rounded-lg transition-all"
+              className="inline-flex items-center gap-2 px-5 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-sm font-medium rounded-lg transition-all"
             >
               Make a Deposit
               <ArrowRight className="h-4 w-4" />
@@ -502,39 +504,39 @@ export default function WithdrawPage() {
     return (
       <div className="min-h-screen bg-slate-900 p-3 sm:p-4 md:p-6">
         <div className="max-w-lg mx-auto">
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Shield className="h-8 w-8 text-amber-400" />
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 sm:p-6">
+            <div className="text-center mb-4 sm:mb-6">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-amber-400" />
               </div>
-              <h2 className="text-lg font-bold text-white mb-2">Verification Required</h2>
-              <p className="text-slate-400 text-sm">
+              <h2 className="text-base sm:text-lg font-bold text-white mb-2">Verification Required</h2>
+              <p className="text-slate-400 text-xs sm:text-sm">
                 Complete the following verifications to withdraw funds
               </p>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               {/* Email Verification */}
               <div className={cn(
-                'flex items-center gap-4 p-4 rounded-xl border transition-all',
+                'flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-all',
                 emailVerified
                   ? 'bg-emerald-500/10 border-emerald-500/30'
                   : 'bg-slate-800 border-slate-700'
               )}>
                 <div className={cn(
-                  'w-10 h-10 rounded-full flex items-center justify-center',
+                  'w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0',
                   emailVerified ? 'bg-emerald-500/20' : 'bg-amber-500/20'
                 )}>
                   {emailVerified ? (
-                    <CheckCircle className="h-5 w-5 text-emerald-400" />
+                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-400" />
                   ) : (
-                    <Mail className="h-5 w-5 text-amber-400" />
+                    <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-amber-400" />
                   )}
                 </div>
-                <div className="flex-1">
-                  <p className="text-white font-medium text-sm">Email Verification</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-medium text-xs sm:text-sm">Email Verification</p>
                   <p className={cn(
-                    'text-xs',
+                    'text-[10px] sm:text-xs',
                     emailVerified ? 'text-emerald-400' : 'text-slate-400'
                   )}>
                     {emailVerified ? 'Verified' : 'Verify your email address'}
@@ -543,7 +545,7 @@ export default function WithdrawPage() {
                 {!emailVerified && (
                   <a
                     href="/dashboard/profile"
-                    className="px-3 py-1.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-xs font-medium rounded-lg transition-all"
+                    className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-[10px] sm:text-xs font-medium rounded-lg transition-all shrink-0"
                   >
                     Verify
                   </a>
@@ -552,25 +554,25 @@ export default function WithdrawPage() {
 
               {/* KYC Verification */}
               <div className={cn(
-                'flex items-center gap-4 p-4 rounded-xl border transition-all',
+                'flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-all',
                 kycApproved
                   ? 'bg-emerald-500/10 border-emerald-500/30'
                   : 'bg-slate-800 border-slate-700'
               )}>
                 <div className={cn(
-                  'w-10 h-10 rounded-full flex items-center justify-center',
+                  'w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0',
                   kycApproved ? 'bg-emerald-500/20' : 'bg-amber-500/20'
                 )}>
                   {kycApproved ? (
-                    <CheckCircle className="h-5 w-5 text-emerald-400" />
+                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-400" />
                   ) : (
-                    <Shield className="h-5 w-5 text-amber-400" />
+                    <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-amber-400" />
                   )}
                 </div>
-                <div className="flex-1">
-                  <p className="text-white font-medium text-sm">KYC Verification</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-medium text-xs sm:text-sm">KYC Verification</p>
                   <p className={cn(
-                    'text-xs',
+                    'text-[10px] sm:text-xs',
                     kycApproved ? 'text-emerald-400' : 'text-slate-400'
                   )}>
                     {kycApproved
@@ -585,7 +587,7 @@ export default function WithdrawPage() {
                 {!kycApproved && (
                   <a
                     href="/dashboard/profile"
-                    className="px-3 py-1.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-xs font-medium rounded-lg transition-all"
+                    className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-[#1079ff] to-[#092ab2] hover:from-[#3a93ff] hover:to-[#1079ff] text-white text-[10px] sm:text-xs font-medium rounded-lg transition-all shrink-0"
                   >
                     {user?.kycStatus === 'PENDING' ? 'View' : 'Complete'}
                   </a>
@@ -593,11 +595,11 @@ export default function WithdrawPage() {
               </div>
             </div>
 
-            <div className="mt-6 p-4 bg-blue-900/20 border border-blue-900/30 rounded-lg flex items-start gap-3">
-              <Info className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
-              <div className="text-sm text-blue-300">
+            <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-900/20 border border-blue-900/30 rounded-lg flex items-start gap-2 sm:gap-3">
+              <Info className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400 shrink-0 mt-0.5" />
+              <div className="text-xs sm:text-sm text-blue-300">
                 <p className="font-medium mb-1">Why is this required?</p>
-                <p className="text-xs text-blue-300/80">
+                <p className="text-[10px] sm:text-xs text-blue-300/80">
                   These verifications help protect your account and ensure secure withdrawals.
                   Once verified, you can withdraw funds anytime.
                 </p>
@@ -619,13 +621,29 @@ export default function WithdrawPage() {
         </div>
 
         {/* Balance Card */}
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 flex items-center justify-between">
+        <div className={cn(
+          "bg-slate-800/50 border rounded-xl p-3 flex items-center justify-between",
+          isLiveAccount ? "border-slate-700" : "border-amber-500/30"
+        )}>
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="p-1.5 sm:p-2 bg-[#1079ff]/20 rounded-lg">
-              <Wallet className="h-4 w-4 text-[#1079ff]" />
+            <div className={cn(
+              "p-1.5 sm:p-2 rounded-lg",
+              isLiveAccount ? "bg-[#1079ff]/20" : "bg-amber-500/20"
+            )}>
+              <Wallet className={cn("h-4 w-4", isLiveAccount ? "text-[#1079ff]" : "text-amber-400")} />
             </div>
             <div>
-              <p className="text-slate-400 text-[10px] sm:text-xs">Available</p>
+              <div className="flex items-center gap-2">
+                <p className="text-slate-400 text-[10px] sm:text-xs">Available Balance</p>
+                <span className={cn(
+                  "px-1.5 py-0.5 rounded text-[8px] sm:text-[10px] font-semibold",
+                  isLiveAccount
+                    ? "bg-[#1079ff]/20 text-[#1079ff]"
+                    : "bg-amber-500/20 text-amber-400"
+                )}>
+                  {isLiveAccount ? "LIVE" : "DEMO"}
+                </span>
+              </div>
               <p className="text-white text-base sm:text-lg font-bold">{formatCurrency(balance)}</p>
             </div>
           </div>
@@ -663,33 +681,33 @@ export default function WithdrawPage() {
                 </div>
 
                 {/* Method Card */}
-                <div className="bg-slate-900 border border-[#1079ff]/50 rounded-xl p-4 mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden', depositMethod.iconBg)}>
+                <div className="bg-slate-900 border border-[#1079ff]/50 rounded-xl p-3 sm:p-4 mb-4">
+                  <div className="flex items-center gap-2.5 sm:gap-3">
+                    <div className={cn('w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center overflow-hidden shrink-0', depositMethod.iconBg)}>
                       {depositMethod.iconUrl ? (
-                        <img src={depositMethod.iconUrl} alt={depositMethod.name} className="w-8 h-8 object-contain" />
+                        <img src={depositMethod.iconUrl} alt={depositMethod.name} className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
                       ) : (
-                        <span className="text-white font-bold text-sm">
+                        <span className="text-white font-bold text-xs sm:text-sm">
                           {isMobileMoneyMethod
                             ? getProviderIconText(depositMethod.mobileProvider)
                             : depositMethod.cryptoCurrency?.slice(0, 3) || '?'}
                         </span>
                       )}
                     </div>
-                    <div className="flex-1">
-                      <p className="text-white font-semibold">{depositMethod.name}</p>
-                      <p className="text-slate-400 text-sm">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-semibold text-sm sm:text-base">{depositMethod.name}</p>
+                      <p className="text-slate-400 text-xs sm:text-sm">
                         {isMobileMoneyMethod ? 'Mobile Money' : 'Cryptocurrency'}
                       </p>
                       {depositMethod.network && (
-                        <p className="text-[#1079ff] text-xs">Network: {depositMethod.network}</p>
+                        <p className="text-[#1079ff] text-[10px] sm:text-xs">Network: {depositMethod.network}</p>
                       )}
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       {isMobileMoneyMethod ? (
-                        <Smartphone className="h-6 w-6 text-[#1079ff]" />
+                        <Smartphone className="h-5 w-5 sm:h-6 sm:w-6 text-[#1079ff]" />
                       ) : (
-                        <Bitcoin className="h-6 w-6 text-[#1079ff]" />
+                        <Bitcoin className="h-5 w-5 sm:h-6 sm:w-6 text-[#1079ff]" />
                       )}
                     </div>
                   </div>
@@ -700,7 +718,7 @@ export default function WithdrawPage() {
                   <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
                   <p className="text-blue-300 text-xs">
                     For security, withdrawals must use the same method as your deposit.
-                    Min: ${depositMethod.minAmount} • Processing: {depositMethod.processingTime}
+                    Min: ${depositMethod.minAmount} • Max: {formatCurrency(depositMethod.maxAmount || 100000)} • Processing: {depositMethod.processingTime}
                   </p>
                 </div>
 
@@ -734,7 +752,9 @@ export default function WithdrawPage() {
                     </div>
                     <div>
                       <p className="text-white font-medium text-xs sm:text-sm">{depositMethod.name}</p>
-                      <p className="text-slate-500 text-[10px] sm:text-xs">Min: ${depositMethod.minAmount}</p>
+                      <p className="text-slate-500 text-[10px] sm:text-xs">
+                        ${depositMethod.minAmount} - {formatCurrency(depositMethod.maxAmount || 100000)}
+                      </p>
                     </div>
                   </div>
                 </div>

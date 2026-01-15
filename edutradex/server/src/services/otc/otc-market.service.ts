@@ -28,18 +28,29 @@ import {
   SymbolExposure,
   OTCActivityEvent
 } from './types.js';
+import { config } from '../../config/env.js';
 
-// Price update interval (1000ms = 1 update per second for natural movement)
-const PRICE_UPDATE_INTERVAL_MS = 1000;
+// OTC intervals from configuration (with fallback defaults)
+const PRICE_UPDATE_INTERVAL_MS = config.otc.priceUpdateInterval;
+const PRICE_HISTORY_SAVE_INTERVAL_MS = config.otc.priceHistorySaveInterval;
+const CLEANUP_INTERVAL_MS = config.otc.cleanupInterval;
+const DIAGNOSTIC_LOG_INTERVAL_MS = config.otc.diagnosticLogInterval;
 
-// Price history save interval (every 5 seconds for more frequent data points)
-const PRICE_HISTORY_SAVE_INTERVAL_MS = 5000;
-
-// Cleanup interval for expired trades (every minute)
-const CLEANUP_INTERVAL_MS = 60000;
-
-// Diagnostic logging interval (every 30 seconds)
-const DIAGNOSTIC_LOG_INTERVAL_MS = 30000;
+/**
+ * OTC System Metrics for monitoring performance
+ */
+interface OTCMetrics {
+  priceUpdates: number;
+  priceUpdateErrors: number;
+  historySaves: number;
+  historySaveErrors: number;
+  settlementSuccesses: number;
+  settlementFailures: number;
+  avgPriceUpdateTimeMs: number;
+  lastPriceUpdateTimeMs: number;
+  uptime: number;
+  startTime: number;
+}
 
 export class OTCMarketService {
   private isInitialized = false;
@@ -52,6 +63,22 @@ export class OTCMarketService {
   private realPrices: Map<string, number> = new Map();
   private priceUpdateCount = 0;
   private lastDiagnosticTime = Date.now();
+
+  // Metrics tracking
+  private metrics: OTCMetrics = {
+    priceUpdates: 0,
+    priceUpdateErrors: 0,
+    historySaves: 0,
+    historySaveErrors: 0,
+    settlementSuccesses: 0,
+    settlementFailures: 0,
+    avgPriceUpdateTimeMs: 0,
+    lastPriceUpdateTimeMs: 0,
+    uptime: 0,
+    startTime: 0,
+  };
+  private priceUpdateTimes: number[] = [];
+  private readonly MAX_METRIC_SAMPLES = 100;
 
   // Services
   private priceGenerator: OTCPriceGenerator = otcPriceGenerator;
@@ -252,17 +279,37 @@ export class OTCMarketService {
 
   /**
    * Get default price for a symbol (fallback)
+   * Throws error if no default price is configured to prevent invalid pricing
    */
   private getDefaultPrice(baseSymbol: string): number {
     const defaults: Record<string, number> = {
       'EUR/USD': 1.0850,
       'GBP/USD': 1.2650,
       'USD/JPY': 150.50,
+      'USD/CHF': 0.8850,
+      'AUD/USD': 0.6550,
+      'USD/CAD': 1.3650,
+      'NZD/USD': 0.5950,
+      'EUR/GBP': 0.8580,
+      'EUR/JPY': 163.30,
+      'GBP/JPY': 190.40,
       'BTC/USD': 95000,
       'ETH/USD': 3400,
-      'SOL/USD': 180
+      'SOL/USD': 180,
+      'XRP/USD': 2.20,
+      'BNB/USD': 680,
+      'ADA/USD': 0.95,
+      'DOGE/USD': 0.35,
+      'DOT/USD': 7.50,
+      'LTC/USD': 105,
+      'LINK/USD': 22
     };
-    return defaults[baseSymbol] || 1.0;
+    const price = defaults[baseSymbol];
+    if (price === undefined) {
+      logger.error(`[OTCMarket] No default price configured for ${baseSymbol}`);
+      throw new Error(`No default price configured for symbol: ${baseSymbol}`);
+    }
+    return price;
   }
 
   /**
@@ -279,29 +326,54 @@ export class OTCMarketService {
       return;
     }
 
+    // Initialize metrics
+    this.metrics.startTime = Date.now();
+
     // Log active configs
     const activeSymbols = Array.from(this.configs.keys());
     logger.info(`[OTCMarket] Starting with ${activeSymbols.length} active symbols: ${activeSymbols.join(', ')}`);
 
-    // Start price update loop
+    // Start price update loop with error handling and metrics
     this.priceUpdateInterval = setInterval(() => {
-      this.updatePrices();
+      const startTime = Date.now();
+      try {
+        this.updatePrices();
+        this.trackPriceUpdateTime(Date.now() - startTime);
+        this.metrics.priceUpdates++;
+      } catch (error) {
+        this.metrics.priceUpdateErrors++;
+        logger.error('[OTCMarket] Price update failed', { error });
+      }
     }, PRICE_UPDATE_INTERVAL_MS);
 
-    // Start history save loop
-    this.historySaveInterval = setInterval(() => {
-      this.savePriceHistory();
+    // Start history save loop with error handling and metrics
+    this.historySaveInterval = setInterval(async () => {
+      try {
+        await this.savePriceHistory();
+        this.metrics.historySaves++;
+      } catch (error) {
+        this.metrics.historySaveErrors++;
+        logger.error('[OTCMarket] History save failed', { error });
+      }
     }, PRICE_HISTORY_SAVE_INTERVAL_MS);
 
-    // Start cleanup loop - cleans expired trades and old price history
-    this.cleanupInterval = setInterval(() => {
-      this.riskEngine.cleanupExpiredTrades();
-      this.cleanupOldPriceHistory();
+    // Start cleanup loop with error handling - cleans expired trades and old price history
+    this.cleanupInterval = setInterval(async () => {
+      try {
+        this.riskEngine.cleanupExpiredTrades();
+        await this.cleanupOldPriceHistory();
+      } catch (error) {
+        logger.error('[OTCMarket] Cleanup failed', { error });
+      }
     }, CLEANUP_INTERVAL_MS);
 
-    // Start diagnostic logging loop
+    // Start diagnostic logging loop with error handling
     this.diagnosticInterval = setInterval(() => {
-      this.logDiagnostics();
+      try {
+        this.logDiagnostics();
+      } catch (error) {
+        logger.error('[OTCMarket] Diagnostics failed', { error });
+      }
     }, DIAGNOSTIC_LOG_INTERVAL_MS);
 
     this.isRunning = true;
@@ -597,7 +669,10 @@ export class OTCMarketService {
 
   /**
    * Cleanup old price history data to keep database performant
-   * Retains last 24 hours of data per symbol (sufficient for charts)
+   * Retains last 24 hours of OTC-generated data per symbol
+   *
+   * IMPORTANT: Preserves SYNTHETIC and SEEDED data - these are historical
+   * candles needed for chart display and should not be deleted.
    *
    * Uses batched DELETE to avoid long-running transactions and reduce lock contention.
    * Deleting 1000 rows at a time keeps each transaction fast (~50-100ms).
@@ -610,11 +685,13 @@ export class OTCMarketService {
     try {
       for (let i = 0; i < MAX_BATCHES; i++) {
         // Delete a batch of old records using CTID for efficient deletion
+        // CRITICAL: Exclude SYNTHETIC and SEEDED data from cleanup
         const result = await query(
           `DELETE FROM "OTCPriceHistory"
            WHERE ctid IN (
              SELECT ctid FROM "OTCPriceHistory"
              WHERE timestamp < NOW() - INTERVAL '24 hours'
+               AND "priceMode" NOT IN ('SYNTHETIC', 'SEEDED')
              LIMIT $1
            )`,
           [BATCH_SIZE]
@@ -779,8 +856,25 @@ export class OTCMarketService {
     return this.configs.has(symbol);
   }
 
+  // Whitelist of allowed updatable fields for OTC config
+  private static readonly ALLOWED_CONFIG_FIELDS = new Set([
+    'name',
+    'isEnabled',
+    'riskEnabled',
+    'baseVolatility',
+    'pipSize',
+    'spreadPips',
+    'maxExposure',
+    'targetWinRate',
+    'influenceStrength',
+    'payoutPercent',
+    'minTradeAmount',
+    'maxTradeAmount'
+  ]);
+
   /**
    * Update OTC configuration (admin)
+   * Uses whitelist approach to prevent SQL injection
    */
   async updateConfig(symbol: string, updates: Partial<OTCConfigRow>): Promise<void> {
     const config = this.configs.get(symbol);
@@ -788,20 +882,27 @@ export class OTCMarketService {
       throw new Error(`OTC config not found for symbol: ${symbol}`);
     }
 
-    // Build update query dynamically
+    // Build update query using whitelist validation
     const fields: string[] = [];
     const values: any[] = [];
     let paramIndex = 1;
 
     for (const [key, value] of Object.entries(updates)) {
-      if (key !== 'id' && key !== 'symbol' && key !== 'createdAt') {
+      // Only allow whitelisted fields to be updated
+      if (OTCMarketService.ALLOWED_CONFIG_FIELDS.has(key)) {
         fields.push(`"${key}" = $${paramIndex}`);
         values.push(value);
         paramIndex++;
+      } else if (key !== 'id' && key !== 'symbol' && key !== 'createdAt' && key !== 'updatedAt') {
+        // Log attempted update of non-whitelisted field
+        logger.warn('[OTCMarket] Attempted to update non-whitelisted field', { symbol, field: key });
       }
     }
 
-    if (fields.length === 0) return;
+    if (fields.length === 0) {
+      logger.warn('[OTCMarket] No valid fields to update', { symbol, attempted: Object.keys(updates) });
+      return;
+    }
 
     values.push(symbol);
 
@@ -824,6 +925,12 @@ export class OTCMarketService {
     logger.info(`[OTCMarket] Config updated for ${symbol}`, updates);
   }
 
+  // Valid OTC symbol pattern: BASE/QUOTE-OTC (e.g., EUR/USD-OTC, BTC/USD-OTC)
+  private static readonly OTC_SYMBOL_PATTERN = /^[A-Z]{2,6}\/[A-Z]{2,6}-OTC$/;
+
+  // Valid base symbol pattern: BASE/QUOTE (e.g., EUR/USD, BTC/USD)
+  private static readonly BASE_SYMBOL_PATTERN = /^[A-Z]{2,6}\/[A-Z]{2,6}$/;
+
   /**
    * Create a new OTC configuration
    */
@@ -833,6 +940,28 @@ export class OTCMarketService {
     marketType: string;
     name: string;
   }): Promise<OTCConfigRow> {
+    // Validate OTC symbol format
+    if (!OTCMarketService.OTC_SYMBOL_PATTERN.test(config.symbol)) {
+      throw new Error(`Invalid OTC symbol format: ${config.symbol}. Expected format: BASE/QUOTE-OTC (e.g., EUR/USD-OTC)`);
+    }
+
+    // Validate base symbol format
+    if (!OTCMarketService.BASE_SYMBOL_PATTERN.test(config.baseSymbol)) {
+      throw new Error(`Invalid base symbol format: ${config.baseSymbol}. Expected format: BASE/QUOTE (e.g., EUR/USD)`);
+    }
+
+    // Validate market type
+    const validMarketTypes = ['FOREX', 'CRYPTO'];
+    if (!validMarketTypes.includes(config.marketType)) {
+      throw new Error(`Invalid market type: ${config.marketType}. Must be one of: ${validMarketTypes.join(', ')}`);
+    }
+
+    // Validate symbol matches base symbol
+    const expectedSymbol = `${config.baseSymbol}-OTC`;
+    if (config.symbol !== expectedSymbol) {
+      throw new Error(`Symbol mismatch: ${config.symbol} should be ${expectedSymbol} for base symbol ${config.baseSymbol}`);
+    }
+
     const result = await queryOne<OTCConfigRow>(`
       INSERT INTO "OTCConfig" (
         id, symbol, "baseSymbol", "marketType", name
@@ -1062,6 +1191,86 @@ export class OTCMarketService {
       }));
 
     return bars;
+  }
+
+  // ==========================================
+  // METRICS TRACKING
+  // ==========================================
+
+  /**
+   * Track price update timing for performance monitoring
+   */
+  private trackPriceUpdateTime(timeMs: number): void {
+    this.priceUpdateTimes.push(timeMs);
+    this.metrics.lastPriceUpdateTimeMs = timeMs;
+
+    // Keep only recent samples
+    if (this.priceUpdateTimes.length > this.MAX_METRIC_SAMPLES) {
+      this.priceUpdateTimes.shift();
+    }
+
+    // Calculate rolling average
+    const sum = this.priceUpdateTimes.reduce((a, b) => a + b, 0);
+    this.metrics.avgPriceUpdateTimeMs = Math.round(sum / this.priceUpdateTimes.length * 100) / 100;
+  }
+
+  /**
+   * Record a successful trade settlement
+   */
+  recordSettlementSuccess(): void {
+    this.metrics.settlementSuccesses++;
+  }
+
+  /**
+   * Record a failed trade settlement
+   */
+  recordSettlementFailure(): void {
+    this.metrics.settlementFailures++;
+  }
+
+  /**
+   * Get current OTC system metrics
+   */
+  getMetrics(): OTCMetrics & {
+    settlementSuccessRate: number;
+    errorRate: number;
+    symbolCount: number;
+  } {
+    const now = Date.now();
+    const totalSettlements = this.metrics.settlementSuccesses + this.metrics.settlementFailures;
+    const totalPriceOperations = this.metrics.priceUpdates + this.metrics.priceUpdateErrors;
+
+    return {
+      ...this.metrics,
+      uptime: this.metrics.startTime > 0 ? now - this.metrics.startTime : 0,
+      settlementSuccessRate: totalSettlements > 0
+        ? Math.round((this.metrics.settlementSuccesses / totalSettlements) * 10000) / 100
+        : 100,
+      errorRate: totalPriceOperations > 0
+        ? Math.round((this.metrics.priceUpdateErrors / totalPriceOperations) * 10000) / 100
+        : 0,
+      symbolCount: this.configs.size,
+    };
+  }
+
+  /**
+   * Reset metrics (useful for testing or after maintenance)
+   */
+  resetMetrics(): void {
+    this.metrics = {
+      priceUpdates: 0,
+      priceUpdateErrors: 0,
+      historySaves: 0,
+      historySaveErrors: 0,
+      settlementSuccesses: 0,
+      settlementFailures: 0,
+      avgPriceUpdateTimeMs: 0,
+      lastPriceUpdateTimeMs: 0,
+      uptime: 0,
+      startTime: this.isRunning ? Date.now() : 0,
+    };
+    this.priceUpdateTimes = [];
+    logger.info('[OTCMarket] Metrics reset');
   }
 }
 

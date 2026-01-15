@@ -273,8 +273,8 @@ class AdminService {
   }
 
   async updateUserStatus(userId: string, isActive: boolean): Promise<{ success: boolean }> {
-    const user = await queryOne<{ role: string }>(
-      `SELECT role FROM "User" WHERE id = $1`,
+    const user = await queryOne<{ role: string; isProtected: boolean }>(
+      `SELECT role, "isProtected" FROM "User" WHERE id = $1`,
       [userId]
     );
 
@@ -282,8 +282,19 @@ class AdminService {
       throw new AdminServiceError('User not found', 404);
     }
 
+    // Protect SUPERADMIN accounts
+    if (user.role === 'SUPERADMIN') {
+      throw new AdminServiceError('Cannot modify SuperAdmin account status', 403);
+    }
+
+    // Protect ADMIN accounts
     if (user.role === 'ADMIN') {
-      throw new AdminServiceError('Cannot modify admin user status', 403);
+      throw new AdminServiceError('Cannot modify admin account status', 403);
+    }
+
+    // Protect accounts with isProtected flag
+    if (user.isProtected) {
+      throw new AdminServiceError('Cannot modify protected account status', 403);
     }
 
     await query(
@@ -301,13 +312,23 @@ class AdminService {
       throw new AdminServiceError('Invalid role', 400);
     }
 
-    const user = await queryOne<{ id: string }>(
-      `SELECT id FROM "User" WHERE id = $1`,
+    const user = await queryOne<{ id: string; role: string; isProtected: boolean }>(
+      `SELECT id, role, "isProtected" FROM "User" WHERE id = $1`,
       [userId]
     );
 
     if (!user) {
       throw new AdminServiceError('User not found', 404);
+    }
+
+    // Protect SUPERADMIN accounts from role changes
+    if (user.role === 'SUPERADMIN') {
+      throw new AdminServiceError('Cannot modify SuperAdmin role', 403);
+    }
+
+    // Protect accounts with isProtected flag
+    if (user.isProtected) {
+      throw new AdminServiceError('Cannot modify protected account role', 403);
     }
 
     await query(
@@ -321,13 +342,23 @@ class AdminService {
   }
 
   async resetUserBalance(userId: string, newBalance?: number): Promise<{ demoBalance: number }> {
-    const user = await queryOne<{ id: string }>(
-      `SELECT id FROM "User" WHERE id = $1`,
+    const user = await queryOne<{ id: string; role: string; isProtected: boolean }>(
+      `SELECT id, role, "isProtected" FROM "User" WHERE id = $1`,
       [userId]
     );
 
     if (!user) {
       throw new AdminServiceError('User not found', 404);
+    }
+
+    // Protect admin accounts from balance manipulation
+    if (user.role === 'SUPERADMIN' || user.role === 'ADMIN') {
+      throw new AdminServiceError('Cannot reset admin account balance', 403);
+    }
+
+    // Protect accounts with isProtected flag
+    if (user.isProtected) {
+      throw new AdminServiceError('Cannot reset protected account balance', 403);
     }
 
     const balance = newBalance ?? config.trading.defaultDemoBalance;
@@ -343,8 +374,8 @@ class AdminService {
   }
 
   async deleteUser(userId: string): Promise<{ success: boolean }> {
-    const user = await queryOne<{ role: string }>(
-      `SELECT role FROM "User" WHERE id = $1`,
+    const user = await queryOne<{ role: string; isProtected: boolean }>(
+      `SELECT role, "isProtected" FROM "User" WHERE id = $1`,
       [userId]
     );
 
@@ -352,8 +383,19 @@ class AdminService {
       throw new AdminServiceError('User not found', 404);
     }
 
+    // Protect SUPERADMIN accounts from deletion
+    if (user.role === 'SUPERADMIN') {
+      throw new AdminServiceError('Cannot delete SuperAdmin account', 403);
+    }
+
+    // Protect ADMIN accounts from deletion
     if (user.role === 'ADMIN') {
-      throw new AdminServiceError('Cannot delete admin user', 403);
+      throw new AdminServiceError('Cannot delete admin account', 403);
+    }
+
+    // Protect accounts with isProtected flag
+    if (user.isProtected) {
+      throw new AdminServiceError('Cannot delete protected account', 403);
     }
 
     await query(`DELETE FROM "User" WHERE id = $1`, [userId]);

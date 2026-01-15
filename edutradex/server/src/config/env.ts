@@ -47,6 +47,21 @@ const envSchema = z.object({
   SMTP_FROM_NAME: z.string().default('OptigoBroker'),
   SMTP_FROM_EMAIL: z.string().default('noreply@optigobroker.com'),
   EMAIL_VERIFICATION_ENABLED: z.string().default('false'),
+
+  // OTC Market Configuration (intervals in milliseconds)
+  OTC_PRICE_UPDATE_INTERVAL: z.string().default('1000'),
+  OTC_PRICE_HISTORY_SAVE_INTERVAL: z.string().default('5000'),
+  OTC_CLEANUP_INTERVAL: z.string().default('60000'),
+  OTC_DIAGNOSTIC_LOG_INTERVAL: z.string().default('30000'),
+
+  // WebSocket Configuration
+  WS_PING_INTERVAL: z.string().default('30000'),
+  WS_RECONNECT_INTERVAL: z.string().default('3000'),
+  WS_MAX_HISTORY_LENGTH: z.string().default('300'),
+
+  // Trade Settlement Configuration
+  TRADE_SETTLEMENT_CHECK_INTERVAL: z.string().default('10000'),
+  TRADE_SETTLEMENT_MAX_RETRIES: z.string().default('3'),
 });
 
 function validateEnv() {
@@ -114,5 +129,23 @@ export const config = {
     fromName: env.SMTP_FROM_NAME,
     fromEmail: env.SMTP_FROM_EMAIL,
     verificationEnabled: env.EMAIL_VERIFICATION_ENABLED === 'true',
+  },
+
+  otc: {
+    priceUpdateInterval: parseInt(env.OTC_PRICE_UPDATE_INTERVAL, 10),
+    priceHistorySaveInterval: parseInt(env.OTC_PRICE_HISTORY_SAVE_INTERVAL, 10),
+    cleanupInterval: parseInt(env.OTC_CLEANUP_INTERVAL, 10),
+    diagnosticLogInterval: parseInt(env.OTC_DIAGNOSTIC_LOG_INTERVAL, 10),
+  },
+
+  websocket: {
+    pingInterval: parseInt(env.WS_PING_INTERVAL, 10),
+    reconnectInterval: parseInt(env.WS_RECONNECT_INTERVAL, 10),
+    maxHistoryLength: parseInt(env.WS_MAX_HISTORY_LENGTH, 10),
+  },
+
+  tradeSettlement: {
+    checkInterval: parseInt(env.TRADE_SETTLEMENT_CHECK_INTERVAL, 10),
+    maxRetries: parseInt(env.TRADE_SETTLEMENT_MAX_RETRIES, 10),
   },
 };
