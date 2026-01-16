@@ -374,8 +374,6 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
 
   // Professional chart features state
   const [candleCountdown, setCandleCountdown] = useState<number>(0);
-  const [priceDirection, setPriceDirection] = useState<'up' | 'down' | 'none'>('none');
-  const [isPulsing, setIsPulsing] = useState(false);
   const [flashClass, setFlashClass] = useState<string>('');
   const [magnetMode, setMagnetMode] = useState(false);
   const [isClient, setIsClient] = useState(false);
@@ -2408,22 +2406,14 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
     const prevPrice = prevPriceRef.current;
 
     if (prevPrice !== 0 && price !== prevPrice) {
-      // Determine direction
+      // Determine direction and trigger flash animation
       const direction = price > prevPrice ? 'up' : 'down';
-      setPriceDirection(direction);
-
-      // Trigger pulse animation
-      setIsPulsing(true);
-      const pulseTimeout = setTimeout(() => setIsPulsing(false), 400);
-
-      // Trigger flash animation
       setFlashClass(direction === 'up' ? 'animate-flash-up' : 'animate-flash-down');
       const flashTimeout = setTimeout(() => setFlashClass(''), 250);
 
       prevPriceRef.current = price;
 
       return () => {
-        clearTimeout(pulseTimeout);
         clearTimeout(flashTimeout);
       };
     } else if (prevPrice === 0) {
@@ -2621,32 +2611,29 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
 
   return (
     <div className="h-full w-full flex flex-col bg-[#0f0f1a] relative">
-      {/* OHLC Info Panel - Top Right */}
+      {/* OHLC Info Panel - Desktop only, top left */}
       {ohlcInfo && (
-        <div className="absolute top-2 right-2 z-20 bg-gradient-to-b from-[#1e1e38]/95 to-[#1a1a2e]/95 border border-[#3d3d5c] rounded-xl px-3 py-2 backdrop-blur-sm shadow-xl">
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex flex-col">
-              <span className="text-gray-500 text-[10px]">O</span>
+        <div className="hidden md:block absolute top-2 left-2 z-20 bg-[#1a1a2e]/90 border border-[#2d2d44] rounded-lg px-2.5 py-1.5 backdrop-blur-sm">
+          <div className="flex items-center gap-3 text-[11px]">
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500">O</span>
               <span className="text-white font-mono">{formatPrice(ohlcInfo.open)}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="text-gray-500 text-[10px]">H</span>
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500">H</span>
               <span className="text-emerald-400 font-mono">{formatPrice(ohlcInfo.high)}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="text-gray-500 text-[10px]">L</span>
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500">L</span>
               <span className="text-red-400 font-mono">{formatPrice(ohlcInfo.low)}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="text-gray-500 text-[10px]">C</span>
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500">C</span>
               <span className="text-white font-mono">{formatPrice(ohlcInfo.close)}</span>
             </div>
-            <div className="flex flex-col border-l border-[#3d3d5c] pl-3">
-              <span className="text-gray-500 text-[10px]">Change</span>
-              <span className={`font-mono font-semibold ${ohlcInfo.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {ohlcInfo.change >= 0 ? '+' : ''}{ohlcInfo.changePercent.toFixed(2)}%
-              </span>
-            </div>
+            <span className={`font-mono font-semibold ${ohlcInfo.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {ohlcInfo.change >= 0 ? '+' : ''}{ohlcInfo.changePercent.toFixed(2)}%
+            </span>
           </div>
         </div>
       )}
@@ -2655,15 +2642,15 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
           PROFESSIONAL CHART UI ELEMENTS
           ============================================ */}
 
-      {/* Candle Countdown Timer */}
+      {/* Candle Countdown Timer - Top left on mobile, top right on desktop */}
       {currentPrice && (
-        <div className="absolute right-[90px] top-1/2 -translate-y-[60px] z-20">
-          <div className={`px-2.5 py-1.5 bg-gradient-to-r from-[#1e1e38] to-[#1a1a2e] border border-[#3d3d5c] rounded-lg shadow-lg ${candleCountdown <= 5 ? 'animate-countdown-pulse border-orange-500/50' : ''}`}>
-            <div className="flex items-center gap-1.5">
-              <svg className={`w-3 h-3 ${candleCountdown <= 5 ? 'text-orange-400' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="absolute left-2 md:left-auto md:right-2 top-2 z-20">
+          <div className={`px-2 py-1 bg-[#1a1a2e]/90 backdrop-blur-sm border rounded-md ${candleCountdown <= 5 ? 'border-orange-500/50' : 'border-[#2d2d44]'}`}>
+            <div className="flex items-center gap-1">
+              <svg className={`w-3 h-3 ${candleCountdown <= 5 ? 'text-orange-400' : 'text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className={`text-xs font-mono font-bold ${candleCountdown <= 5 ? 'text-orange-400' : 'text-gray-300'}`}>
+              <span className={`text-xs font-mono font-semibold ${candleCountdown <= 5 ? 'text-orange-400' : 'text-white'}`}>
                 {formatCountdown(candleCountdown)}
               </span>
             </div>
@@ -2673,14 +2660,6 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
 
 
 
-      {/* Gradient Overlay for Visual Depth */}
-      <div
-        className="absolute inset-0 pointer-events-none z-[1]"
-        style={{
-          background: 'linear-gradient(180deg, rgba(34, 197, 94, 0.02) 0%, transparent 30%, transparent 70%, rgba(239, 68, 68, 0.02) 100%)',
-          mixBlendMode: 'overlay',
-        }}
-      />
 
       {/* Mobile Chart Type Menu */}
       {showChartTypeMenu && (
@@ -3425,29 +3404,8 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
           </span>
         </div>
 
-        {/* Floating Price Badge */}
-        {currentPrice && isClient && (
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
-            <div className={`
-              px-3 py-2 rounded-lg backdrop-blur-sm border shadow-lg transition-all duration-150
-              ${priceDirection === 'up' 
-                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' 
-                : priceDirection === 'down'
-                ? 'bg-red-500/20 border-red-500/50 text-red-400'
-                : 'bg-[#1a1a2e]/80 border-[#2d2d44] text-white'}
-              ${isPulsing ? 'scale-105' : 'scale-100'}
-            `}>
-              <div className="text-lg font-bold font-mono">
-                {formatPrice(currentPrice.price)}
-              </div>
-              <div className={`text-xs font-medium ${
-                (currentPrice.changePercent ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
-              }`}>
-                {(currentPrice.changePercent ?? 0) >= 0 ? '+' : ''}{(currentPrice.changePercent ?? 0).toFixed(2)}%
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Current Price Line - minimal Pocket Option style */}
+        {/* Price is shown on the chart's price axis - no floating card needed */}
       </div>
 
       {/* RSI Panel */}
@@ -3495,15 +3453,15 @@ const PriceChartComponent = forwardRef<PriceChartHandle, PriceChartProps>(
               {[0, 1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
-                  className="w-3 bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-sm animate-pulse"
+                  className="w-3 bg-gradient-to-t from-blue-600 to-blue-400 rounded-sm animate-pulse"
                   style={{
                     height: `${30 + (i % 3) * 15}px`,
                     animationDelay: `${i * 0.15}s`,
                     animationDuration: '1.2s',
                   }}
                 >
-                  <div className="w-0.5 h-2 bg-emerald-300 mx-auto -mt-2" />
-                  <div className="w-0.5 h-2 bg-emerald-700 mx-auto mt-auto" />
+                  <div className="w-0.5 h-2 bg-blue-300 mx-auto -mt-2" />
+                  <div className="w-0.5 h-2 bg-blue-700 mx-auto mt-auto" />
                 </div>
               ))}
             </div>

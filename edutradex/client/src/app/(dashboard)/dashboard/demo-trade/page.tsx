@@ -396,20 +396,6 @@ export default function DemoTradePage() {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-[#0d0d1a] overflow-hidden">
-      {/* Demo Mode Banner - Desktop */}
-      <div className="hidden md:flex items-center justify-center gap-2 bg-amber-500/10 border-b border-amber-500/20 py-1.5 px-4">
-        <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-        <span className="text-amber-400 text-xs font-medium">
-          DEMO MODE - Practice trading with virtual funds (${getDemoBalance().toLocaleString()})
-        </span>
-        <a
-          href="/dashboard/trade"
-          className="ml-4 text-xs text-amber-400 hover:text-amber-300 underline underline-offset-2"
-        >
-          Switch to Real Trading
-        </a>
-      </div>
-
       {/* ===== DESKTOP LAYOUT ===== */}
       <div className="hidden md:block">
         <TradingHeader
@@ -422,20 +408,6 @@ export default function DemoTradePage() {
       </div>
 
       {/* ===== MOBILE LAYOUT ===== */}
-      {/* Demo Mode Banner - Mobile */}
-      <div className="md:hidden flex items-center justify-between bg-amber-500/10 border-b border-amber-500/20 py-2 px-3">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-          <span className="text-amber-400 text-xs font-medium">DEMO MODE</span>
-        </div>
-        <a
-          href="/dashboard/trade"
-          className="text-xs text-amber-400 hover:text-amber-300 underline underline-offset-2"
-        >
-          Go to Real
-        </a>
-      </div>
-
       {/* Mobile Asset Bar - replaces header on demo trade page */}
       <MobileAssetBar
         selectedAsset={selectedAsset}
@@ -447,6 +419,13 @@ export default function DemoTradePage() {
         drawnLinesCount={drawnLinesCount}
         onUndoDrawing={handleUndoDrawing}
         onClearDrawings={handleClearDrawings}
+        balance={getDemoBalance()}
+        accountType="DEMO"
+        onSwitchAccount={(type) => {
+          if (type === 'LIVE') {
+            window.location.href = '/dashboard/trade';
+          }
+        }}
       />
 
       {/* ===== MAIN CONTENT AREA ===== */}

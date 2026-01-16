@@ -201,68 +201,65 @@ function MobileTradingPanelComponent({
       )}>
         {/* Time, Amount, Profit Row */}
         <div className={cn(
-          "flex gap-2.5 px-3 pt-3",
+          "flex gap-2 px-3 pt-2",
           isDemoMode ? "border-t border-amber-500/20" : "border-t border-[#1a1a2e]"
         )}>
           {/* Time Input */}
           <button
             onClick={() => setShowTimeSheet(true)}
-            className="flex-1 flex items-center justify-between bg-[#1a1a2e]/80 border border-[#2d2d44]/60 rounded-xl px-3 py-2.5 active:bg-[#252542] transition-all"
+            className="flex-1 flex items-center justify-between bg-[#1a1a2e]/80 border border-[#2d2d44]/60 rounded-lg px-2.5 py-2 active:bg-[#252542] transition-all"
           >
             <div className="flex flex-col items-start">
-              <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-wide">Time</span>
-              <span className="text-white font-bold text-sm">{formatDuration(duration)}</span>
+              <span className="text-slate-500 text-[9px] font-semibold uppercase tracking-wide">Time</span>
+              <span className="text-white font-bold text-[13px]">{formatDuration(duration)}</span>
             </div>
-            <div className="w-8 h-8 rounded-lg bg-[#1079ff]/15 flex items-center justify-center">
-              <Clock className="h-4 w-4 text-[#1079ff]" />
+            <div className="w-7 h-7 rounded-md bg-[#1079ff]/15 flex items-center justify-center">
+              <Clock className="h-3.5 w-3.5 text-[#1079ff]" />
             </div>
           </button>
 
           {/* Amount Input */}
           <button
             onClick={() => setShowAmountSheet(true)}
-            className="flex-1 flex items-center justify-between bg-[#1a1a2e]/80 border border-[#2d2d44]/60 rounded-xl px-3 py-2.5 active:bg-[#252542] transition-all"
+            className="flex-1 flex items-center justify-between bg-[#1a1a2e]/80 border border-[#2d2d44]/60 rounded-lg px-2.5 py-2 active:bg-[#252542] transition-all"
           >
             <div className="flex flex-col items-start">
-              <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-wide">Amount</span>
-              <span className="text-white font-bold text-sm">${amount}</span>
+              <span className="text-slate-500 text-[9px] font-semibold uppercase tracking-wide">Amount</span>
+              <span className="text-white font-bold text-[13px]">${amount}</span>
             </div>
-            <div className="w-8 h-8 rounded-lg bg-[#1079ff]/15 flex items-center justify-center">
-              <DollarSign className="h-4 w-4 text-[#1079ff]" />
+            <div className="w-7 h-7 rounded-md bg-[#1079ff]/15 flex items-center justify-center">
+              <DollarSign className="h-3.5 w-3.5 text-[#1079ff]" />
             </div>
           </button>
 
           {/* Payout Display */}
-          <div className="flex flex-col items-center justify-center bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border border-emerald-500/30 rounded-xl px-3 py-2.5 min-w-[70px]">
-            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">Payout</span>
-            <span className="text-emerald-400 font-bold text-sm">+{payoutPercent}%</span>
+          <div className="flex flex-col items-center justify-center bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border border-emerald-500/30 rounded-lg px-2.5 py-2 min-w-[60px]">
+            <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-wide">Payout</span>
+            <span className="text-emerald-400 font-bold text-[13px]">+{payoutPercent}%</span>
           </div>
         </div>
 
         {/* Balance Warning */}
         {insufficientBalance && (
-          <div className="mx-3 mt-2 py-2 px-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
-              <span className="text-red-400 text-xs">!</span>
-            </div>
-            <span className="text-red-400 text-xs font-medium">
-              Need ${(amount - balance).toFixed(2)} more (Available: ${balance.toFixed(2)})
+          <div className="mx-3 mt-1.5 py-1.5 px-2.5 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-1.5">
+            <span className="text-red-400 text-[11px] font-medium">
+              Need ${(amount - balance).toFixed(2)} more
             </span>
           </div>
         )}
 
         {/* BUY and SELL Buttons */}
-        <div className="flex gap-2.5 px-3 py-2.5">
+        <div className="flex gap-2 px-3 py-2">
           <button
             onClick={() => handleTrade('UP')}
             disabled={isLoading || insufficientBalance || invalidAmount || isDisabled}
-            className="flex-1 py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-emerald-900/50 disabled:to-emerald-900/50 disabled:cursor-not-allowed rounded-xl font-bold text-white text-base flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-900/40 active:scale-[0.98]"
+            className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:from-emerald-900/50 disabled:to-emerald-900/50 disabled:cursor-not-allowed rounded-xl font-bold text-white text-sm flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-emerald-900/40 active:scale-[0.98]"
           >
             {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
-                <ArrowUp className="h-5 w-5" strokeWidth={3} />
+                <ArrowUp className="h-4 w-4" strokeWidth={3} />
                 BUY
               </>
             )}
@@ -270,13 +267,13 @@ function MobileTradingPanelComponent({
           <button
             onClick={() => handleTrade('DOWN')}
             disabled={isLoading || insufficientBalance || invalidAmount || isDisabled}
-            className="flex-1 py-3.5 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:from-red-900/50 disabled:to-red-900/50 disabled:cursor-not-allowed rounded-xl font-bold text-white text-base flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-900/40 active:scale-[0.98]"
+            className="flex-1 py-2.5 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:from-red-900/50 disabled:to-red-900/50 disabled:cursor-not-allowed rounded-xl font-bold text-white text-sm flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-red-900/40 active:scale-[0.98]"
           >
             {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
-                <ArrowDown className="h-5 w-5" strokeWidth={3} />
+                <ArrowDown className="h-4 w-4" strokeWidth={3} />
                 SELL
               </>
             )}
@@ -284,25 +281,25 @@ function MobileTradingPanelComponent({
         </div>
 
         {/* Inline Navigation - Trade & Copy */}
-        <div className="flex items-center justify-center gap-3 px-3 pb-3 pt-1">
+        <div className="flex items-center justify-center gap-2 px-3 pb-2">
           <button
             onClick={onOpenTrades}
-            className="flex items-center gap-2 px-5 py-2 rounded-full bg-[#1079ff]/15 border border-[#1079ff]/30 text-[#1079ff] text-xs font-semibold active:bg-[#1079ff]/25 transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#1079ff]/15 border border-[#1079ff]/30 text-[#1079ff] text-[11px] font-semibold active:bg-[#1079ff]/25 transition-all"
           >
-            <LineChart className="h-4 w-4" />
-            My Trades
+            <LineChart className="h-3.5 w-3.5" />
+            Trades
             {activeTradesCount > 0 && (
-              <span className="min-w-[20px] h-[20px] flex items-center justify-center bg-[#1079ff] text-white text-[10px] font-bold rounded-full px-1.5">
+              <span className="min-w-[18px] h-[18px] flex items-center justify-center bg-[#1079ff] text-white text-[9px] font-bold rounded-full px-1">
                 {activeTradesCount}
               </span>
             )}
           </button>
           <button
             onClick={goToCopy}
-            className="flex items-center gap-2 px-5 py-2 rounded-full bg-[#252542]/80 border border-[#3d3d5c]/50 text-slate-400 text-xs font-semibold active:bg-[#2d2d52] transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#252542]/80 border border-[#3d3d5c]/50 text-slate-400 text-[11px] font-semibold active:bg-[#2d2d52] transition-all"
           >
-            <Users className="h-4 w-4" />
-            Copy Trading
+            <Users className="h-3.5 w-3.5" />
+            Copy
           </button>
         </div>
       </div>

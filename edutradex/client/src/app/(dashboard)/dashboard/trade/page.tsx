@@ -430,6 +430,13 @@ export default function TradePage() {
         drawnLinesCount={drawnLinesCount}
         onUndoDrawing={handleUndoDrawing}
         onClearDrawings={handleClearDrawings}
+        balance={getActiveBalance()}
+        accountType={user?.activeAccountType || 'LIVE'}
+        onSwitchAccount={(type) => {
+          if (type === 'DEMO') {
+            window.location.href = '/dashboard/demo-trade';
+          }
+        }}
       />
 
       {/* ===== MAIN CONTENT AREA ===== */}

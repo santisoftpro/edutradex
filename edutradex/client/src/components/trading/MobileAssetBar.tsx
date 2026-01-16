@@ -19,6 +19,10 @@ interface MobileAssetBarProps {
   drawnLinesCount?: number;
   onUndoDrawing?: () => void;
   onClearDrawings?: () => void;
+  // Balance and account
+  balance?: number;
+  accountType?: 'LIVE' | 'DEMO';
+  onSwitchAccount?: (type: 'LIVE' | 'DEMO') => void;
 }
 
 function getAssetCategory(asset: MarketAsset): AssetCategory {
@@ -55,6 +59,9 @@ export function MobileAssetBar({
   drawnLinesCount = 0,
   onUndoDrawing,
   onClearDrawings,
+  balance,
+  accountType = 'LIVE',
+  onSwitchAccount,
 }: MobileAssetBarProps) {
   const [showAssetMenu, setShowAssetMenu] = useState(false);
   const [search, setSearch] = useState('');
@@ -359,9 +366,50 @@ export function MobileAssetBar({
         </div>
       </div>
 
+      {/* Balance & Account Row */}
+      {balance !== undefined && (
+        <div className="flex items-center justify-between px-3 py-1.5 border-t border-[#1a1a2e]">
+          {/* Balance Display */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-[#1a1a2e] rounded-lg px-2.5 py-1.5">
+              <span className="text-slate-400 text-[10px] font-medium">BAL</span>
+              <span className="text-white text-sm font-bold">${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          </div>
+
+          {/* Account Type Switcher */}
+          {onSwitchAccount && (
+            <div className="flex items-center bg-[#1a1a2e] rounded-lg p-0.5">
+              <button
+                onClick={() => onSwitchAccount('LIVE')}
+                className={cn(
+                  'px-3 py-1 rounded-md text-[11px] font-semibold transition-all',
+                  accountType === 'LIVE'
+                    ? 'bg-emerald-500 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                )}
+              >
+                LIVE
+              </button>
+              <button
+                onClick={() => onSwitchAccount('DEMO')}
+                className={cn(
+                  'px-3 py-1 rounded-md text-[11px] font-semibold transition-all',
+                  accountType === 'DEMO'
+                    ? 'bg-amber-500 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                )}
+              >
+                DEMO
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Price Display Row */}
       {currentPrice && (
-        <div className="flex items-center gap-2 px-3 pb-2">
+        <div className="flex items-center gap-2 px-3 pb-1.5">
           <span className="text-white text-sm font-medium">
             {currentPrice.price.toFixed(currentPrice.price > 100 ? 2 : 5)}
           </span>
