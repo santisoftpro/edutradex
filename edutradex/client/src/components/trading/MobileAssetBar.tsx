@@ -1,8 +1,39 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, TrendingUp, TrendingDown, Search, Loader2, Clock, MoreHorizontal, Undo2, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import {
+  ChevronDown,
+  TrendingUp,
+  TrendingDown,
+  Search,
+  Loader2,
+  Clock,
+  MoreHorizontal,
+  Undo2,
+  Trash2,
+  Menu,
+  X,
+  User,
+  LayoutDashboard,
+  LineChart,
+  Wallet,
+  History,
+  ArrowUpFromLine,
+  Receipt,
+  BarChart3,
+  Gift,
+  Settings,
+  HelpCircle,
+  Shield,
+  LogOut,
+  Users,
+} from 'lucide-react';
+import Image from 'next/image';
+import toast from 'react-hot-toast';
 import { useTradeStore } from '@/store/trade.store';
+import { useAuthStore } from '@/store/auth.store';
 import { api, PriceTick, MarketAsset } from '@/lib/api';
 import { cn, isMarketOpen, MarketType } from '@/lib/utils';
 
@@ -49,6 +80,20 @@ const CATEGORY_LABELS: Record<AssetCategory, string> = {
   indices: 'Indices',
 };
 
+// Navigation items for the mobile menu
+const navItems = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard/history', label: 'History', icon: History },
+  { href: '/dashboard/copy-trading', label: 'Copy Trading', icon: Users },
+  { href: '/dashboard/deposit', label: 'Deposit', icon: Wallet },
+  { href: '/dashboard/withdraw', label: 'Withdraw', icon: ArrowUpFromLine },
+  { href: '/dashboard/transactions', label: 'Transactions', icon: Receipt },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/dashboard/affiliate', label: 'Affiliate', icon: Gift },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+  { href: '/dashboard/support', label: 'Support', icon: HelpCircle },
+];
+
 export function MobileAssetBar({
   selectedAsset,
   onSelectAsset,
@@ -63,13 +108,24 @@ export function MobileAssetBar({
   accountType = 'LIVE',
   onSwitchAccount,
 }: MobileAssetBarProps) {
+  const router = useRouter();
+  const { user, logout } = useAuthStore();
   const [showAssetMenu, setShowAssetMenu] = useState(false);
+  const [showNavMenu, setShowNavMenu] = useState(false);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<AssetCategory>('all');
   const [assets, setAssets] = useState<MarketAsset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expirationDisplay, setExpirationDisplay] = useState('');
   const { activeTrades } = useTradeStore();
+
+  const isAdmin = user?.role === 'ADMIN';
+
+  const handleLogout = () => {
+    logout();
+    toast.success('Logged out');
+    router.push('/login');
+  };
 
   // Fetch assets on mount
   useEffect(() => {
@@ -175,10 +231,140 @@ export function MobileAssetBar({
 
   return (
     <div className="md:hidden bg-[#0d0d1a]">
+      {/* Navigation Slide-out Menu */}
+      {showNavMenu && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 z-[70]"
+            onClick={() => setShowNavMenu(false)}
+          />
+
+          {/* Menu Panel */}
+          <div className="fixed inset-y-0 left-0 w-72 bg-[#1a1a2e] z-[80] flex flex-col animate-slide-in-left">
+            {/* Menu Header */}
+            <div className="flex items-center justify-between p-4 border-b border-[#2d2d44]">
+              <div className="flex items-center gap-2">
+                <Image src="/logo.png" alt="OptigoBroker" width={28} height={28} />
+                <span className="text-lg font-bold text-white">OptigoBroker</span>
+              </div>
+              <button
+                onClick={() => setShowNavMenu(false)}
+                className="p-2 text-slate-400 hover:text-white hover:bg-[#252542] rounded-lg transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* User Info */}
+            {user && (
+              <div className="p-4 border-b border-[#2d2d44]">
+                <div className="flex items-center gap-3">
+                  <div className="h-11 w-11 bg-gradient-to-br from-[#1079ff] to-[#092ab2] rounded-xl flex items-center justify-center">
+                    <User className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-semibold truncate">{user.name}</p>
+                    <p className="text-sm text-slate-500 truncate">{user.email}</p>
+                  </div>
+                </div>
+
+                {/* Balance Display */}
+                {balance !== undefined && (
+                  <div className={cn(
+                    'mt-3 flex items-center justify-between rounded-xl px-3 py-2.5',
+                    accountType === 'LIVE'
+                      ? 'bg-emerald-500/10 border border-emerald-500/30'
+                      : 'bg-amber-500/10 border border-amber-500/30'
+                  )}>
+                    <div className="flex items-center gap-2">
+                      <Wallet className={cn('h-4 w-4', accountType === 'LIVE' ? 'text-emerald-400' : 'text-amber-400')} />
+                      <span className={cn('text-xs font-semibold', accountType === 'LIVE' ? 'text-emerald-400' : 'text-amber-400')}>
+                        {accountType}
+                      </span>
+                    </div>
+                    <span className={cn('font-bold', accountType === 'LIVE' ? 'text-emerald-400' : 'text-amber-400')}>
+                      ${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Navigation Links */}
+            <nav className="flex-1 overflow-y-auto py-3">
+              <div className="px-3 space-y-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setShowNavMenu(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-300 hover:bg-[#252542] hover:text-white transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[#252542] flex items-center justify-center">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <span className="font-medium text-sm">{item.label}</span>
+                    </Link>
+                  );
+                })}
+
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setShowNavMenu(false)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+                      <Shield className="h-4 w-4" />
+                    </div>
+                    <span className="font-medium text-sm">Admin Panel</span>
+                  </Link>
+                )}
+              </div>
+            </nav>
+
+            {/* Logout Button */}
+            <div className="p-4 border-t border-[#2d2d44]">
+              <button
+                onClick={() => {
+                  setShowNavMenu(false);
+                  handleLogout();
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-500/20 transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="font-medium text-sm">Sign Out</span>
+              </button>
+            </div>
+          </div>
+
+          <style jsx global>{`
+            @keyframes slide-in-left {
+              from { transform: translateX(-100%); }
+              to { transform: translateX(0); }
+            }
+            .animate-slide-in-left {
+              animation: slide-in-left 0.2s ease-out;
+            }
+          `}</style>
+        </>
+      )}
+
       {/* Asset Row */}
       <div className="flex items-center justify-between px-3 py-2">
-        {/* Left Side - Asset Selector and Active Trades */}
+        {/* Left Side - Menu, Asset Selector and Active Trades */}
         <div className="flex items-center gap-2">
+          {/* Hamburger Menu Button */}
+          <button
+            onClick={() => setShowNavMenu(true)}
+            className="flex items-center justify-center w-10 h-10 bg-[#1a1a2e] border border-[#2d2d44] rounded-lg active:bg-[#252542] transition-colors"
+          >
+            <Menu className="h-5 w-5 text-slate-400" />
+          </button>
+
           {/* Asset Selector */}
           <div className="relative flex items-center gap-1.5">
             <button

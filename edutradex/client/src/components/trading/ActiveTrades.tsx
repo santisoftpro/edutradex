@@ -25,7 +25,7 @@ export function ActiveTrades({ latestPrices }: ActiveTradesProps) {
   }
 
   return (
-    <div className="absolute bottom-2 md:bottom-3 left-2 md:left-3 right-2 md:right-auto z-10 flex flex-wrap gap-1.5 md:gap-2 max-w-full md:max-w-[calc(100%-24px)] mb-[80px] md:mb-0">
+    <div className="hidden md:flex absolute bottom-3 left-3 z-10 flex-wrap gap-2 max-w-[calc(100%-24px)]">
       {activeTrades.slice(0, 4).map((trade) => {
         const priceData = latestPrices.get(trade.symbol);
         return (
@@ -33,7 +33,7 @@ export function ActiveTrades({ latestPrices }: ActiveTradesProps) {
         );
       })}
       {activeTrades.length > 4 && (
-        <div className="flex items-center px-2 md:px-3 py-1 md:py-1.5 bg-slate-800/90 rounded-full text-[10px] md:text-xs text-slate-400">
+        <div className="flex items-center px-3 py-1.5 bg-slate-800/90 rounded-full text-xs text-slate-400">
           +{activeTrades.length - 4} more
         </div>
       )}
